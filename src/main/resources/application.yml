@@ -1,0 +1,38 @@
+# Discord bot configuration
+discord:
+  token: ${DISCORD_BOT_TOKEN} # Discord bot token from environment variable
+  channel: "качал-очка"        # Channel name where bot responds
+  guild-id: ${DISCORD_GUILD_ID} # Guild/Server ID
+  admin-user-id: ${DISCORD_ADMIN_USER_ID} # User ID with admin privileges
+
+# Challenge configuration
+challenges:
+  default:
+    daily-reminder-time: "07:00" # Time for daily progress reports (24-hour format)
+    timezone: "Europe/Moscow"    # Timezone for scheduling
+  
+# Apache Ignite configuration
+ignite:
+  client-mode: true
+  addresses:
+    - "127.0.0.1:10800"  # Ignite server address
+  
+# Scheduled tasks configuration
+scheduled:
+  enabled: true
+  cron:
+    daily-report: "0 0 7 * * ?"  # Every day at 7:00 AM
+
+# Visualization settings
+visualization:
+  enabled: true
+  max-width: 400
+  max-height: 300
+  format: "png"
+
+# Logging configuration
+logging:
+  level:
+    com.discord.challengebot: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"
