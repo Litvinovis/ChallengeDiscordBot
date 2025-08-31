@@ -2,7 +2,7 @@
 discord:
   token: ${DISCORD_BOT_TOKEN} # Discord bot token from environment variable
   channel: "качал-очка"        # Channel name where bot responds
-  guild-id: ${DISCORD_GUILD_ID} # Guild/Server ID
+  # guild-id has been removed to allow bot to respond on any server
   admin-user-id: ${DISCORD_ADMIN_USER_ID} # User ID with admin privileges
 
 # Challenge configuration
@@ -15,7 +15,7 @@ challenges:
 ignite:
   client-mode: true
   addresses:
-    - "127.0.0.1:10800"  # Ignite server address
+    - "127.0.0.1:11800"  # Ignite server address on non-standard port
   
 # Scheduled tasks configuration
 scheduled:
