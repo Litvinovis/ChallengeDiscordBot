@@ -23,7 +23,7 @@ public class IgniteConfig {
         // Настройка обнаружения узлов
         TcpDiscoverySpi discoverySpi = new TcpDiscoverySpi();
         TcpDiscoveryVmIpFinder ipFinder = new TcpDiscoveryVmIpFinder();
-        ipFinder.setAddresses(Collections.singletonList("127.0.0.1:10800"));
+        ipFinder.setAddresses(Collections.singletonList("127.0.0.1:11800")); // Используем правильный порт
         discoverySpi.setIpFinder(ipFinder);
         
         cfg.setDiscoverySpi(discoverySpi);

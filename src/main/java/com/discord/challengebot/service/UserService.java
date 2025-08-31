@@ -41,8 +41,18 @@ public class UserService {
                 return false;
             }
             
-            // В реальной реализации здесь будет обращение к Ignite
-            // Для демонстрации просто логируем
+            // Получаем информацию об участнике или создаем новую
+            Participant participant = dataStorageService.getParticipant(userId);
+            if (participant == null) {
+                participant = new Participant(userId, username);
+            }
+            
+            // Добавляем испытание в список участника
+            participant.addChallenge(challengeName);
+            
+            // Сохраняем обновленную информацию об участнике
+            dataStorageService.saveParticipant(participant);
+            
             logger.info("Пользователь {} успешно зарегистрирован на испытание {}", username, challengeName);
             return true;
         } catch (Exception e) {
@@ -68,8 +78,19 @@ public class UserService {
                 return false;
             }
             
-            // В реальной реализации здесь будет обращение к Ignite
-            // Для демонстрации просто логируем
+            // Получаем информацию об участнике
+            Participant participant = dataStorageService.getParticipant(userId);
+            if (participant == null) {
+                logger.warn("Участник с ID {} не найден", userId);
+                return false;
+            }
+            
+            // Удаляем испытание из списка участника
+            participant.removeChallenge(challengeName);
+            
+            // Сохраняем обновленную информацию об участнике
+            dataStorageService.saveParticipant(participant);
+            
             logger.info("Регистрация пользователя {} на испытание {} успешно отменена", userId, challengeName);
             return true;
         } catch (Exception e) {
@@ -117,11 +138,26 @@ public class UserService {
                 return new java.util.ArrayList<>();
             }
             
-            java.util.List<com.discord.challengebot.model.Challenge> challenges = dataStorageService.getAllChallenges();
-            // В реальной реализации здесь будет фильтрация по пользователю
+            // Получаем информацию об участнике
+            Participant participant = dataStorageService.getParticipant(userId);
+            if (participant == null) {
+                logger.debug("Участник с ID {} не найден", userId);
+                return new java.util.ArrayList<>();
+            }
             
-            logger.debug("Получено {} зарегистрированных испытаний для пользователя {}", challenges.size(), userId);
-            return challenges;
+            // Получаем все испытания
+            java.util.List<com.discord.challengebot.model.Challenge> allChallenges = dataStorageService.getAllChallenges();
+            
+            // Фильтруем только те испытания, на которые зарегистрирован пользователь
+            java.util.List<com.discord.challengebot.model.Challenge> registeredChallenges = new java.util.ArrayList<>();
+            for (com.discord.challengebot.model.Challenge challenge : allChallenges) {
+                if (participant.isRegisteredForChallenge(challenge.getName())) {
+                    registeredChallenges.add(challenge);
+                }
+            }
+            
+            logger.debug("Получено {} зарегистрированных испытаний для пользователя {}", registeredChallenges.size(), userId);
+            return registeredChallenges;
         } catch (Exception e) {
             logger.error("Ошибка при получении зарегистрированных испытаний для пользователя: {}", userId, e);
             return new java.util.ArrayList<>();

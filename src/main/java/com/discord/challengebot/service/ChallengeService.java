@@ -152,6 +152,24 @@ public class ChallengeService {
     }
 
     /**
+     * Получить все активные испытания
+     */
+    public List<Challenge> getActiveChallenges() {
+        try {
+            logger.debug("Получение всех активных испытаний");
+            List<Challenge> allChallenges = getAllChallenges();
+            List<Challenge> activeChallenges = allChallenges.stream()
+                    .filter(Challenge::isActive)
+                    .collect(Collectors.toList());
+            logger.debug("Получено {} активных испытаний", activeChallenges.size());
+            return activeChallenges;
+        } catch (Exception e) {
+            logger.error("Ошибка при получении активных испытаний", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
      * Получить статистику по испытанию
      */
     public ChallengeStats getChallengeStats(Challenge challenge) {

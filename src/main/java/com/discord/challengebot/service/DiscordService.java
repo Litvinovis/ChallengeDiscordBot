@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.utils.FileUpload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -160,9 +161,13 @@ public class DiscordService {
             
             TextChannel channel = jda.getTextChannelById(channelId);
             if (channel != null) {
-                channel.sendMessage(message).queue();
-                // В реальной реализации здесь будет отправка изображения
-                // channel.sendFile(image, "chart.png").queue();
+                if (image != null && image.length > 0) {
+                    // Отправка сообщения с изображением
+                    channel.sendMessage(message).addFiles(FileUpload.fromData(image, "chart.png")).queue();
+                } else {
+                    // Отправка только текстового сообщения
+                    channel.sendMessage(message).queue();
+                }
                 logger.info("Сообщение с визуализацией отправлено в канал");
             } else {
                 logger.warn("Канал с ID {} не найден", channelId);
@@ -185,6 +190,7 @@ public class DiscordService {
             sb.append("`+<испытание> <количество>` - Добавить прогресс к испытанию (например: `+отжимания 10`)\n");
             sb.append("`+статистика` - Показать статистику по всем испытаниям\n");
             sb.append("`+статистика <испытание>` - Показать статистику по конкретному испытанию\n");
+            sb.append("`+испытания` - Показать список всех активных испытаний\n");
             sb.append("`+помощь` - Показать эту справку\n\n");
             
             sb.append("**Команды управления испытаниями (только для администраторов):**\n");

@@ -56,4 +56,19 @@ public class Participant {
     public void setRegisteredChallenges(List<String> registeredChallenges) {
         this.registeredChallenges = registeredChallenges;
     }
+    
+    // Helper methods
+    public void addChallenge(String challengeName) {
+        if (!registeredChallenges.contains(challengeName)) {
+            registeredChallenges.add(challengeName);
+        }
+    }
+    
+    public void removeChallenge(String challengeName) {
+        registeredChallenges.remove(challengeName);
+    }
+    
+    public boolean isRegisteredForChallenge(String challengeName) {
+        return registeredChallenges.contains(challengeName);
+    }
 }

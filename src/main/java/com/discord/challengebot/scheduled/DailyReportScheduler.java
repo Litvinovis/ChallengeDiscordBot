@@ -77,9 +77,22 @@ public class DailyReportScheduler {
     public void cleanupOldData() {
         logger.info("Очистка старых данных");
         try {
-            // В реальной реализации здесь будет очистка старых данных
-            // Например, удаление завершенных испытаний старше 30 дней
-            logger.info("Очистка старых данных завершена");
+            // Получаем все испытания
+            List<Challenge> allChallenges = challengeService.getAllChallenges();
+            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+            int deletedCount = 0;
+            
+            // Удаляем завершенные испытания старше 30 дней
+            for (Challenge challenge : allChallenges) {
+                if (!challenge.isActive() && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
+                    if (challengeService.deleteChallenge(challenge.getName())) {
+                        deletedCount++;
+                        logger.info("Удалено старое завершенное испытание: {}", challenge.getName());
+                    }
+                }
+            }
+            
+            logger.info("Очистка старых данных завершена. Удалено {} испытаний", deletedCount);
         } catch (Exception e) {
             logger.error("Ошибка при очистке старых данных", e);
         }

@@ -154,6 +154,9 @@ public class DiscordMessageListener extends ListenerAdapter {
                 case "прогресс":
                     handleProgressCommand(parts, userId, channelId);
                     break;
+                case "испытания":
+                    handleListChallengesCommand(channelId);
+                    break;
                 default:
                     // Считаем, что это команда добавления прогресса к испытанию
                     handleProgressUpdateCommand(command, userId, username, channelId);
@@ -780,6 +783,43 @@ public class DiscordMessageListener extends ListenerAdapter {
             logger.info("Личный прогресс пользователя {} по испытанию '{}' отправлен", userId, challengeName);
         } catch (Exception e) {
             logger.error("Ошибка обработки команды личного прогресса для пользователя {}", userId, e);
+        }
+    }
+
+    /**
+     * Обработать команду списка испытаний
+     */
+    private void handleListChallengesCommand(String channelId) {
+        try {
+            logger.debug("Обработка команды списка испытаний");
+            TextChannel channel = jda.getTextChannelById(channelId);
+            if (channel == null) {
+                logger.warn("Канал {} не найден при обработке команды списка испытаний", channelId);
+                return;
+            }
+            
+            List<Challenge> activeChallenges = challengeService.getActiveChallenges();
+            
+            if (activeChallenges.isEmpty()) {
+                channel.sendMessage("Активных испытаний нет.").queue();
+                logger.info("Нет активных испытаний для отображения");
+                return;
+            }
+            
+            StringBuilder message = new StringBuilder();
+            message.append("**Активные испытания:**\n\n");
+            
+            for (Challenge challenge : activeChallenges) {
+                message.append("- **").append(challenge.getName()).append("**\n");
+                message.append("  Цель: ").append(challenge.getTargetValue()).append(" ").append(challenge.getUnit()).append("\n");
+                message.append("  Участников: ").append(challenge.getParticipants().size()).append("\n");
+                message.append("  Окончание: ").append(challenge.getEndDate().toLocalDate().toString()).append("\n\n");
+            }
+            
+            channel.sendMessage(message.toString()).queue();
+            logger.info("Список из {} активных испытаний отправлен", activeChallenges.size());
+        } catch (Exception e) {
+            logger.error("Ошибка обработки команды списка испытаний", e);
         }
     }
 

@@ -1,6 +1,7 @@
 package com.discord.challengebot.service;
 
 import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.model.Participant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -14,6 +15,9 @@ class UserServiceTest {
 
     @Mock
     private DiscordConfig discordConfig;
+
+    @Mock
+    private DataStorageService dataStorageService;
 
     @InjectMocks
     private UserService userService;
@@ -51,19 +55,31 @@ class UserServiceTest {
         String userId = "12345";
         String username = "testuser";
         String challengeName = "Отжимания";
+        
+        // Мокаем поведение dataStorageService
+        when(dataStorageService.getParticipant(userId)).thenReturn(null);
 
         boolean result = userService.registerForChallenge(userId, username, challengeName);
 
         assertTrue(result);
+        verify(dataStorageService).getParticipant(userId);
+        verify(dataStorageService).saveParticipant(any(Participant.class));
     }
 
     @Test
     void testUnregisterFromChallenge() {
         String userId = "12345";
         String challengeName = "Отжимания";
+        
+        // Мокаем поведение dataStorageService
+        Participant participant = new Participant(userId, "testuser");
+        participant.addChallenge(challengeName);
+        when(dataStorageService.getParticipant(userId)).thenReturn(participant);
 
         boolean result = userService.unregisterFromChallenge(userId, challengeName);
 
         assertTrue(result);
+        verify(dataStorageService).getParticipant(userId);
+        verify(dataStorageService).saveParticipant(any(Participant.class));
     }
 }

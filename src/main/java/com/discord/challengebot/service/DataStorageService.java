@@ -15,8 +15,8 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import javax.cache.Cache;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Сервис для работы с хранилищем данных (Apache Ignite)
@@ -28,10 +28,7 @@ public class DataStorageService {
     private Ignite ignite;
     private IgniteCache<String, Challenge> challengesCache;
     private IgniteCache<String, Participant> participantsCache;
-    
-    // In-memory storage for demonstration purposes
-    private Map<String, Challenge> inMemoryChallenges = new ConcurrentHashMap<>();
-    private Map<String, Participant> inMemoryParticipants = new ConcurrentHashMap<>();
+    private boolean isTestMode = false;
     
     /**
      * Инициализация подключения к Apache Ignite
@@ -41,18 +38,51 @@ public class DataStorageService {
         try {
             logger.info("Инициализация подключения к Apache Ignite");
             
-            // Для демонстрации используем in-memory хранение вместо реального подключения к Ignite
-            // В реальном приложении здесь будет инициализация Ignite клиента
-            logger.info("Используется in-memory хранение вместо Apache Ignite для демонстрации");
+            // Проверяем, запущены ли тесты
+            if (isTestMode) {
+                logger.info("Работаем в тестовом режиме с embedded Ignite");
+                // Используем встроенный режим для тестов
+                IgniteConfiguration cfg = new IgniteConfiguration();
+                cfg.setClientMode(false); // Режим сервера для тестов
+                cfg.setIgniteInstanceName("test-ignite-instance");
+                
+                ignite = Ignition.start(cfg);
+            } else {
+                // Инициализация клиента Apache Ignite для production
+                IgniteConfiguration cfg = new IgniteConfiguration();
+                cfg.setClientMode(true);
+                
+                // Настройка адресов серверов (из application.yml)
+                // В реальном приложении это будет получено из конфигурации
+                cfg.setDiscoverySpi(new org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi()
+                    .setIpFinder(new org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder()
+                        .setAddresses(Collections.singletonList("127.0.0.1:11800"))));
+                
+                ignite = Ignition.start(cfg);
+            }
             
-            // Инициализация in-memory коллекций
-            challengesCache = null; // Будет заменено на реальную реализацию с Ignite
-            participantsCache = null; // Будет заменено на реальную реализацию с Ignite
+            // Создание или получение кэша для испытаний
+            CacheConfiguration<String, Challenge> challengeCacheCfg = new CacheConfiguration<>("challenges");
+            challengeCacheCfg.setCacheMode(CacheMode.PARTITIONED);
+            challengesCache = ignite.getOrCreateCache(challengeCacheCfg);
+            
+            // Создание или получение кэша для участников
+            CacheConfiguration<String, Participant> participantCacheCfg = new CacheConfiguration<>("participants");
+            participantCacheCfg.setCacheMode(CacheMode.PARTITIONED);
+            participantsCache = ignite.getOrCreateCache(participantCacheCfg);
             
             logger.info("Подключение к Apache Ignite успешно инициализировано");
         } catch (Exception e) {
             logger.error("Ошибка инициализации подключения к Apache Ignite", e);
+            // Не прерываем инициализацию приложения из-за ошибки Ignite
         }
+    }
+    
+    /**
+     * Установить режим тестирования
+     */
+    public void setTestMode(boolean testMode) {
+        this.isTestMode = testMode;
     }
     
     /**
@@ -63,7 +93,12 @@ public class DataStorageService {
         try {
             if (ignite != null) {
                 logger.info("Закрытие подключения к Apache Ignite");
-                ignite.close();
+                // Безопасное закрытие Ignite
+                try {
+                    ignite.close();
+                } catch (Exception e) {
+                    logger.warn("Ошибка при закрытии подключения к Apache Ignite (игнорируется)", e);
+                }
                 logger.info("Подключение к Apache Ignite успешно закрыто");
             }
         } catch (Exception e) {
@@ -76,19 +111,24 @@ public class DataStorageService {
      */
     public void saveChallenge(Challenge challenge) {
         try {
-            logger.debug("Сохранение испытания: {}", challenge != null ? challenge.getName() : "null");
+            // Проверяем, что сервис инициализирован
+            if (challengesCache == null) {
+                logger.warn("Кэш испытаний не инициализирован, пропускаем сохранение");
+                return;
+            }
+            
+            logger.debug("Сохранение испытания в Apache Ignite: {}", challenge != null ? challenge.getName() : "null");
             if (challenge == null) {
                 logger.warn("Попытка сохранить null испытание");
                 return;
             }
             
-            // В реальной реализации здесь будет сохранение в Ignite
-            // Для демонстрации используем in-memory хранение
-            inMemoryChallenges.put(challenge.getId(), challenge);
+            // Сохранение испытания в кэш Ignite
+            challengesCache.put(challenge.getId(), challenge);
             
-            logger.info("Испытание '{}' успешно сохранено в хранилище", challenge.getName());
+            logger.info("Испытание '{}' успешно сохранено в Apache Ignite", challenge.getName());
         } catch (Exception e) {
-            logger.error("Ошибка при сохранении испытания: {}", challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при сохранении испытания в Apache Ignite: {}", challenge != null ? challenge.getName() : "null", e);
         }
     }
     
@@ -97,28 +137,31 @@ public class DataStorageService {
      */
     public Challenge getChallenge(String name) {
         try {
-            logger.debug("Получение испытания: {}", name);
+            // Проверяем, что сервис инициализирован
+            if (challengesCache == null) {
+                logger.warn("Кэш испытаний не инициализирован, возвращаем null");
+                return null;
+            }
+            
+            logger.debug("Получение испытания из Apache Ignite: {}", name);
             if (name == null || name.isEmpty()) {
                 logger.warn("Попытка получить испытание с пустым именем");
                 return null;
             }
             
-            // В реальной реализации здесь будет получение из Ignite
-            // Для демонстрации используем in-memory хранение
-            Challenge challenge = inMemoryChallenges.values().stream()
-                    .filter(c -> name.equals(c.getName()))
-                    .findFirst()
-                    .orElse(null);
-            
-            if (challenge != null) {
-                logger.debug("Испытание '{}' успешно получено из хранилища", name);
-            } else {
-                logger.debug("Испытание '{}' не найдено в хранилище", name);
+            // Поиск испытания по имени в кэше Ignite
+            for (javax.cache.Cache.Entry<String, Challenge> entry : challengesCache) {
+                Challenge challenge = entry.getValue();
+                if (name.equals(challenge.getName())) {
+                    logger.debug("Испытание '{}' успешно получено из Apache Ignite", name);
+                    return challenge;
+                }
             }
             
-            return challenge;
+            logger.debug("Испытание '{}' не найдено в Apache Ignite", name);
+            return null;
         } catch (Exception e) {
-            logger.error("Ошибка при получении испытания: {}", name, e);
+            logger.error("Ошибка при получении испытания из Apache Ignite: {}", name, e);
             return null;
         }
     }
@@ -128,16 +171,24 @@ public class DataStorageService {
      */
     public List<Challenge> getAllChallenges() {
         try {
-            logger.debug("Получение всех испытаний из хранилища");
+            // Проверяем, что сервис инициализирован
+            if (challengesCache == null) {
+                logger.warn("Кэш испытаний не инициализирован, возвращаем пустой список");
+                return new ArrayList<>();
+            }
             
-            // В реальной реализации здесь будет получение всех испытаний из Ignite
-            // Для демонстрации используем in-memory хранение
-            List<Challenge> challenges = new ArrayList<>(inMemoryChallenges.values());
+            logger.debug("Получение всех испытаний из Apache Ignite");
             
-            logger.debug("Получено {} испытаний из хранилища", challenges.size());
+            // Получение всех испытаний из кэша Ignite
+            List<Challenge> challenges = new ArrayList<>();
+            for (javax.cache.Cache.Entry<String, Challenge> entry : challengesCache) {
+                challenges.add(entry.getValue());
+            }
+            
+            logger.debug("Получено {} испытаний из Apache Ignite", challenges.size());
             return challenges;
         } catch (Exception e) {
-            logger.error("Ошибка при получении всех испытаний из хранилища", e);
+            logger.error("Ошибка при получении всех испытаний из Apache Ignite", e);
             return new ArrayList<>();
         }
     }
@@ -147,20 +198,32 @@ public class DataStorageService {
      */
     public boolean deleteChallenge(String challengeName) {
         try {
-            logger.debug("Удаление испытания: {}", challengeName);
+            // Проверяем, что сервис инициализирован
+            if (challengesCache == null) {
+                logger.warn("Кэш испытаний не инициализирован, возвращаем false");
+                return false;
+            }
+            
+            logger.debug("Удаление испытания из Apache Ignite: {}", challengeName);
             if (challengeName == null || challengeName.isEmpty()) {
                 logger.warn("Попытка удалить испытание с пустым именем");
                 return false;
             }
             
-            // В реальной реализации здесь будет удаление из Ignite
-            // Для демонстрации и совместимости с тестами возвращаем true
-            // В реальной реализации мы бы проверяли существование и удаляли
+            // Поиск и удаление испытания по имени
+            for (javax.cache.Cache.Entry<String, Challenge> entry : challengesCache) {
+                Challenge challenge = entry.getValue();
+                if (challengeName.equals(challenge.getName())) {
+                    challengesCache.remove(entry.getKey());
+                    logger.info("Испытание '{}' успешно удалено из Apache Ignite", challengeName);
+                    return true;
+                }
+            }
             
-            logger.info("Испытание '{}' обработано для удаления", challengeName);
-            return true; // Возвращаем true для совместимости с существующими тестами
+            logger.warn("Испытание '{}' не найдено для удаления в Apache Ignite", challengeName);
+            return false;
         } catch (Exception e) {
-            logger.error("Ошибка при удалении испытания: {}", challengeName, e);
+            logger.error("Ошибка при удалении испытания из Apache Ignite: {}", challengeName, e);
             return false;
         }
     }
@@ -170,19 +233,24 @@ public class DataStorageService {
      */
     public void saveParticipant(Participant participant) {
         try {
-            logger.debug("Сохранение участника: {}", participant != null ? participant.getUsername() : "null");
+            // Проверяем, что сервис инициализирован
+            if (participantsCache == null) {
+                logger.warn("Кэш участников не инициализирован, пропускаем сохранение");
+                return;
+            }
+            
+            logger.debug("Сохранение участника в Apache Ignite: {}", participant != null ? participant.getUsername() : "null");
             if (participant == null) {
                 logger.warn("Попытка сохранить null участника");
                 return;
             }
             
-            // В реальной реализации здесь будет сохранение в Ignite
-            // Для демонстрации используем in-memory хранение
-            inMemoryParticipants.put(participant.getUserId(), participant);
+            // Сохранение участника в кэш Ignite
+            participantsCache.put(participant.getUserId(), participant);
             
-            logger.info("Участник '{}' успешно сохранен в хранилище", participant.getUsername());
+            logger.info("Участник '{}' успешно сохранен в Apache Ignite", participant.getUsername());
         } catch (Exception e) {
-            logger.error("Ошибка при сохранении участника: {}", participant != null ? participant.getUsername() : "null", e);
+            logger.error("Ошибка при сохранении участника в Apache Ignite: {}", participant != null ? participant.getUsername() : "null", e);
         }
     }
     
@@ -191,25 +259,30 @@ public class DataStorageService {
      */
     public Participant getParticipant(String userId) {
         try {
-            logger.debug("Получение участника по ID: {}", userId);
+            // Проверяем, что сервис инициализирован
+            if (participantsCache == null) {
+                logger.warn("Кэш участников не инициализирован, возвращаем null");
+                return null;
+            }
+            
+            logger.debug("Получение участника из Apache Ignite по ID: {}", userId);
             if (userId == null || userId.isEmpty()) {
                 logger.warn("Попытка получить участника с пустым ID");
                 return null;
             }
             
-            // В реальной реализации здесь будет получение из Ignite
-            // Для демонстрации используем in-memory хранение
-            Participant participant = inMemoryParticipants.get(userId);
+            // Получение участника из кэша Ignite
+            Participant participant = participantsCache.get(userId);
             
             if (participant != null) {
-                logger.debug("Участник '{}' успешно получен из хранилища", userId);
+                logger.debug("Участник '{}' успешно получен из Apache Ignite", userId);
             } else {
-                logger.debug("Участник с ID '{}' не найден в хранилище", userId);
+                logger.debug("Участник с ID '{}' не найден в Apache Ignite", userId);
             }
             
             return participant;
         } catch (Exception e) {
-            logger.error("Ошибка при получении участника по ID: {}", userId, e);
+            logger.error("Ошибка при получении участника из Apache Ignite по ID: {}", userId, e);
             return null;
         }
     }
@@ -219,16 +292,24 @@ public class DataStorageService {
      */
     public List<Participant> getAllParticipants() {
         try {
-            logger.debug("Получение всех участников из хранилища");
+            // Проверяем, что сервис инициализирован
+            if (participantsCache == null) {
+                logger.warn("Кэш участников не инициализирован, возвращаем пустой список");
+                return new ArrayList<>();
+            }
             
-            // В реальной реализации здесь будет получение всех участников из Ignite
-            // Для демонстрации используем in-memory хранение
-            List<Participant> participants = new ArrayList<>(inMemoryParticipants.values());
+            logger.debug("Получение всех участников из Apache Ignite");
             
-            logger.debug("Получено {} участников из хранилища", participants.size());
+            // Получение всех участников из кэша Ignite
+            List<Participant> participants = new ArrayList<>();
+            for (javax.cache.Cache.Entry<String, Participant> entry : participantsCache) {
+                participants.add(entry.getValue());
+            }
+            
+            logger.debug("Получено {} участников из Apache Ignite", participants.size());
             return participants;
         } catch (Exception e) {
-            logger.error("Ошибка при получении всех участников из хранилища", e);
+            logger.error("Ошибка при получении всех участников из Apache Ignite", e);
             return new ArrayList<>();
         }
     }
@@ -238,25 +319,30 @@ public class DataStorageService {
      */
     public boolean deleteParticipant(String userId) {
         try {
-            logger.debug("Удаление участника по ID: {}", userId);
+            // Проверяем, что сервис инициализирован
+            if (participantsCache == null) {
+                logger.warn("Кэш участников не инициализирован, возвращаем false");
+                return false;
+            }
+            
+            logger.debug("Удаление участника из Apache Ignite по ID: {}", userId);
             if (userId == null || userId.isEmpty()) {
                 logger.warn("Попытка удалить участника с пустым ID");
                 return false;
             }
             
-            // В реальной реализации здесь будет удаление из Ignite
-            // Для демонстрации используем in-memory хранение
-            Participant removedParticipant = inMemoryParticipants.remove(userId);
+            // Удаление участника из кэша Ignite
+            boolean removed = participantsCache.remove(userId);
             
-            if (removedParticipant != null) {
-                logger.info("Участник '{}' успешно удален из хранилища", userId);
-                return true;
+            if (removed) {
+                logger.info("Участник с ID '{}' успешно удален из Apache Ignite", userId);
             } else {
-                logger.warn("Участник с ID '{}' не найден для удаления", userId);
-                return true; // Возвращаем true для совместимости с существующими тестами
+                logger.warn("Участник с ID '{}' не найден для удаления в Apache Ignite", userId);
             }
+            
+            return removed;
         } catch (Exception e) {
-            logger.error("Ошибка при удалении участника по ID: {}", userId, e);
+            logger.error("Ошибка при удалении участника из Apache Ignite по ID: {}", userId, e);
             return false;
         }
     }
