@@ -2,6 +2,7 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
+import com.discord.challengebot.model.Challenge;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Сервис для взаимодействия с Discord
@@ -76,6 +79,24 @@ public class DiscordService {
     }
 
     /**
+     * Отправить сообщение в канал по имени
+     */
+    public void sendMessageToChannel(String channelName, String message) {
+        try {
+            // Ищем канал по имени
+            TextChannel channel = jda.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
+            if (channel != null) {
+                channel.sendMessage(message).queue();
+                logger.info("Сообщение отправлено в канал {}: {}", channelName, message);
+            } else {
+                logger.warn("Канал с именем {} не найден", channelName);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка отправки сообщения в Discord", e);
+        }
+    }
+
+    /**
      * Отправить сообщение с визуализацией
      */
     public void sendMessageWithVisualization(String channelId, String message, byte[] image) {
@@ -84,6 +105,7 @@ public class DiscordService {
             if (channel != null) {
                 channel.sendMessage(message).queue();
                 // В реальной реализации здесь будет отправка изображения
+                // channel.sendFile(image, "chart.png").queue();
                 logger.info("Сообщение с визуализацией отправлено в канал");
             } else {
                 logger.warn("Канал с ID {} не найден", channelId);
@@ -111,7 +133,10 @@ public class DiscordService {
         sb.append("`+удалить <название>` - Удалить испытание\n");
         sb.append("`+остановить <название>` - Остановить активное испытание\n");
         sb.append("`+продолжить <название>` - Продолжить остановленное испытание\n");
-        sb.append("`+изменить <название> <новая цель>` - Изменить цель испытания\n\n");
+        sb.append("`+изменить <название> <новая цель>` - Изменить цель испытания\n");
+        sb.append("`+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника\n");
+        sb.append("`+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание\n");
+        sb.append("`+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания\n\n");
         
         sb.append("**Команды пользователя:**\n");
         sb.append("`+мои` - Показать личные испытания\n");
@@ -126,8 +151,43 @@ public class DiscordService {
      * Отправить ежедневный отчет
      */
     public void sendDailyReport() {
-        // В реальной реализации здесь будет отправка ежедневного отчета
         logger.info("Отправка ежедневного отчета");
+        // Получаем все активные испытания
+        List<Challenge> challenges = challengeService.getAllChallenges();
+        challenges = challenges.stream().filter(Challenge::isActive).collect(java.util.stream.Collectors.toList());
+        
+        if (challenges.isEmpty()) {
+            sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
+            return;
+        }
+        
+        StringBuilder report = new StringBuilder();
+        report.append("**Ежедневный отчет по испытаниям**\n\n");
+        
+        for (Challenge challenge : challenges) {
+            ChallengeStats stats = challengeService.getChallengeStats(challenge);
+            report.append(statisticsService.formatReportForDiscord(stats)).append("\n");
+        }
+        
+        sendMessageToChannel(discordConfig.getReportChannel(), report.toString());
+    }
+
+    /**
+     * Отправить уведомление о завершении испытания
+     */
+    public void sendChallengeCompletionNotification(Challenge challenge) {
+        String message = String.format("**Испытание завершено!**\nИспытание \"%s\" успешно завершено!\nПоздравляем всех участников!", 
+                                     challenge.getName());
+        
+        // Отправляем сообщение в канал отчетов
+        sendMessageToChannel(discordConfig.getReportChannel(), message);
+        
+        // Также отправляем топ-5 участников
+        List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, 5);
+        if (!leaderboard.isEmpty()) {
+            String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
+            sendMessageToChannel(discordConfig.getReportChannel(), leaderboardMessage);
+        }
     }
 
     /**
@@ -144,7 +204,8 @@ public class DiscordService {
         // Некоторые команды доступны только администраторам
         if (command.startsWith("новый") || command.startsWith("удалить") || 
             command.startsWith("остановить") || command.startsWith("продолжить") || 
-            command.startsWith("изменить")) {
+            command.startsWith("изменить") || command.startsWith("установить_прогресс") ||
+            command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
             return userService.isAdminUser(userId);
         }
         return true;

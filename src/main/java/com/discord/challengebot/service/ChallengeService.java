@@ -5,11 +5,13 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Сервис для управления испытаниями
@@ -17,6 +19,9 @@ import java.util.Map;
 @Service
 public class ChallengeService {
     private static final Logger logger = LoggerFactory.getLogger(ChallengeService.class);
+    
+    @Autowired
+    private DataStorageService dataStorageService;
 
     /**
      * Создать новое испытание
@@ -37,6 +42,9 @@ public class ChallengeService {
         challenge.setDescription(description);
         challenge.setUnit(unit);
         
+        // Сохраняем испытание
+        dataStorageService.saveChallenge(challenge);
+        
         logger.info("Испытание {} успешно создано", name);
         return challenge;
     }
@@ -55,6 +63,12 @@ public class ChallengeService {
         long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
         challenge.getParticipantProgress().put(userId, userProgress + amount);
         
+        // Добавляем участника в список, если его там нет
+        challenge.addParticipant(userId);
+        
+        // Сохраняем обновленное испытание
+        dataStorageService.saveChallenge(challenge);
+        
         logger.info("Прогресс успешно добавлен. Текущий общий прогресс: {}", challenge.getCurrentValue());
         return challenge;
     }
@@ -63,18 +77,14 @@ public class ChallengeService {
      * Получить испытание по имени
      */
     public Challenge getChallenge(String name) {
-        // В реальной реализации здесь будет обращение к Ignite
-        logger.info("Получение испытания: {}", name);
-        return null;
+        return dataStorageService.getChallenge(name);
     }
 
     /**
      * Получить все испытания
      */
     public List<Challenge> getAllChallenges() {
-        // В реальной реализации здесь будет обращение к Ignite
-        logger.info("Получение всех испытаний");
-        return null;
+        return dataStorageService.getAllChallenges();
     }
 
     /**
@@ -87,8 +97,9 @@ public class ChallengeService {
         double percentage = challenge.getTargetValue() > 0 ? 
                            (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
         
-        // В реальной реализации здесь будет расчет дней до окончания
-        int daysRemaining = 10;
+        // Расчет дней до окончания
+        LocalDateTime now = LocalDateTime.now();
+        long daysRemaining = java.time.Duration.between(now, challenge.getEndDate()).toDays();
         double dailyTarget = daysRemaining > 0 ? (double) remaining / daysRemaining : 0;
         
         return new ChallengeStats(
@@ -98,7 +109,7 @@ public class ChallengeService {
             remaining,
             percentage,
             dailyTarget,
-            daysRemaining
+            (int) daysRemaining
         );
     }
 
@@ -106,18 +117,24 @@ public class ChallengeService {
      * Получить статистику по всем испытаниям
      */
     public Map<String, ChallengeStats> getAllChallengesStats() {
+        List<Challenge> challenges = getAllChallenges();
+        new java.util.HashMap<String, ChallengeStats>();
+        for (Challenge challenge : challenges) {
+            ChallengeStats stats = getChallengeStats(challenge);
+        }
         // В реальной реализации здесь будет обращение к Ignite
         logger.info("Получение статистики по всем испытаниям");
-        return null;
+        return new java.util.HashMap<>();
     }
 
     /**
      * Получить испытания пользователя
      */
     public List<Challenge> getUserChallenges(String userId) {
-        // В реальной реализации здесь будет обращение к Ignite
-        logger.info("Получение испытаний пользователя: {}", userId);
-        return null;
+        List<Challenge> allChallenges = getAllChallenges();
+        return allChallenges.stream()
+                .filter(challenge -> challenge.hasParticipant(userId))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -125,8 +142,7 @@ public class ChallengeService {
      */
     public boolean deleteChallenge(String challengeName) {
         logger.info("Удаление испытания: {}", challengeName);
-        // В реальной реализации здесь будет обращение к Ignite
-        return true;
+        return dataStorageService.deleteChallenge(challengeName);
     }
 
     /**
@@ -135,6 +151,7 @@ public class ChallengeService {
     public Challenge updateChallengeStatus(Challenge challenge, boolean active) {
         logger.info("Обновление статуса испытания {}: {}", challenge.getName(), active ? "активно" : "остановлено");
         challenge.setActive(active);
+        dataStorageService.saveChallenge(challenge);
         return challenge;
     }
 
@@ -145,6 +162,92 @@ public class ChallengeService {
         logger.info("Обновление цели испытания {} с {} на {}", 
                    challenge.getName(), challenge.getTargetValue(), newTarget);
         challenge.setTargetValue(newTarget);
+        dataStorageService.saveChallenge(challenge);
         return challenge;
+    }
+
+    /**
+     * Установить прогресс участника в испытании
+     */
+    public Challenge setParticipantProgress(Challenge challenge, String userId, long progress) {
+        logger.info("Установка прогресса {} для пользователя {} в испытании {}", 
+                   progress, userId, challenge.getName());
+        
+        // Устанавливаем прогресс участника
+        challenge.getParticipantProgress().put(userId, progress);
+        
+        // Добавляем участника в список, если его там нет
+        challenge.addParticipant(userId);
+        
+        // Пересчитываем общий прогресс
+        long totalProgress = challenge.getParticipantProgress().values().stream().mapToLong(Long::longValue).sum();
+        challenge.setCurrentValue(totalProgress);
+        
+        // Сохраняем обновленное испытание
+        dataStorageService.saveChallenge(challenge);
+        
+        return challenge;
+    }
+
+    /**
+     * Удалить участника из испытания
+     */
+    public Challenge removeParticipant(Challenge challenge, String userId) {
+        logger.info("Удаление участника {} из испытания {}", userId, challenge.getName());
+        
+        // Удаляем прогресс участника
+        challenge.getParticipantProgress().remove(userId);
+        
+        // Удаляем участника из списка
+        challenge.removeParticipant(userId);
+        
+        // Пересчитываем общий прогресс
+        long totalProgress = challenge.getParticipantProgress().values().stream().mapToLong(Long::longValue).sum();
+        challenge.setCurrentValue(totalProgress);
+        
+        // Сохраняем обновленное испытание
+        dataStorageService.saveChallenge(challenge);
+        
+        return challenge;
+    }
+
+    /**
+     * Добавить участника в испытание
+     */
+    public Challenge addParticipant(Challenge challenge, String userId) {
+        logger.info("Добавление участника {} в испытание {}", userId, challenge.getName());
+        
+        // Добавляем участника в список
+        challenge.addParticipant(userId);
+        
+        // Если у участника еще нет прогресса, устанавливаем 0
+        if (!challenge.getParticipantProgress().containsKey(userId)) {
+            challenge.getParticipantProgress().put(userId, 0L);
+        }
+        
+        // Сохраняем обновленное испытание
+        dataStorageService.saveChallenge(challenge);
+        
+        return challenge;
+    }
+
+    /**
+     * Получить топ участников по прогрессу в испытании
+     */
+    public List<Map.Entry<String, Long>> getTopParticipants(Challenge challenge, int limit) {
+        return challenge.getParticipantProgress().entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Завершить испытание и отправить уведомление
+     */
+    public void completeChallenge(Challenge challenge) {
+        logger.info("Завершение испытания: {}", challenge.getName());
+        challenge.setActive(false);
+        dataStorageService.saveChallenge(challenge);
+        // Отправка уведомления будет выполнена в другом сервисе
     }
 }

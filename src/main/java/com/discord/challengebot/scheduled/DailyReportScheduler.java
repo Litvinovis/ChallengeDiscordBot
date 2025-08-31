@@ -1,11 +1,16 @@
 package com.discord.challengebot.scheduled;
 
 import com.discord.challengebot.service.DiscordService;
+import com.discord.challengebot.service.ChallengeService;
+import com.discord.challengebot.model.Challenge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Планировщик ежедневных отчетов
@@ -16,6 +21,9 @@ public class DailyReportScheduler {
     
     @Autowired
     private DiscordService discordService;
+    
+    @Autowired
+    private ChallengeService challengeService;
 
     /**
      * Отправка ежедневных отчетов о прогрессе в 7:00 утра
@@ -37,7 +45,18 @@ public class DailyReportScheduler {
     @Scheduled(cron = "0 0 * * * ?") // Каждый час
     public void checkChallengeCompletions() {
         logger.info("Проверка завершения испытаний");
-        // В реальной реализации здесь будет проверка завершения испытаний
+        
+        // Получаем все активные испытания
+        List<Challenge> challenges = challengeService.getAllChallenges();
+        LocalDateTime now = LocalDateTime.now();
+        
+        for (Challenge challenge : challenges) {
+            if (challenge.isActive() && challenge.getEndDate().isBefore(now)) {
+                // Испытание завершено
+                challengeService.completeChallenge(challenge);
+                discordService.sendChallengeCompletionNotification(challenge);
+            }
+        }
     }
 
     /**
@@ -47,5 +66,6 @@ public class DailyReportScheduler {
     public void cleanupOldData() {
         logger.info("Очистка старых данных");
         // В реальной реализации здесь будет очистка старых данных
+        // Например, удаление завершенных испытаний старше 30 дней
     }
 }

@@ -13,6 +13,7 @@ public class DiscordConfig {
     private String channel;
     private String guildId;
     private String adminUserId;
+    private String reportChannel;
 
     // Getters and setters
     public String getToken() {
@@ -45,5 +46,13 @@ public class DiscordConfig {
 
     public void setAdminUserId(String adminUserId) {
         this.adminUserId = adminUserId;
+    }
+
+    public String getReportChannel() {
+        return reportChannel;
+    }
+
+    public void setReportChannel(String reportChannel) {
+        this.reportChannel = reportChannel;
     }
 }

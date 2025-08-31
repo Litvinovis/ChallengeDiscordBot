@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Сервис для расчета статистики
@@ -79,10 +81,12 @@ public class StatisticsService {
     /**
      * Сгенерировать таблицу лидеров
      */
-    public List<?> generateLeaderboard(Challenge challenge, int limit) {
-        // В реальной реализации здесь будет генерация таблицы лидеров
+    public List<Map.Entry<String, Long>> generateLeaderboard(Challenge challenge, int limit) {
         logger.info("Генерация таблицы лидеров для испытания: {}", challenge.getName());
-        return null;
+        return challenge.getParticipantProgress().entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -97,6 +101,25 @@ public class StatisticsService {
         sb.append("Процент выполнения: ").append(String.format("%.2f", stats.getPercentage())).append("%\n");
         sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.getDailyTarget())).append(" в день\n");
         sb.append("Дней осталось: ").append(stats.getDaysRemaining()).append("\n");
+        
+        return sb.toString();
+    }
+
+    /**
+     * Форматировать таблицу лидеров для Discord
+     */
+    public String formatLeaderboardForDiscord(Challenge challenge, List<Map.Entry<String, Long>> leaderboard) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("**Топ участников по испытанию: ").append(challenge.getName()).append("**\n");
+        
+        if (leaderboard.isEmpty()) {
+            sb.append("Пока нет участников.\n");
+        } else {
+            for (int i = 0; i < leaderboard.size(); i++) {
+                Map.Entry<String, Long> entry = leaderboard.get(i);
+                sb.append((i + 1)).append(". <@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
+            }
+        }
         
         return sb.toString();
     }

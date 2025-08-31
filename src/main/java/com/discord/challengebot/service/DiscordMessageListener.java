@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Обработчик сообщений Discord
@@ -81,8 +83,10 @@ public class DiscordMessageListener extends ListenerAdapter {
         // Проверяем авторизацию для команд, требующих прав администратора
         if (!discordService.isAuthorizedUser(userId, commandName)) {
             // Отправляем сообщение в канал
-            // Получаем канал по ID
-            // channel.sendMessage("У вас нет прав для выполнения этой команды.").queue();
+            TextChannel channel = event.getJDA().getTextChannelById(channelId);
+            if (channel != null) {
+                channel.sendMessage("У вас нет прав для выполнения этой команды.").queue();
+            }
             return;
         }
         
@@ -108,6 +112,15 @@ public class DiscordMessageListener extends ListenerAdapter {
             case "изменить":
                 handleChangeTargetCommand(parts, channelId);
                 break;
+            case "установить_прогресс":
+                handleSetParticipantProgressCommand(parts, channelId);
+                break;
+            case "добавить_участника":
+                handleAddParticipantCommand(parts, channelId);
+                break;
+            case "удалить_участника":
+                handleRemoveParticipantCommand(parts, channelId);
+                break;
             case "мои":
                 handleMyChallengesCommand(userId, channelId);
                 break;
@@ -132,20 +145,49 @@ public class DiscordMessageListener extends ListenerAdapter {
      */
     private void handleHelpCommand(String channelId) {
         String helpMessage = discordService.generateHelpMessage();
-        // В реальной реализации здесь будет отправка сообщения
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel != null) {
+            channel.sendMessage(helpMessage).queue();
+        }
     }
 
     /**
      * Обработать команду статистики
      */
     private void handleStatisticsCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length == 1) {
             // Общая статистика по всем испытаниям
-            // В реальной реализации здесь будет получение всех испытаний и их статистики
+            List<Challenge> challenges = challengeService.getAllChallenges();
+            if (challenges.isEmpty()) {
+                channel.sendMessage("Нет доступных испытаний.").queue();
+                return;
+            }
+            
+            StringBuilder message = new StringBuilder();
+            message.append("**Статистика по всем испытаниям:**\n\n");
+            
+            for (Challenge challenge : challenges) {
+                ChallengeStats stats = challengeService.getChallengeStats(challenge);
+                message.append(statisticsService.formatReportForDiscord(stats)).append("\n");
+            }
+            
+            channel.sendMessage(message.toString()).queue();
         } else {
             // Статистика по конкретному испытанию
             String challengeName = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
-            // В реальной реализации здесь будет получение испытания и его статистики
+            Challenge challenge = challengeService.getChallenge(challengeName);
+            
+            if (challenge == null) {
+                channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+                return;
+            }
+            
+            ChallengeStats stats = challengeService.getChallengeStats(challenge);
+            String formattedStats = discordService.formatChallengeStats(stats);
+            channel.sendMessage(formattedStats).queue();
         }
     }
 
@@ -153,8 +195,11 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду создания нового испытания
      */
     private void handleNewChallengeCommand(String[] parts, String userId, String username, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 3) {
-            // channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания] [тип]").queue();
+            channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания] [тип]").queue();
             return;
         }
         
@@ -163,7 +208,7 @@ public class DiscordMessageListener extends ListenerAdapter {
         try {
             target = Long.parseLong(parts[2]);
         } catch (NumberFormatException e) {
-            // channel.sendMessage("Цель должна быть числом.").queue();
+            channel.sendMessage("Цель должна быть числом.").queue();
             return;
         }
         
@@ -187,17 +232,18 @@ public class DiscordMessageListener extends ListenerAdapter {
         }
         
         Challenge challenge = challengeService.createChallenge(name, target, endDate, type, description, unit);
-        // В реальной реализации здесь будет сохранение испытания в Ignite
-        
-        // channel.sendMessage("Испытание \"" + name + "\" успешно создано!").queue();
+        channel.sendMessage("Испытание \"" + name + "\" успешно создано!").queue();
     }
 
     /**
      * Обработать команду удаления испытания
      */
     private void handleDeleteChallengeCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите название испытания. Используйте: +удалить <название>").queue();
+            channel.sendMessage("Укажите название испытания. Используйте: +удалить <название>").queue();
             return;
         }
         
@@ -205,9 +251,9 @@ public class DiscordMessageListener extends ListenerAdapter {
         boolean deleted = challengeService.deleteChallenge(challengeName);
         
         if (deleted) {
-            // channel.sendMessage("Испытание \"" + challengeName + "\" успешно удалено.").queue();
+            channel.sendMessage("Испытание \"" + challengeName + "\" успешно удалено.").queue();
         } else {
-            // channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            channel.sendMessage("Не удалось удалить испытание \"" + challengeName + "\".").queue();
         }
     }
 
@@ -215,36 +261,59 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду остановки испытания
      */
     private void handleStopChallengeCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите название испытания. Используйте: +остановить <название>").queue();
+            channel.sendMessage("Укажите название испытания. Используйте: +остановить <название>").queue();
             return;
         }
         
         String challengeName = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
-        // В реальной реализации здесь будет получение и обновление испытания
-        // channel.sendMessage("Испытание \"" + challengeName + "\" остановлено.").queue();
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        challengeService.updateChallengeStatus(challenge, false);
+        channel.sendMessage("Испытание \"" + challengeName + "\" остановлено.").queue();
     }
 
     /**
      * Обработать команду возобновления испытания
      */
     private void handleResumeChallengeCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите название испытания. Используйте: +продолжить <название>").queue();
+            channel.sendMessage("Укажите название испытания. Используйте: +продолжить <название>").queue();
             return;
         }
         
         String challengeName = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
-        // В реальной реализации здесь будет получение и обновление испытания
-        // channel.sendMessage("Испытание \"" + challengeName + "\" возобновлено.").queue();
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        challengeService.updateChallengeStatus(challenge, true);
+        channel.sendMessage("Испытание \"" + challengeName + "\" возобновлено.").queue();
     }
 
     /**
      * Обработать команду изменения цели испытания
      */
     private void handleChangeTargetCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 3) {
-            // channel.sendMessage("Укажите название испытания и новую цель. Используйте: +изменить <название> <новая цель>").queue();
+            channel.sendMessage("Недостаточно параметров. Используйте: +изменить <название> <новая цель>").queue();
             return;
         }
         
@@ -253,86 +322,242 @@ public class DiscordMessageListener extends ListenerAdapter {
         try {
             newTarget = Long.parseLong(parts[2]);
         } catch (NumberFormatException e) {
-            // channel.sendMessage("Новая цель должна быть числом.").queue();
+            channel.sendMessage("Цель должна быть числом.").queue();
             return;
         }
         
-        // В реальной реализации здесь будет получение и обновление испытания
-        // channel.sendMessage("Цель испытания \"" + challengeName + "\" изменена на " + newTarget + ".").queue();
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        challengeService.updateChallengeTarget(challenge, newTarget);
+        channel.sendMessage("Цель испытания \"" + challengeName + "\" изменена на " + newTarget + ".").queue();
     }
 
     /**
-     * Обработать команду просмотра личных испытаний
+     * Обработать команду установки прогресса участника
+     */
+    private void handleSetParticipantProgressCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
+        if (parts.length < 4) {
+            channel.sendMessage("Недостаточно параметров. Используйте: +установить_прогресс <испытание> <пользователь> <количество>").queue();
+            return;
+        }
+        
+        String challengeName = parts[1];
+        String userMention = parts[2]; // Формат: <@123456789>
+        long progress;
+        try {
+            progress = Long.parseLong(parts[3]);
+        } catch (NumberFormatException e) {
+            channel.sendMessage("Количество должно быть числом.").queue();
+            return;
+        }
+        
+        // Извлекаем ID пользователя из упоминания
+        String userId = userMention.replaceAll("[^0-9]", "");
+        
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        challengeService.setParticipantProgress(challenge, userId, progress);
+        channel.sendMessage("Прогресс участника <@" + userId + "> в испытании \"" + challengeName + "\" установлен на " + progress + ".").queue();
+    }
+
+    /**
+     * Обработать команду добавления участника
+     */
+    private void handleAddParticipantCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
+        if (parts.length < 3) {
+            channel.sendMessage("Недостаточно параметров. Используйте: +добавить_участника <испытание> <пользователь>").queue();
+            return;
+        }
+        
+        String challengeName = parts[1];
+        String userMention = parts[2]; // Формат: <@123456789>
+        
+        // Извлекаем ID пользователя из упоминания
+        String userId = userMention.replaceAll("[^0-9]", "");
+        
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        challengeService.addParticipant(challenge, userId);
+        channel.sendMessage("Участник <@" + userId + "> добавлен в испытание \"" + challengeName + "\".").queue();
+    }
+
+    /**
+     * Обработать команду удаления участника
+     */
+    private void handleRemoveParticipantCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
+        if (parts.length < 3) {
+            channel.sendMessage("Недостаточно параметров. Используйте: +удалить_участника <испытание> <пользователь>").queue();
+            return;
+        }
+        
+        String challengeName = parts[1];
+        String userMention = parts[2]; // Формат: <@123456789>
+        
+        // Извлекаем ID пользователя из упоминания
+        String userId = userMention.replaceAll("[^0-9]", "");
+        
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        challengeService.removeParticipant(challenge, userId);
+        channel.sendMessage("Участник <@" + userId + "> удален из испытания \"" + challengeName + "\".").queue();
+    }
+
+    /**
+     * Обработать команду личных испытаний
      */
     private void handleMyChallengesCommand(String userId, String channelId) {
-        // В реальной реализации здесь будет получение испытаний пользователя
-        // channel.sendMessage("Ваши испытания: ...").queue();
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
+        List<Challenge> userChallenges = challengeService.getUserChallenges(userId);
+        
+        if (userChallenges.isEmpty()) {
+            channel.sendMessage("У вас нет активных испытаний.").queue();
+            return;
+        }
+        
+        StringBuilder message = new StringBuilder();
+        message.append("**Ваши испытания:**\n\n");
+        
+        for (Challenge challenge : userChallenges) {
+            ChallengeStats stats = challengeService.getChallengeStats(challenge);
+            message.append("- ").append(challenge.getName()).append(": ")
+                   .append(stats.getCurrentValue()).append("/").append(stats.getTargetValue())
+                   .append(" (").append(String.format("%.2f", stats.getPercentage())).append("%)\n");
+        }
+        
+        channel.sendMessage(message.toString()).queue();
     }
 
     /**
-     * Обработать команду регистрации на испытание
+     * Обработать команду регистрации
      */
     private void handleRegistrationCommand(String[] parts, String userId, String username, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите название испытания. Используйте: +регистрация <название>").queue();
+            channel.sendMessage("Укажите название испытания. Используйте: +регистрация <название>").queue();
             return;
         }
         
         String challengeName = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
-        boolean registered = userService.registerForChallenge(userId, username, challengeName);
+        Challenge challenge = challengeService.getChallenge(challengeName);
         
-        if (registered) {
-            // channel.sendMessage("Вы успешно зарегистрированы на испытание \"" + challengeName + "\"!").queue();
-        } else {
-            // channel.sendMessage("Не удалось зарегистрироваться на испытание \"" + challengeName + "\".").queue();
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
         }
+        
+        challengeService.addParticipant(challenge, userId);
+        channel.sendMessage("Вы успешно зарегистрированы на испытание \"" + challengeName + "\".").queue();
     }
 
     /**
      * Обработать команду таблицы лидеров
      */
     private void handleLeaderboardCommand(String[] parts, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите название испытания. Используйте: +топ <название> [количество]").queue();
+            channel.sendMessage("Укажите название испытания. Используйте: +топ <испытание> [количество]").queue();
             return;
         }
         
         String challengeName = parts[1];
-        int limit = 10; // По умолчанию
+        int limit = 5; // По умолчанию показываем топ-5
         
         if (parts.length > 2) {
             try {
                 limit = Integer.parseInt(parts[2]);
+                // Ограничиваем количество участников в списке
+                limit = Math.min(limit, 20);
             } catch (NumberFormatException e) {
                 // Используем значение по умолчанию
             }
         }
         
-        // В реальной реализации здесь будет генерация таблицы лидеров
-        // channel.sendMessage("Таблица лидеров по испытанию \"" + challengeName + "\": ...").queue();
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, limit);
+        String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
+        channel.sendMessage(leaderboardMessage).queue();
     }
 
     /**
-     * Обработать команду просмотра личного прогресса
+     * Обработать команду личного прогресса
      */
     private void handleProgressCommand(String[] parts, String userId, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите название испытания. Используйте: +прогресс <название>").queue();
+            channel.sendMessage("Укажите название испытания. Используйте: +прогресс <испытание>").queue();
             return;
         }
         
         String challengeName = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
-        // В реальной реализации здесь будет получение прогресса пользователя
-        // channel.sendMessage("Ваш прогресс по испытанию \"" + challengeName + "\": ...").queue();
+        Challenge challenge = challengeService.getChallenge(challengeName);
+        
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        Long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+        String message = String.format("**Ваш прогресс по испытанию \"%s\":**\n%s: %d/%d (%.2f%%)", 
+                                     challenge.getName(), challenge.getUnit(), userProgress, 
+                                     challenge.getTargetValue(), 
+                                     challenge.getTargetValue() > 0 ? (double) userProgress / challenge.getTargetValue() * 100 : 0);
+        
+        channel.sendMessage(message).queue();
     }
 
     /**
      * Обработать команду обновления прогресса
      */
     private void handleProgressUpdateCommand(String command, String userId, String username, String channelId) {
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) return;
+        
         String[] parts = command.split("\\s+");
         if (parts.length < 2) {
-            // channel.sendMessage("Укажите количество. Используйте: +<испытание> <количество>").queue();
+            channel.sendMessage("Недостаточно параметров. Используйте: +<испытание> <количество>").queue();
             return;
         }
         
@@ -341,18 +566,23 @@ public class DiscordMessageListener extends ListenerAdapter {
         try {
             amount = Long.parseLong(parts[1]);
         } catch (NumberFormatException e) {
-            // channel.sendMessage("Количество должно быть числом.").queue();
+            channel.sendMessage("Количество должно быть числом.").queue();
             return;
         }
         
-        // В реальной реализации здесь будет:
-        // 1. Получение испытания из Ignite
-        // 2. Проверка, что испытание существует и активно
-        // 3. Проверка регистрации пользователя (для индивидуальных испытаний)
-        // 4. Обновление прогресса
-        // 5. Расчет статистики
-        // 6. Отправка ответа в канал
+        Challenge challenge = challengeService.getChallenge(challengeName);
         
-        // channel.sendMessage("Прогресс по испытанию \"" + challengeName + "\" обновлен. " + statistics).queue();
+        if (challenge == null) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+            return;
+        }
+        
+        if (!challenge.isActive()) {
+            channel.sendMessage("Испытание \"" + challengeName + "\" не активно.").queue();
+            return;
+        }
+        
+        challengeService.addProgress(challenge, userId, username, amount);
+        channel.sendMessage("Прогресс по испытанию \"" + challengeName + "\" обновлен на " + amount + ".").queue();
     }
 }

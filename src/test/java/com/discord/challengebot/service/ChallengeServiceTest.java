@@ -17,6 +17,9 @@ import static org.mockito.Mockito.*;
 class ChallengeServiceTest {
 
     @Mock
+    private DataStorageService dataStorageService;
+
+    @Mock
     private Challenge mockChallenge;
 
     @InjectMocks
@@ -47,6 +50,9 @@ class ChallengeServiceTest {
         assertTrue(challenge.isActive());
         assertNotNull(challenge.getStartDate());
         assertEquals(endDate, challenge.getEndDate());
+        
+        // Verify that saveChallenge was called
+        verify(dataStorageService).saveChallenge(any(Challenge.class));
     }
 
     @Test
@@ -58,12 +64,14 @@ class ChallengeServiceTest {
         when(mockChallenge.getCurrentValue()).thenReturn(100L);
         java.util.Map<String, Long> participantProgress = new java.util.HashMap<>();
         when(mockChallenge.getParticipantProgress()).thenReturn(participantProgress);
+        when(mockChallenge.getName()).thenReturn("Отжимания");
 
         Challenge updatedChallenge = challengeService.addProgress(mockChallenge, userId, username, amount);
 
         assertNotNull(updatedChallenge);
         verify(mockChallenge).setCurrentValue(110L);
         assertEquals(10L, participantProgress.get(userId));
+        verify(dataStorageService).saveChallenge(mockChallenge);
     }
 
     @Test
@@ -71,6 +79,7 @@ class ChallengeServiceTest {
         when(mockChallenge.getName()).thenReturn("Отжимания");
         when(mockChallenge.getTargetValue()).thenReturn(10000L);
         when(mockChallenge.getCurrentValue()).thenReturn(2500L);
+        when(mockChallenge.getEndDate()).thenReturn(LocalDateTime.now().plusDays(10));
 
         ChallengeStats stats = challengeService.getChallengeStats(mockChallenge);
 

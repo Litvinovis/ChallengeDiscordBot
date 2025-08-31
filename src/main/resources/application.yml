@@ -3,6 +3,7 @@ discord:
   token: ${DISCORD_BOT_TOKEN} # Discord bot token from environment variable
   channel: "качал-очка"        # Channel name where bot responds
   admin-user-id: ${DISCORD_ADMIN_USER_ID} # User ID with admin privileges
+  report-channel: "reports"    # Channel name for reports and challenge completion notifications
 
 # Challenge configuration
 challenges:

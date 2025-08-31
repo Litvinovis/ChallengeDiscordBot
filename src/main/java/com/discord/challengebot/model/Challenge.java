@@ -3,6 +3,8 @@ package com.discord.challengebot.model;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Модель испытания
@@ -19,9 +21,11 @@ public class Challenge {
     private boolean active;
     private String description;
     private String unit;
+    private List<String> participants; // List of participant user IDs
 
     public Challenge() {
         this.participantProgress = new HashMap<>();
+        this.participants = new ArrayList<>();
     }
 
     public Challenge(String id, String name, long targetValue, ChallengeType type, 
@@ -37,6 +41,7 @@ public class Challenge {
         this.active = true;
         this.description = description;
         this.unit = unit;
+        this.participants = new ArrayList<>();
     }
 
     // Getters and setters
@@ -126,5 +131,28 @@ public class Challenge {
 
     public void setUnit(String unit) {
         this.unit = unit;
+    }
+
+    public List<String> getParticipants() {
+        return participants;
+    }
+
+    public void setParticipants(List<String> participants) {
+        this.participants = participants;
+    }
+
+    // Helper methods for participant management
+    public void addParticipant(String userId) {
+        if (!participants.contains(userId)) {
+            participants.add(userId);
+        }
+    }
+
+    public void removeParticipant(String userId) {
+        participants.remove(userId);
+    }
+
+    public boolean hasParticipant(String userId) {
+        return participants.contains(userId);
     }
 }
