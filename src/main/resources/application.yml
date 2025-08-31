@@ -4,6 +4,7 @@ discord:
   channel: "качал-очка"        # Channel name where bot responds
   admin-user-id: ${DISCORD_ADMIN_USER_ID} # User ID with admin privileges
   report-channel: "reports"    # Channel name for reports and challenge completion notifications
+  report-guild-id: ${DISCORD_REPORT_GUILD_ID} # Guild/Server ID for reports (optional, if not set uses same server as command)
 
 # Challenge configuration
 challenges:

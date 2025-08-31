@@ -5,6 +5,7 @@ import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import org.slf4j.Logger;
@@ -83,8 +84,21 @@ public class DiscordService {
      */
     public void sendMessageToChannel(String channelName, String message) {
         try {
-            // Ищем канал по имени
-            TextChannel channel = jda.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
+            TextChannel channel = null;
+            
+            // Если указан конкретный сервер для отчетов, ищем канал на этом сервере
+            if (discordConfig.getReportGuildId() != null && !discordConfig.getReportGuildId().isEmpty()) {
+                Guild guild = jda.getGuildById(discordConfig.getReportGuildId());
+                if (guild != null) {
+                    channel = guild.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
+                }
+            }
+            
+            // Если не нашли канал на указанном сервере или сервер не указан, ищем на всех серверах
+            if (channel == null) {
+                channel = jda.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
+            }
+            
             if (channel != null) {
                 channel.sendMessage(message).queue();
                 logger.info("Сообщение отправлено в канал {}: {}", channelName, message);

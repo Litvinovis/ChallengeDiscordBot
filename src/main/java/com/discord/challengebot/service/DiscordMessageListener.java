@@ -4,6 +4,7 @@ import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -27,6 +28,7 @@ public class DiscordMessageListener extends ListenerAdapter {
     private final ChallengeService challengeService;
     private final UserService userService;
     private final StatisticsService statisticsService;
+    private JDA jda;
 
     public DiscordMessageListener(DiscordService discordService, DiscordConfig discordConfig,
                                 ChallengeService challengeService, UserService userService,
@@ -40,6 +42,9 @@ public class DiscordMessageListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
+        // Сохраняем ссылку на JDA
+        this.jda = event.getJDA();
+        
         // Игнорируем сообщения от ботов
         if (event.getAuthor().isBot()) {
             return;
@@ -83,7 +88,7 @@ public class DiscordMessageListener extends ListenerAdapter {
         // Проверяем авторизацию для команд, требующих прав администратора
         if (!discordService.isAuthorizedUser(userId, commandName)) {
             // Отправляем сообщение в канал
-            TextChannel channel = event.getJDA().getTextChannelById(channelId);
+            TextChannel channel = jda.getTextChannelById(channelId);
             if (channel != null) {
                 channel.sendMessage("У вас нет прав для выполнения этой команды.").queue();
             }
@@ -145,7 +150,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      */
     private void handleHelpCommand(String channelId) {
         String helpMessage = discordService.generateHelpMessage();
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel != null) {
             channel.sendMessage(helpMessage).queue();
         }
@@ -155,7 +160,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду статистики
      */
     private void handleStatisticsCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length == 1) {
@@ -195,7 +200,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду создания нового испытания
      */
     private void handleNewChallengeCommand(String[] parts, String userId, String username, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 3) {
@@ -239,7 +244,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду удаления испытания
      */
     private void handleDeleteChallengeCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 2) {
@@ -261,7 +266,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду остановки испытания
      */
     private void handleStopChallengeCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 2) {
@@ -285,7 +290,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду возобновления испытания
      */
     private void handleResumeChallengeCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 2) {
@@ -309,7 +314,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду изменения цели испытания
      */
     private void handleChangeTargetCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 3) {
@@ -341,7 +346,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду установки прогресса участника
      */
     private void handleSetParticipantProgressCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 4) {
@@ -377,7 +382,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду добавления участника
      */
     private void handleAddParticipantCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 3) {
@@ -406,7 +411,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду удаления участника
      */
     private void handleRemoveParticipantCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 3) {
@@ -435,7 +440,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду личных испытаний
      */
     private void handleMyChallengesCommand(String userId, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         List<Challenge> userChallenges = challengeService.getUserChallenges(userId);
@@ -462,7 +467,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду регистрации
      */
     private void handleRegistrationCommand(String[] parts, String userId, String username, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 2) {
@@ -486,7 +491,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду таблицы лидеров
      */
     private void handleLeaderboardCommand(String[] parts, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 2) {
@@ -523,7 +528,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду личного прогресса
      */
     private void handleProgressCommand(String[] parts, String userId, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         if (parts.length < 2) {
@@ -552,7 +557,7 @@ public class DiscordMessageListener extends ListenerAdapter {
      * Обработать команду обновления прогресса
      */
     private void handleProgressUpdateCommand(String command, String userId, String username, String channelId) {
-        TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) return;
         
         String[] parts = command.split("\\s+");

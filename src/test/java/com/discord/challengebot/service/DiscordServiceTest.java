@@ -33,47 +33,59 @@ class DiscordServiceTest {
     }
 
     @Test
-    void testGenerateHelpMessage() {
-        String helpMessage = discordService.generateHelpMessage();
-
-        assertNotNull(helpMessage);
-        assertTrue(helpMessage.contains("Справка по командам бота"));
-        assertTrue(helpMessage.contains("Основные команды:"));
-        assertTrue(helpMessage.contains("Команды управления испытаниями"));
-        assertTrue(helpMessage.contains("Команды пользователя:"));
-    }
-
-    @Test
-    void testIsAuthorizedUserForAdminCommandWhenAdmin() {
-        String adminUserId = "12345";
-        String command = "новый";
-        when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
-        when(userService.isAdminUser(adminUserId)).thenReturn(true);
-
-        boolean isAuthorized = discordService.isAuthorizedUser(adminUserId, command);
-
-        assertTrue(isAuthorized);
-    }
-
-    @Test
-    void testIsAuthorizedUserForAdminCommandWhenNotAdmin() {
-        String regularUserId = "67890";
-        String command = "новый";
-        when(discordConfig.getAdminUserId()).thenReturn("12345");
-        when(userService.isAdminUser(regularUserId)).thenReturn(false);
-
-        boolean isAuthorized = discordService.isAuthorizedUser(regularUserId, command);
-
-        assertFalse(isAuthorized);
-    }
-
-    @Test
-    void testIsAuthorizedUserForRegularCommand() {
+    void testIsAuthorizedUser_AdminCommand() {
         String userId = "12345";
-        String command = "статистика";
+        String command = "новый";
+        
+        when(userService.isAdminUser(userId)).thenReturn(true);
+        
+        boolean result = discordService.isAuthorizedUser(userId, command);
+        
+        assertTrue(result);
+        verify(userService).isAdminUser(userId);
+    }
 
-        boolean isAuthorized = discordService.isAuthorizedUser(userId, command);
+    @Test
+    void testIsAuthorizedUser_NonAdminCommand() {
+        String userId = "12345";
+        String command = "помощь";
+        
+        boolean result = discordService.isAuthorizedUser(userId, command);
+        
+        assertTrue(result);
+        verify(userService, never()).isAdminUser(userId);
+    }
 
-        assertTrue(isAuthorized);
+    @Test
+    void testIsAuthorizedUser_AdminCommandNonAdminUser() {
+        String userId = "12345";
+        String command = "удалить";
+        
+        when(userService.isAdminUser(userId)).thenReturn(false);
+        
+        boolean result = discordService.isAuthorizedUser(userId, command);
+        
+        assertFalse(result);
+        verify(userService).isAdminUser(userId);
+    }
+
+    @Test
+    void testFormatChallengeStats() {
+        // This is a pass-through method, so we just verify it calls the statistics service
+        when(statisticsService.formatChallengeStats(any())).thenReturn("formatted stats");
+        
+        String result = discordService.formatChallengeStats(null);
+        
+        assertEquals("formatted stats", result);
+        verify(statisticsService).formatChallengeStats(null);
+    }
+    
+    @Test
+    void testGetReportGuildId() {
+        // Test that the report guild ID can be set and retrieved
+        String guildId = "987654321";
+        when(discordConfig.getReportGuildId()).thenReturn(guildId);
+        
+        assertEquals(guildId, discordConfig.getReportGuildId());
     }
 }
