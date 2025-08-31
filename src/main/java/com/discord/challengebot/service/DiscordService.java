@@ -56,9 +56,14 @@ public class DiscordService {
 
     @PreDestroy
     public void shutdown() {
-        if (jda != null) {
-            logger.info("Выключение Discord бота");
-            jda.shutdown();
+        try {
+            if (jda != null) {
+                logger.info("Выключение Discord бота");
+                jda.shutdown();
+                logger.info("Discord бот успешно выключен");
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка при выключении Discord бота", e);
         }
     }
 
@@ -67,6 +72,16 @@ public class DiscordService {
      */
     public void sendMessage(String channelId, String message) {
         try {
+            if (channelId == null || channelId.isEmpty()) {
+                logger.warn("Попытка отправить сообщение в канал с пустым ID");
+                return;
+            }
+            
+            if (message == null || message.isEmpty()) {
+                logger.warn("Попытка отправить пустое сообщение");
+                return;
+            }
+            
             TextChannel channel = jda.getTextChannelById(channelId);
             if (channel != null) {
                 channel.sendMessage(message).queue();
@@ -75,7 +90,7 @@ public class DiscordService {
                 logger.warn("Канал с ID {} не найден", channelId);
             }
         } catch (Exception e) {
-            logger.error("Ошибка отправки сообщения в Discord", e);
+            logger.error("Ошибка отправки сообщения в Discord в канал {}", channelId, e);
         }
     }
 
@@ -84,6 +99,16 @@ public class DiscordService {
      */
     public void sendMessageToChannel(String channelName, String message) {
         try {
+            if (channelName == null || channelName.isEmpty()) {
+                logger.warn("Попытка отправить сообщение в канал с пустым именем");
+                return;
+            }
+            
+            if (message == null || message.isEmpty()) {
+                logger.warn("Попытка отправить пустое сообщение");
+                return;
+            }
+            
             TextChannel channel = null;
             
             // Если указан конкретный сервер для отчетов, ищем канал на этом сервере
@@ -91,12 +116,20 @@ public class DiscordService {
                 Guild guild = jda.getGuildById(discordConfig.getReportGuildId());
                 if (guild != null) {
                     channel = guild.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
+                    if (channel != null) {
+                        logger.debug("Канал '{}' найден на сервере с ID {}", channelName, discordConfig.getReportGuildId());
+                    }
+                } else {
+                    logger.warn("Сервер с ID {} не найден", discordConfig.getReportGuildId());
                 }
             }
             
             // Если не нашли канал на указанном сервере или сервер не указан, ищем на всех серверах
             if (channel == null) {
                 channel = jda.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
+                if (channel != null) {
+                    logger.debug("Канал '{}' найден на одном из серверов", channelName);
+                }
             }
             
             if (channel != null) {
@@ -106,7 +139,7 @@ public class DiscordService {
                 logger.warn("Канал с именем {} не найден", channelName);
             }
         } catch (Exception e) {
-            logger.error("Ошибка отправки сообщения в Discord", e);
+            logger.error("Ошибка отправки сообщения в Discord в канал {}", channelName, e);
         }
     }
 
@@ -115,6 +148,16 @@ public class DiscordService {
      */
     public void sendMessageWithVisualization(String channelId, String message, byte[] image) {
         try {
+            if (channelId == null || channelId.isEmpty()) {
+                logger.warn("Попытка отправить сообщение с визуализацией в канал с пустым ID");
+                return;
+            }
+            
+            if (message == null || message.isEmpty()) {
+                logger.warn("Попытка отправить сообщение с визуализацией с пустым текстом");
+                return;
+            }
+            
             TextChannel channel = jda.getTextChannelById(channelId);
             if (channel != null) {
                 channel.sendMessage(message).queue();
@@ -125,7 +168,7 @@ public class DiscordService {
                 logger.warn("Канал с ID {} не найден", channelId);
             }
         } catch (Exception e) {
-            logger.error("Ошибка отправки сообщения с визуализацией в Discord", e);
+            logger.error("Ошибка отправки сообщения с визуализацией в Discord в канал {}", channelId, e);
         }
     }
 
@@ -133,74 +176,103 @@ public class DiscordService {
      * Сгенерировать сообщение справки
      */
     public String generateHelpMessage() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("**Справка по командам бота**\n\n");
-        
-        sb.append("**Основные команды:**\n");
-        sb.append("`+<испытание> <количество>` - Добавить прогресс к испытанию (например: `+отжимания 10`)\n");
-        sb.append("`+статистика` - Показать статистику по всем испытаниям\n");
-        sb.append("`+статистика <испытание>` - Показать статистику по конкретному испытанию\n");
-        sb.append("`+помощь` - Показать эту справку\n\n");
-        
-        sb.append("**Команды управления испытаниями (только для администраторов):**\n");
-        sb.append("`+новый <название> <цель> [дата окончания] [тип]` - Создать новое испытание\n");
-        sb.append("`+удалить <название>` - Удалить испытание\n");
-        sb.append("`+остановить <название>` - Остановить активное испытание\n");
-        sb.append("`+продолжить <название>` - Продолжить остановленное испытание\n");
-        sb.append("`+изменить <название> <новая цель>` - Изменить цель испытания\n");
-        sb.append("`+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника\n");
-        sb.append("`+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание\n");
-        sb.append("`+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания\n\n");
-        
-        sb.append("**Команды пользователя:**\n");
-        sb.append("`+мои` - Показать личные испытания\n");
-        sb.append("`+топ <испытание> [количество]` - Показать таблицу лидеров по испытанию\n");
-        sb.append("`+прогресс <испытание>` - Показать личный прогресс по испытанию\n");
-        sb.append("`+регистрация <название>` - Зарегистрироваться на испытание\n");
-        
-        return sb.toString();
+        try {
+            logger.debug("Генерация сообщения справки");
+            StringBuilder sb = new StringBuilder();
+            sb.append("**Справка по командам бота**\n\n");
+            
+            sb.append("**Основные команды:**\n");
+            sb.append("`+<испытание> <количество>` - Добавить прогресс к испытанию (например: `+отжимания 10`)\n");
+            sb.append("`+статистика` - Показать статистику по всем испытаниям\n");
+            sb.append("`+статистика <испытание>` - Показать статистику по конкретному испытанию\n");
+            sb.append("`+помощь` - Показать эту справку\n\n");
+            
+            sb.append("**Команды управления испытаниями (только для администраторов):**\n");
+            sb.append("`+новый <название> <цель> [дата окончания] [тип]` - Создать новое испытание\n");
+            sb.append("`+удалить <название>` - Удалить испытание\n");
+            sb.append("`+остановить <название>` - Остановить активное испытание\n");
+            sb.append("`+продолжить <название>` - Продолжить остановленное испытание\n");
+            sb.append("`+изменить <название> <новая цель>` - Изменить цель испытания\n");
+            sb.append("`+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника\n");
+            sb.append("`+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание\n");
+            sb.append("`+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания\n\n");
+            
+            sb.append("**Команды пользователя:**\n");
+            sb.append("`+мои` - Показать личные испытания\n");
+            sb.append("`+топ <испытание> [количество]` - Показать таблицу лидеров по испытанию\n");
+            sb.append("`+прогресс <испытание>` - Показать личный прогресс по испытанию\n");
+            sb.append("`+регистрация <название>` - Зарегистрироваться на испытание\n");
+            
+            logger.debug("Сообщение справки успешно сгенерировано");
+            return sb.toString();
+        } catch (Exception e) {
+            logger.error("Ошибка при генерации сообщения справки", e);
+            return "**Ошибка при генерации справки. Пожалуйста, попробуйте позже.**";
+        }
     }
 
     /**
      * Отправить ежедневный отчет
      */
     public void sendDailyReport() {
-        logger.info("Отправка ежедневного отчета");
-        // Получаем все активные испытания
-        List<Challenge> challenges = challengeService.getAllChallenges();
-        challenges = challenges.stream().filter(Challenge::isActive).collect(java.util.stream.Collectors.toList());
-        
-        if (challenges.isEmpty()) {
-            sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
-            return;
+        try {
+            logger.info("Отправка ежедневного отчета");
+            // Получаем все активные испытания
+            List<Challenge> challenges = challengeService.getAllChallenges();
+            challenges = challenges.stream().filter(Challenge::isActive).collect(java.util.stream.Collectors.toList());
+            
+            if (challenges.isEmpty()) {
+                sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
+                logger.info("Нет активных испытаний для отправки отчета");
+                return;
+            }
+            
+            StringBuilder report = new StringBuilder();
+            report.append("**Ежедневный отчет по испытаниям**\n\n");
+            
+            for (Challenge challenge : challenges) {
+                ChallengeStats stats = challengeService.getChallengeStats(challenge);
+                if (stats != null) {
+                    report.append(statisticsService.formatReportForDiscord(stats)).append("\n");
+                }
+            }
+            
+            sendMessageToChannel(discordConfig.getReportChannel(), report.toString());
+            logger.info("Ежедневный отчет успешно отправлен, обработано {} испытаний", challenges.size());
+        } catch (Exception e) {
+            logger.error("Ошибка при отправке ежедневного отчета", e);
         }
-        
-        StringBuilder report = new StringBuilder();
-        report.append("**Ежедневный отчет по испытаниям**\n\n");
-        
-        for (Challenge challenge : challenges) {
-            ChallengeStats stats = challengeService.getChallengeStats(challenge);
-            report.append(statisticsService.formatReportForDiscord(stats)).append("\n");
-        }
-        
-        sendMessageToChannel(discordConfig.getReportChannel(), report.toString());
     }
 
     /**
      * Отправить уведомление о завершении испытания
      */
     public void sendChallengeCompletionNotification(Challenge challenge) {
-        String message = String.format("**Испытание завершено!**\nИспытание \"%s\" успешно завершено!\nПоздравляем всех участников!", 
-                                     challenge.getName());
-        
-        // Отправляем сообщение в канал отчетов
-        sendMessageToChannel(discordConfig.getReportChannel(), message);
-        
-        // Также отправляем топ-5 участников
-        List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, 5);
-        if (!leaderboard.isEmpty()) {
-            String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
-            sendMessageToChannel(discordConfig.getReportChannel(), leaderboardMessage);
+        try {
+            logger.info("Отправка уведомления о завершении испытания: {}", challenge != null ? challenge.getName() : "null");
+            
+            if (challenge == null) {
+                logger.warn("Попытка отправить уведомление о завершении null испытания");
+                return;
+            }
+            
+            String message = String.format("**Испытание завершено!**\nИспытание \"%s\" успешно завершено!\nПоздравляем всех участников!", 
+                                         challenge.getName());
+            
+            // Отправляем сообщение в канал отчетов
+            sendMessageToChannel(discordConfig.getReportChannel(), message);
+            
+            // Также отправляем топ-5 участников
+            List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, 5);
+            if (!leaderboard.isEmpty()) {
+                String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
+                sendMessageToChannel(discordConfig.getReportChannel(), leaderboardMessage);
+            }
+            
+            logger.info("Уведомление о завершении испытания '{}' успешно отправлено", challenge.getName());
+        } catch (Exception e) {
+            logger.error("Ошибка при отправке уведомления о завершении испытания: {}", 
+                        challenge != null ? challenge.getName() : "null", e);
         }
     }
 
@@ -208,20 +280,47 @@ public class DiscordService {
      * Форматировать статистику испытания для Discord
      */
     public String formatChallengeStats(ChallengeStats stats) {
-        return statisticsService.formatChallengeStats(stats);
+        try {
+            logger.debug("Форматирование статистики испытания для Discord");
+            return statisticsService.formatChallengeStats(stats);
+        } catch (Exception e) {
+            logger.error("Ошибка при форматировании статистики испытания для Discord", e);
+            return "**Ошибка при форматировании статистики. Пожалуйста, попробуйте позже.**";
+        }
     }
 
     /**
      * Проверить, авторизован ли пользователь для команды
      */
     public boolean isAuthorizedUser(String userId, String command) {
-        // Некоторые команды доступны только администраторам
-        if (command.startsWith("новый") || command.startsWith("удалить") || 
-            command.startsWith("остановить") || command.startsWith("продолжить") || 
-            command.startsWith("изменить") || command.startsWith("установить_прогресс") ||
-            command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
-            return userService.isAdminUser(userId);
+        try {
+            logger.debug("Проверка авторизации пользователя {} для команды {}", userId, command);
+            
+            if (userId == null || userId.isEmpty()) {
+                logger.warn("Попытка проверить авторизацию для пользователя с пустым ID");
+                return false;
+            }
+            
+            if (command == null || command.isEmpty()) {
+                logger.warn("Попытка проверить авторизацию для пустой команды");
+                return true;
+            }
+            
+            // Некоторые команды доступны только администраторам
+            if (command.startsWith("новый") || command.startsWith("удалить") || 
+                command.startsWith("остановить") || command.startsWith("продолжить") || 
+                command.startsWith("изменить") || command.startsWith("установить_прогресс") ||
+                command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
+                boolean isAdmin = userService.isAdminUser(userId);
+                logger.debug("Пользователь {} {} администратором", userId, isAdmin ? "является" : "не является");
+                return isAdmin;
+            }
+            
+            logger.debug("Команда '{}' доступна всем пользователям", command);
+            return true;
+        } catch (Exception e) {
+            logger.error("Ошибка при проверке авторизации пользователя {} для команды {}", userId, command, e);
+            return false;
         }
-        return true;
     }
 }
