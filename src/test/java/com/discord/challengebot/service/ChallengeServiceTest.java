@@ -56,13 +56,14 @@ class ChallengeServiceTest {
         long amount = 10;
         
         when(mockChallenge.getCurrentValue()).thenReturn(100L);
-        when(mockChallenge.getParticipantProgress()).thenReturn(new java.util.HashMap<>());
+        java.util.Map<String, Long> participantProgress = new java.util.HashMap<>();
+        when(mockChallenge.getParticipantProgress()).thenReturn(participantProgress);
 
         Challenge updatedChallenge = challengeService.addProgress(mockChallenge, userId, username, amount);
 
         assertNotNull(updatedChallenge);
         verify(mockChallenge).setCurrentValue(110L);
-        verify(mockChallenge.getParticipantProgress()).put(userId, 10L);
+        assertEquals(10L, participantProgress.get(userId));
     }
 
     @Test

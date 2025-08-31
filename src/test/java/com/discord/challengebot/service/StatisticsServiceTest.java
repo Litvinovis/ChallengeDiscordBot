@@ -89,12 +89,12 @@ class StatisticsServiceTest {
 
         String formatted = statisticsService.formatReportForDiscord(stats);
 
-        assertTrue(formatted.contains("Статистика по испытанию: Отжимания"));
+        assertTrue(formatted.contains("**Статистика по испытанию: Отжимания**"));
         assertTrue(formatted.contains("Цель: 10000"));
         assertTrue(formatted.contains("Выполнено: 2500"));
         assertTrue(formatted.contains("Осталось: 7500"));
-        assertTrue(formatted.contains("Процент выполнения: 25.00%"));
-        assertTrue(formatted.contains("Ежедневная цель: 750.00 в день"));
+        assertTrue(formatted.contains("Процент выполнения: 25,00%"));
+        assertTrue(formatted.contains("Ежедневная цель: 750,00 в день"));
         assertTrue(formatted.contains("Дней осталось: 10"));
     }
 }
