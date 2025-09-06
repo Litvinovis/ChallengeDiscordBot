@@ -209,8 +209,9 @@ public class StatisticsService {
             sb.append("Цель: ").append(stats.getTargetValue()).append("\n");
             sb.append("Выполнено: ").append(stats.getCurrentValue()).append("\n");
             sb.append("Осталось: ").append(stats.getRemaining()).append("\n");
-            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.getPercentage())).append("%\n");
-            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.getDailyTarget())).append(" в день\n");
+            // Используем запятую как десятичный разделитель для русской локали
+            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.getPercentage()).replace('.', ',')).append("%\n");
+            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.getDailyTarget()).replace('.', ',')).append(" в день\n");
             sb.append("Дней осталось: ").append(stats.getDaysRemaining()).append("\n");
             
             logger.debug("Отчет для Discord успешно отформатирован");

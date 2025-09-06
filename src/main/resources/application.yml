@@ -1,37 +1,40 @@
-# Discord bot configuration
-discord:
-  token: ${DISCORD_BOT_TOKEN} # Discord bot token from environment variable
-  channel: "качал-очка"        # Channel name where bot responds
-  admin-user-id: ${DISCORD_ADMIN_USER_ID} # User ID with admin privileges
-  report-channel: "reports"    # Channel name for reports and challenge completion notifications
-  report-guild-id: ${DISCORD_REPORT_GUILD_ID} # Guild/Server ID for reports (optional, if not set uses same server as command)
+# Конфигурация Discord бота
+# Все логи, сообщения и комментарии в проекте на русском языке
+# Для локали используем запятую как десятичный разделитель
 
-# Challenge configuration
+discord:
+  token: ${DISCORD_BOT_TOKEN} # Токен Discord бота из переменной окружения
+  channel: "качал-очка"        # Название канала, где бот отвечает
+  admin-user-id: ${DISCORD_ADMIN_USER_ID} # ID пользователя с правами администратора
+  report-channel: "reports"    # Название канала для отчетов и уведомлений о завершении испытаний
+  report-guild-id: ${DISCORD_REPORT_GUILD_ID} # ID сервера для отчетов (необязательно, если не задано, используется тот же сервер, что и команда)
+
+# Конфигурация испытаний
 challenges:
   default:
-    daily-reminder-time: "07:00" # Time for daily progress reports (24-hour format)
-    timezone: "Europe/Moscow"    # Timezone for scheduling
+    daily-reminder-time: "07:00" # Время ежедневных отчетов о прогрессе (24-часовой формат)
+    timezone: "Europe/Moscow"    # Часовой пояс для планирования
   
-# Apache Ignite configuration
+# Конфигурация Apache Ignite
 ignite:
   client-mode: true
   addresses:
-    - "127.0.0.1:11800"  # Ignite server address on non-standard port
+    - "127.0.0.1:11800"  # Адрес сервера Ignite на нестандартном порту
   
-# Scheduled tasks configuration
+# Конфигурация запланированных задач
 scheduled:
   enabled: true
   cron:
-    daily-report: "0 0 7 * * ?"  # Every day at 7:00 AM
+    daily-report: "0 0 7 * * ?"  # Каждый день в 7:00
 
-# Visualization settings
+# Настройки визуализации
 visualization:
   enabled: true
   max-width: 400
   max-height: 300
   format: "png"
 
-# Logging configuration
+# Конфигурация логирования
 logging:
   level:
     com.discord.challengebot: INFO

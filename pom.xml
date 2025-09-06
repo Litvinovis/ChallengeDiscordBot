@@ -78,12 +78,8 @@
             <scope>test</scope>
         </dependency>
         
-        <!-- Logging -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-logging</artifactId>
-            <version>${spring.boot.version}</version>
-        </dependency>
+        <!-- Removed spring-boot-starter-logging as it's already included in spring-boot-starter -->
+        <!-- This was causing the SLF4J conflict -->
         
         <dependency>
             <groupId>org.mockito</groupId>
