@@ -55,8 +55,33 @@ ignite:
 
 ### Запуск приложения
 
+Для корректной работы Apache Ignite с Java 17+ необходимо запускать приложение со специальными JVM аргументами:
+
 ```bash
-java -jar target/challenge-bot-1.0.0.jar
+java --add-opens java.base/java.nio=ALL-UNNAMED \
+     --add-opens java.base/sun.nio.ch=ALL-UNNAMED \
+     --add-opens java.management/sun.management=ALL-UNNAMED \
+     --add-opens jdk.management/com.sun.management.internal=ALL-UNNAMED \
+     -jar target/challenge-bot-1.0.0.jar
+```
+
+#### Скрипт запуска
+
+Для удобства запуска приложения в репозитории также предоставлены скрипты:
+
+- Для Windows: [start.bat](start.bat)
+- Для Linux/Mac: [start.sh](start.sh)
+
+Перед запуском скриптов убедитесь, что они имеют права на выполнение:
+
+```bash
+chmod +x start.sh
+```
+
+Затем можно запустить приложение:
+
+```bash
+./start.sh
 ```
 
 ## Команды бота

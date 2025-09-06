@@ -5,16 +5,23 @@ import org.apache.ignite.Ignition;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
 import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.Collections;
+import java.util.List;
 
 /**
  * Конфигурация Apache Ignite
  */
 @Configuration
 public class IgniteConfig {
+    
+    @Value("${ignite.addresses:127.0.0.1:11800}")
+    private List<String> igniteAddresses;
+    
+    @Value("${ignite.client-mode:true}")
+    private boolean clientMode;
 
     @Bean
     public Ignite igniteInstance() {
@@ -23,11 +30,11 @@ public class IgniteConfig {
         // Настройка обнаружения узлов
         TcpDiscoverySpi discoverySpi = new TcpDiscoverySpi();
         TcpDiscoveryVmIpFinder ipFinder = new TcpDiscoveryVmIpFinder();
-        ipFinder.setAddresses(Collections.singletonList("127.0.0.1:11800")); // Используем правильный порт
+        ipFinder.setAddresses(igniteAddresses); // Используем правильный порт из конфигурации
         discoverySpi.setIpFinder(ipFinder);
         
         cfg.setDiscoverySpi(discoverySpi);
-        cfg.setClientMode(true);
+        cfg.setClientMode(clientMode);
         
         return Ignition.start(cfg);
     }

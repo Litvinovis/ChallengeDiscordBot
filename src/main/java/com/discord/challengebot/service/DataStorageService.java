@@ -11,6 +11,7 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -24,6 +25,12 @@ import java.util.*;
 @Service
 public class DataStorageService {
     private static final Logger logger = LoggerFactory.getLogger(DataStorageService.class);
+    
+    @Value("${ignite.addresses:127.0.0.1:11800}")
+    private List<String> igniteAddresses;
+    
+    @Value("${ignite.client-mode:true}")
+    private boolean clientMode;
     
     private Ignite ignite;
     private IgniteCache<String, Challenge> challengesCache;
@@ -50,13 +57,12 @@ public class DataStorageService {
             } else {
                 // Инициализация клиента Apache Ignite для production
                 IgniteConfiguration cfg = new IgniteConfiguration();
-                cfg.setClientMode(true);
+                cfg.setClientMode(clientMode);
                 
                 // Настройка адресов серверов (из application.yml)
-                // В реальном приложении это будет получено из конфигурации
                 cfg.setDiscoverySpi(new org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi()
                     .setIpFinder(new org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder()
-                        .setAddresses(Collections.singletonList("127.0.0.1:11800"))));
+                        .setAddresses(igniteAddresses)));
                 
                 ignite = Ignition.start(cfg);
             }
