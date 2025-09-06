@@ -3,11 +3,14 @@ package com.discord.challengebot.model;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
+import java.io.Serializable;
 
 /**
  * Модель участника
  */
-public class Participant {
+public class Participant implements Serializable {
+    private static final long serialVersionUID = 1L;
+    
     private String userId;
     private String username;
     private LocalDateTime joinDate;

@@ -7,11 +7,13 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.io.Serializable;
 
 /**
  * Модель испытания
  */
-public class Challenge {
+public class Challenge implements Serializable {
+    private static final long serialVersionUID = 1L;
     private static final Logger logger = LoggerFactory.getLogger(Challenge.class);
     
     private String id;

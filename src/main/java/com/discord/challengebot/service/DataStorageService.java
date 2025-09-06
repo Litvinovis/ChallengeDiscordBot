@@ -6,6 +6,7 @@ import com.discord.challengebot.model.Participant;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.cache.CacheMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,14 +45,31 @@ public class DataStorageService {
             // Создание или получение кэша для испытаний с включенной персистентностью
             CacheConfiguration<String, Challenge> challengeCacheCfg = new CacheConfiguration<>("challenges");
             challengeCacheCfg.setBackups(1); // Резервные копии для надежности
+            challengeCacheCfg.setCacheMode(CacheMode.PARTITIONED); // Режим кэширования
             challengesCache = ignite.getOrCreateCache(challengeCacheCfg);
             
             // Создание или получение кэша для участников с включенной персистентностью
             CacheConfiguration<String, Participant> participantCacheCfg = new CacheConfiguration<>("participants");
             participantCacheCfg.setBackups(1); // Резервные копии для надежности
+            participantCacheCfg.setCacheMode(CacheMode.PARTITIONED); // Режим кэширования
             participantsCache = ignite.getOrCreateCache(participantCacheCfg);
             
             logger.info("Подключение к Apache Ignite успешно инициализировано");
+            logger.debug("Кэш испытаний инициализирован: {}", challengesCache != null);
+            logger.debug("Кэш участников инициализирован: {}", participantsCache != null);
+            
+            // Проверяем, есть ли уже участники в кэше
+            if (participantsCache != null) {
+                try {
+                    int participantCount = 0;
+                    for (javax.cache.Cache.Entry<String, Participant> entry : participantsCache) {
+                        participantCount++;
+                    }
+                    logger.debug("При инициализации в кэше участников найдено: {} записей", participantCount);
+                } catch (Exception e) {
+                    logger.debug("Ошибка при проверке содержимого кэша участников при инициализации: {}", e.getMessage());
+                }
+            }
         } catch (Exception e) {
             logger.error("Ошибка инициализации подключения к Apache Ignite", e);
             // Не прерываем инициализацию приложения из-за ошибки Ignite
@@ -219,6 +237,9 @@ public class DataStorageService {
                 return;
             }
             
+            logger.debug("Сохраняем участника с ID: {}, имя: {}, количество зарегистрированных испытаний: {}", 
+                        participant.getUserId(), participant.getUsername(), participant.getRegisteredChallenges().size());
+            
             // Сохранение участника в кэш Ignite
             participantsCache.put(participant.getUserId(), participant);
             
@@ -249,9 +270,20 @@ public class DataStorageService {
             Participant participant = participantsCache.get(userId);
             
             if (participant != null) {
-                logger.debug("Участник '{}' успешно получен из Apache Ignite", userId);
+                logger.debug("Участник '{}' успешно получен из Apache Ignite, имя пользователя: {}", userId, participant.getUsername());
             } else {
                 logger.debug("Участник с ID '{}' не найден в Apache Ignite", userId);
+                // Дополнительно проверим, есть ли вообще какие-либо участники в кэше
+                try {
+                    int participantCount = 0;
+                    for (javax.cache.Cache.Entry<String, Participant> entry : participantsCache) {
+                        participantCount++;
+                        logger.debug("Найден участник в кэше: ID={}, имя={}", entry.getKey(), entry.getValue().getUsername());
+                    }
+                    logger.debug("Всего участников в кэше: {}", participantCount);
+                } catch (Exception e) {
+                    logger.debug("Ошибка при подсчете участников в кэше: {}", e.getMessage());
+                }
             }
             
             return participant;
@@ -276,11 +308,14 @@ public class DataStorageService {
             
             // Получение всех участников из кэша Ignite
             List<Participant> participants = new ArrayList<>();
+            int count = 0;
             for (javax.cache.Cache.Entry<String, Participant> entry : participantsCache) {
                 participants.add(entry.getValue());
+                count++;
+                logger.debug("Найден участник в кэше: ID={}, имя={}", entry.getKey(), entry.getValue().getUsername());
             }
             
-            logger.debug("Получено {} участников из Apache Ignite", participants.size());
+            logger.debug("Получено {} участников из Apache Ignite", count);
             return participants;
         } catch (Exception e) {
             logger.error("Ошибка при получении всех участников из Apache Ignite", e);

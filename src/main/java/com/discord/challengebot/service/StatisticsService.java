@@ -2,6 +2,8 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.model.Participant;
+import net.dv8tion.jda.api.entities.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,7 +20,21 @@ import java.util.stream.Collectors;
 @Service
 public class StatisticsService {
     private static final Logger logger = LoggerFactory.getLogger(StatisticsService.class);
-
+    
+    // Добавляем зависимости
+    private DiscordService discordService;
+    private UserService userService;
+    
+    // Setter для внедрения зависимости
+    public void setDiscordService(DiscordService discordService) {
+        this.discordService = discordService;
+    }
+    
+    // Setter для внедрения зависимости UserService
+    public void setUserService(UserService userService) {
+        this.userService = userService;
+    }
+    
     /**
      * Рассчитать статистику по испытанию
      */
@@ -263,7 +279,92 @@ public class StatisticsService {
                 sb.append("\n**Топ-3 участников:**\n");
                 for (int i = 0; i < topParticipants.size(); i++) {
                     Map.Entry<String, Long> entry = topParticipants.get(i);
-                    sb.append((i + 1)).append(". <@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
+                    String userId = entry.getKey();
+                    String username = userId; // По умолчанию используем ID
+                    
+                    logger.debug("Обработка пользователя с ID: {}", userId);
+                    
+                    // Пытаемся получить имя пользователя из кэша
+                    if (userService != null) {
+                        logger.debug("UserService доступен, попытка получить информацию об участнике: {}", userId);
+                        try {
+                            Participant participant = userService.getParticipant(userId);
+                            if (participant != null) {
+                                logger.debug("Участник найден в кэше: {}, имя пользователя: {}", userId, participant.getUsername());
+                                if (participant.getUsername() != null && !participant.getUsername().isEmpty()) {
+                                    username = participant.getUsername();
+                                    logger.debug("Используем имя пользователя из кэша: {}", username);
+                                } else {
+                                    logger.debug("Имя пользователя в кэше пустое для участника: {}", userId);
+                                }
+                            } else {
+                                logger.debug("Участник не найден в кэше: {}", userId);
+                                if (discordService != null) {
+                                    // Если в кэше нет имени, пытаемся получить его через Discord API
+                                    logger.debug("Попытка получить имя пользователя через Discord API: {}", userId);
+                                    User user = discordService.getJDA().getUserById(userId);
+                                    if (user != null) {
+                                        username = user.getName();
+                                        logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
+                                        // Обновляем кэш UserService с новым именем пользователя
+                                        try {
+                                            logger.debug("Обновление кэша UserService для пользователя: {}", userId);
+                                            // Пытаемся получить текущие испытания пользователя для сохранения их при обновлении
+                                            List<com.discord.challengebot.model.Challenge> userChallenges = userService.getRegisteredChallenges(userId);
+                                            logger.debug("Получено {} зарегистрированных испытаний для пользователя: {}", userChallenges.size(), userId);
+                                            if (!userChallenges.isEmpty()) {
+                                                // Если у пользователя есть зарегистрированные испытания, обновляем имя в кэше
+                                                for (com.discord.challengebot.model.Challenge userChallenge : userChallenges) {
+                                                    logger.debug("Регистрация пользователя {} с именем {} на испытание {}", userId, username, userChallenge.getName());
+                                                    userService.registerForChallenge(userId, username, userChallenge.getName());
+                                                }
+                                            } else {
+                                                // Если у пользователя нет зарегистрированных испытаний, 
+                                                // но он есть в таблице лидеров, регистрируем его на текущее испытание
+                                                logger.debug("У пользователя {} нет зарегистрированных испытаний, регистрируем на текущее испытание {}", userId, challenge.getName());
+                                                userService.registerForChallenge(userId, username, challenge.getName());
+                                                
+                                                // Проверяем, что участник был успешно зарегистрирован
+                                                Participant registeredParticipant = userService.getParticipant(userId);
+                                                if (registeredParticipant != null) {
+                                                    logger.debug("Участник {} успешно зарегистрирован на испытание {}, имя в кэше: {}", 
+                                                                userId, challenge.getName(), registeredParticipant.getUsername());
+                                                } else {
+                                                    logger.warn("Не удалось зарегистрировать участника {} на испытание {}", userId, challenge.getName());
+                                                }
+                                            }
+                                        } catch (Exception cacheUpdateException) {
+                                            logger.debug("Не удалось обновить имя пользователя {} в кэше: {}", userId, cacheUpdateException.getMessage());
+                                        }
+                                    } else {
+                                        logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+                            // Используем ID как запасной вариант
+                        }
+                    } else {
+                        logger.debug("UserService недоступен");
+                        if (discordService != null) {
+                            // Если нет UserService, пытаемся получить имя через Discord API
+                            logger.debug("Попытка получить имя пользователя через Discord API (UserService недоступен): {}", userId);
+                            try {
+                                User user = discordService.getJDA().getUserById(userId);
+                                if (user != null) {
+                                    username = user.getName();
+                                    logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
+                                } else {
+                                    logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
+                                }
+                            } catch (Exception e) {
+                                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+                            }
+                        }
+                    }
+                    
+                    sb.append((i + 1)).append(". ").append(username).append(" - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
                 }
             }
             
@@ -333,7 +434,92 @@ public class StatisticsService {
             } else {
                 for (int i = 0; i < leaderboard.size(); i++) {
                     Map.Entry<String, Long> entry = leaderboard.get(i);
-                    sb.append((i + 1)).append(". <@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
+                    String userId = entry.getKey();
+                    String username = userId; // По умолчанию используем ID
+                    
+                    logger.debug("Обработка пользователя с ID: {}", userId);
+                    
+                    // Пытаемся получить имя пользователя из кэша
+                    if (userService != null) {
+                        logger.debug("UserService доступен, попытка получить информацию об участнике: {}", userId);
+                        try {
+                            Participant participant = userService.getParticipant(userId);
+                            if (participant != null) {
+                                logger.debug("Участник найден в кэше: {}, имя пользователя: {}", userId, participant.getUsername());
+                                if (participant.getUsername() != null && !participant.getUsername().isEmpty()) {
+                                    username = participant.getUsername();
+                                    logger.debug("Используем имя пользователя из кэша: {}", username);
+                                } else {
+                                    logger.debug("Имя пользователя в кэше пустое для участника: {}", userId);
+                                }
+                            } else {
+                                logger.debug("Участник не найден в кэше: {}", userId);
+                                if (discordService != null) {
+                                    // Если в кэше нет имени, пытаемся получить его через Discord API
+                                    logger.debug("Попытка получить имя пользователя через Discord API: {}", userId);
+                                    User user = discordService.getJDA().getUserById(userId);
+                                    if (user != null) {
+                                        username = user.getName();
+                                        logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
+                                        // Обновляем кэш UserService с новым именем пользователя
+                                        try {
+                                            logger.debug("Обновление кэша UserService для пользователя: {}", userId);
+                                            // Пытаемся получить текущие испытания пользователя для сохранения их при обновлении
+                                            List<com.discord.challengebot.model.Challenge> userChallenges = userService.getRegisteredChallenges(userId);
+                                            logger.debug("Получено {} зарегистрированных испытаний для пользователя: {}", userChallenges.size(), userId);
+                                            if (!userChallenges.isEmpty()) {
+                                                // Если у пользователя есть зарегистрированные испытания, обновляем имя в кэше
+                                                for (com.discord.challengebot.model.Challenge userChallenge : userChallenges) {
+                                                    logger.debug("Регистрация пользователя {} с именем {} на испытание {}", userId, username, userChallenge.getName());
+                                                    userService.registerForChallenge(userId, username, userChallenge.getName());
+                                                }
+                                            } else {
+                                                // Если у пользователя нет зарегистрированных испытаний, 
+                                                // но он есть в таблице лидеров, регистрируем его на текущее испытание
+                                                logger.debug("У пользователя {} нет зарегистрированных испытаний, регистрируем на текущее испытание {}", userId, challenge.getName());
+                                                userService.registerForChallenge(userId, username, challenge.getName());
+                                                
+                                                // Проверяем, что участник был успешно зарегистрирован
+                                                Participant registeredParticipant = userService.getParticipant(userId);
+                                                if (registeredParticipant != null) {
+                                                    logger.debug("Участник {} успешно зарегистрирован на испытание {}, имя в кэше: {}", 
+                                                                userId, challenge.getName(), registeredParticipant.getUsername());
+                                                } else {
+                                                    logger.warn("Не удалось зарегистрировать участника {} на испытание {}", userId, challenge.getName());
+                                                }
+                                            }
+                                        } catch (Exception cacheUpdateException) {
+                                            logger.debug("Не удалось обновить имя пользователя {} в кэше: {}", userId, cacheUpdateException.getMessage());
+                                        }
+                                    } else {
+                                        logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+                            // Используем ID как запасной вариант
+                        }
+                    } else {
+                        logger.debug("UserService недоступен");
+                        if (discordService != null) {
+                            // Если нет UserService, пытаемся получить имя через Discord API
+                            logger.debug("Попытка получить имя пользователя через Discord API (UserService недоступен): {}", userId);
+                            try {
+                                User user = discordService.getJDA().getUserById(userId);
+                                if (user != null) {
+                                    username = user.getName();
+                                    logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
+                                } else {
+                                    logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
+                                }
+                            } catch (Exception e) {
+                                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+                            }
+                        }
+                    }
+                    
+                    sb.append((i + 1)).append(". ").append(username).append(" - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
                 }
                 logger.debug("Таблица лидеров для испытания '{}' содержит {} участников", 
                             challenge.getName(), leaderboard.size());

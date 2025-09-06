@@ -44,13 +44,33 @@ public class UserService {
             // Получаем информацию об участнике или создаем новую
             Participant participant = dataStorageService.getParticipant(userId);
             if (participant == null) {
+                logger.debug("Участник с ID {} не найден, создаем нового участника с именем {}", userId, username);
                 participant = new Participant(userId, username);
+            } else {
+                logger.debug("Участник с ID {} найден, текущее имя пользователя: {}", userId, participant.getUsername());
+                // Обновляем имя пользователя, если оно отличается
+                if (!username.equals(participant.getUsername())) {
+                    logger.debug("Обновляем имя пользователя с {} на {} для участника {}", participant.getUsername(), username, userId);
+                    participant.setUsername(username);
+                }
+            }
+            
+            // Проверяем, зарегистрирован ли уже участник на это испытание
+            if (participant.isRegisteredForChallenge(challengeName)) {
+                logger.debug("Участник {} уже зарегистрирован на испытание {}", userId, challengeName);
+                // Сохраняем обновленную информацию об участнике (на случай, если имя было обновлено)
+                logger.debug("Сохраняем информацию об участнике {} в кэш", userId);
+                dataStorageService.saveParticipant(participant);
+                logger.info("Пользователь {} уже зарегистрирован на испытание {}, обновлена информация", username, challengeName);
+                return true;
             }
             
             // Добавляем испытание в список участника
+            logger.debug("Добавляем испытание {} в список участника {}", challengeName, userId);
             participant.addChallenge(challengeName);
             
             // Сохраняем обновленную информацию об участнике
+            logger.debug("Сохраняем информацию об участнике {} в кэш", userId);
             dataStorageService.saveParticipant(participant);
             
             logger.info("Пользователь {} успешно зарегистрирован на испытание {}", username, challengeName);
@@ -114,7 +134,7 @@ public class UserService {
             Participant participant = dataStorageService.getParticipant(userId);
             
             if (participant != null) {
-                logger.debug("Информация об участнике {} успешно получена", userId);
+                logger.debug("Информация об участнике {} успешно получена, имя пользователя: {}", userId, participant.getUsername());
             } else {
                 logger.debug("Информация об участнике {} не найдена", userId);
             }
@@ -145,6 +165,8 @@ public class UserService {
                 return new java.util.ArrayList<>();
             }
             
+            logger.debug("Участник {} найден, количество зарегистрированных испытаний: {}", userId, participant.getRegisteredChallenges().size());
+            
             // Получаем все испытания
             java.util.List<com.discord.challengebot.model.Challenge> allChallenges = dataStorageService.getAllChallenges();
             
@@ -153,6 +175,7 @@ public class UserService {
             for (com.discord.challengebot.model.Challenge challenge : allChallenges) {
                 if (participant.isRegisteredForChallenge(challenge.getName())) {
                     registeredChallenges.add(challenge);
+                    logger.debug("Участник {} зарегистрирован на испытание: {}", userId, challenge.getName());
                 }
             }
             

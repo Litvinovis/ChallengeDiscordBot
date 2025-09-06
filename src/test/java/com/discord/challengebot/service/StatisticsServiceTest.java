@@ -166,9 +166,10 @@ class StatisticsServiceTest {
         assertTrue(formatted.contains("Дней осталось: 10"), "Should contain days remaining");
         assertTrue(formatted.contains("Зарегистрировано участников: 3"), "Should contain participant count");
         assertTrue(formatted.contains("**Топ-3 участников:**"), "Should contain top participants header");
-        assertTrue(formatted.contains("1. <@user1> - 1000 раз"), "Should contain top participant 1");
-        assertTrue(formatted.contains("2. <@user2> - 800 раз"), "Should contain top participant 2");
-        assertTrue(formatted.contains("3. <@user3> - 600 раз"), "Should contain top participant 3");
+        // Now we're using usernames instead of user IDs
+        assertTrue(formatted.contains("1. user1 - 1000 раз"), "Should contain top participant 1");
+        assertTrue(formatted.contains("2. user2 - 800 раз"), "Should contain top participant 2");
+        assertTrue(formatted.contains("3. user3 - 600 раз"), "Should contain top participant 3");
     }
     
     @Test

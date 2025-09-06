@@ -23,6 +23,10 @@ public class ChallengeService {
     
     @Autowired
     private DataStorageService dataStorageService;
+    
+    // Добавляем зависимость UserService
+    @Autowired
+    private UserService userService;
 
     /**
      * Создать новое испытание
@@ -103,6 +107,15 @@ public class ChallengeService {
             if (amount < 0) {
                 logger.warn("Попытка добавить отрицательный прогресс: {}", amount);
                 return challenge;
+            }
+            
+            // Регистрируем пользователя в системе
+            boolean registered = userService.registerForChallenge(userId, username, challenge.getName());
+            if (!registered) {
+                logger.warn("Не удалось зарегистрировать пользователя {} ({}) в системе для испытания {}", username, userId, challenge.getName());
+                // We'll continue with adding progress, but this might cause issues with username display
+            } else {
+                logger.debug("Пользователь {} ({}) успешно зарегистрирован в системе для испытания {}", username, userId, challenge.getName());
             }
             
             // Обновляем общий прогресс
@@ -461,6 +474,61 @@ public class ChallengeService {
         } catch (Exception e) {
             logger.error("Ошибка при удалении участника '{}' из испытания '{}'", 
                         userId, challenge != null ? challenge.getName() : "null", e);
+            return challenge;
+        }
+    }
+
+    /**
+     * Добавить участника в испытание с регистрацией имени пользователя
+     */
+    public Challenge addParticipantWithUsername(Challenge challenge, String userId, String username) {
+        try {
+            logger.info("Добавление участника {} ({}) в испытание {}", username, userId, challenge != null ? challenge.getName() : "null");
+            
+            if (challenge == null) {
+                logger.warn("Попытка добавить участника в null испытание");
+                return null;
+            }
+            
+            if (userId == null || userId.isEmpty()) {
+                logger.warn("Попытка добавить участника с пустым ID");
+                return challenge;
+            }
+            
+            if (username == null || username.isEmpty()) {
+                logger.warn("Попытка добавить участника с пустым именем");
+                return challenge;
+            }
+            
+            logger.debug("Регистрация пользователя {} ({}) в системе для испытания {}", username, userId, challenge.getName());
+            // Регистрируем пользователя в системе
+            boolean registered = userService.registerForChallenge(userId, username, challenge.getName());
+            if (registered) {
+                logger.debug("Пользователь {} ({}) успешно зарегистрирован в системе для испытания {}", username, userId, challenge.getName());
+            } else {
+                logger.warn("Не удалось зарегистрировать пользователя {} ({}) в системе для испытания {}", username, userId, challenge.getName());
+                // Продолжаем выполнение, но это может вызвать проблемы с отображением имени пользователя
+            }
+            
+            // Добавляем участника в список
+            logger.debug("Добавление участника {} в список участников испытания {}", userId, challenge.getName());
+            challenge.addParticipant(userId);
+            
+            // Если у участника еще нет прогресса, устанавливаем 0
+            if (!challenge.getParticipantProgress().containsKey(userId)) {
+                logger.debug("Установка начального прогресса 0 для участника {} в испытании {}", userId, challenge.getName());
+                challenge.getParticipantProgress().put(userId, 0L);
+            }
+            
+            // Сохраняем обновленное испытание
+            logger.debug("Сохранение обновленного испытания {} после добавления участника {}", challenge.getName(), userId);
+            dataStorageService.saveChallenge(challenge);
+            
+            logger.info("Участник '{}' ({}) успешно добавлен в испытание '{}'", username, userId, challenge.getName());
+            return challenge;
+        } catch (Exception e) {
+            logger.error("Ошибка при добавлении участника '{}' ({}) в испытание '{}'", 
+                        username, userId, challenge != null ? challenge.getName() : "null", e);
             return challenge;
         }
     }

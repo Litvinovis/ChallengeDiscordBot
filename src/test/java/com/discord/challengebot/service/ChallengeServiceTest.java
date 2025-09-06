@@ -20,6 +20,9 @@ class ChallengeServiceTest {
     private DataStorageService dataStorageService;
 
     @Mock
+    private UserService userService;
+
+    @Mock
     private Challenge mockChallenge;
 
     @InjectMocks
@@ -69,6 +72,7 @@ class ChallengeServiceTest {
         Challenge updatedChallenge = challengeService.addProgress(mockChallenge, userId, username, amount);
 
         assertNotNull(updatedChallenge);
+        verify(userService).registerForChallenge(userId, username, "Отжимания");
         verify(mockChallenge).setCurrentValue(110L);
         assertEquals(10L, participantProgress.get(userId));
         verify(dataStorageService).saveChallenge(mockChallenge);

@@ -4,6 +4,7 @@ import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
+import com.discord.challengebot.model.Participant;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -612,6 +613,17 @@ public class DiscordMessageListener extends ListenerAdapter {
             // Извлекаем ID пользователя из упоминания
             String userId = userMention.replaceAll("[^0-9]", "");
             
+            // Получаем имя пользователя через Discord API
+            String username = userId; // По умолчанию используем ID
+            try {
+                net.dv8tion.jda.api.entities.User user = jda.getUserById(userId);
+                if (user != null) {
+                    username = user.getName();
+                }
+            } catch (Exception e) {
+                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+            }
+            
             Challenge challenge = challengeService.getChallenge(challengeName);
             
             if (challenge == null) {
@@ -619,6 +631,9 @@ public class DiscordMessageListener extends ListenerAdapter {
                 logger.warn("Испытание '{}' не найдено при попытке установки прогресса участника", challengeName);
                 return;
             }
+            
+            // Регистрируем пользователя в системе перед установкой прогресса
+            userService.registerForChallenge(userId, username, challengeName);
             
             Challenge updatedChallenge = challengeService.setParticipantProgress(challenge, userId, progress);
             if (updatedChallenge != null) {
@@ -657,6 +672,44 @@ public class DiscordMessageListener extends ListenerAdapter {
             // Извлекаем ID пользователя из упоминания
             String userId = userMention.replaceAll("[^0-9]", "");
             
+            logger.debug("Попытка добавления участника с ID: {} в испытание: {}", userId, challengeName);
+            
+            // Получаем имя пользователя через Discord API
+            String username = userId; // По умолчанию используем ID
+            boolean usernameRetrieved = false;
+            try {
+                net.dv8tion.jda.api.entities.User user = jda.getUserById(userId);
+                if (user != null) {
+                    username = user.getName();
+                    usernameRetrieved = true;
+                    logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
+                } else {
+                    logger.debug("Пользователь с ID {} не найден через Discord API", userId);
+                }
+            } catch (Exception e) {
+                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+            }
+            
+            // Если не удалось получить имя пользователя через Discord API, пытаемся получить его из кэша
+            if (!usernameRetrieved) {
+                try {
+                    Participant cachedParticipant = userService.getParticipant(userId);
+                    if (cachedParticipant != null && cachedParticipant.getUsername() != null && !cachedParticipant.getUsername().isEmpty()) {
+                        username = cachedParticipant.getUsername();
+                        usernameRetrieved = true;
+                        logger.debug("Имя пользователя получено из кэша: {} для ID: {}", username, userId);
+                    }
+                } catch (Exception e) {
+                    logger.debug("Не удалось получить имя пользователя из кэша для ID {}: {}", userId, e.getMessage());
+                }
+            }
+            
+            // Если так и не удалось получить имя пользователя, используем ID как запасной вариант
+            if (!usernameRetrieved) {
+                username = "user_" + userId; // Более дружелюбная замена для ID
+                logger.debug("Используем сгенерированное имя для пользователя с ID: {}", userId);
+            }
+            
             Challenge challenge = challengeService.getChallenge(challengeName);
             
             if (challenge == null) {
@@ -665,10 +718,27 @@ public class DiscordMessageListener extends ListenerAdapter {
                 return;
             }
             
-            Challenge updatedChallenge = challengeService.addParticipant(challenge, userId);
+            logger.debug("Испытание '{}' найдено, попытка добавления участника {} ({})", challengeName, username, userId);
+            
+            // Используем новый метод, который регистрирует пользователя с именем
+            Challenge updatedChallenge = challengeService.addParticipantWithUsername(challenge, userId, username);
             if (updatedChallenge != null) {
                 channel.sendMessage("Участник <@" + userId + "> добавлен в испытание \"" + challengeName + "\".").queue();
                 logger.info("Участник '{}' добавлен в испытание '{}'", userId, challengeName);
+                
+                // Проверяем, что участник был добавлен в список участников испытания
+                if (updatedChallenge.hasParticipant(userId)) {
+                    logger.debug("Участник {} успешно добавлен в список участников испытания '{}'", userId, challengeName);
+                } else {
+                    logger.warn("Участник {} не был добавлен в список участников испытания '{}'", userId, challengeName);
+                }
+                
+                // Проверяем, что у участника есть запись о прогрессе
+                if (updatedChallenge.getParticipantProgress().containsKey(userId)) {
+                    logger.debug("У участника {} есть запись о прогрессе в испытании '{}'", userId, challengeName);
+                } else {
+                    logger.warn("У участника {} нет записи о прогрессе в испытании '{}'", userId, challengeName);
+                }
             } else {
                 channel.sendMessage("Ошибка при добавлении участника <@" + userId + "> в испытание \"" + challengeName + "\".").queue();
                 logger.error("Ошибка при добавлении участника '{}' в испытание '{}'", userId, challengeName);
@@ -701,6 +771,17 @@ public class DiscordMessageListener extends ListenerAdapter {
             
             // Извлекаем ID пользователя из упоминания
             String userId = userMention.replaceAll("[^0-9]", "");
+            
+            // Получаем имя пользователя через Discord API
+            String username = userId; // По умолчанию используем ID
+            try {
+                net.dv8tion.jda.api.entities.User user = jda.getUserById(userId);
+                if (user != null) {
+                    username = user.getName();
+                }
+            } catch (Exception e) {
+                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
+            }
             
             Challenge challenge = challengeService.getChallenge(challengeName);
             
@@ -789,7 +870,8 @@ public class DiscordMessageListener extends ListenerAdapter {
                 return;
             }
             
-            Challenge updatedChallenge = challengeService.addParticipant(challenge, userId);
+            // Используем новый метод, который регистрирует пользователя с именем
+            Challenge updatedChallenge = challengeService.addParticipantWithUsername(challenge, userId, username);
             if (updatedChallenge != null) {
                 channel.sendMessage("Вы успешно зарегистрированы на испытание \"" + challengeName + "\".").queue();
                 logger.info("Пользователь '{}' успешно зарегистрирован на испытание '{}'", username, challengeName);
@@ -979,7 +1061,15 @@ public class DiscordMessageListener extends ListenerAdapter {
             
             Challenge updatedChallenge = challengeService.addProgress(challenge, userId, username, amount);
             if (updatedChallenge != null) {
-                channel.sendMessage("Прогресс по испытанию \"" + challengeName + "\" обновлен на " + amount + ".").queue();
+                // Получаем общий прогресс пользователя по этому испытанию
+                long userTotalProgress = updatedChallenge.getParticipantProgress().getOrDefault(userId, 0L);
+                // Получаем общий прогресс по всем участникам
+                long totalChallengeProgress = updatedChallenge.getCurrentValue();
+                long targetValue = updatedChallenge.getTargetValue();
+                
+                String message = String.format("Прогресс по испытанию \"%s\" обновлен на %d, общее количество выполненных тобой действий - %d. Общий прогресс %d/%d.", 
+                                             challengeName, amount, userTotalProgress, totalChallengeProgress, targetValue);
+                channel.sendMessage(message).queue();
                 logger.info("Прогресс пользователя {} по испытанию '{}' обновлен на {}", username, challengeName, amount);
             } else {
                 channel.sendMessage("Ошибка при обновлении прогресса по испытанию \"" + challengeName + "\".").queue();

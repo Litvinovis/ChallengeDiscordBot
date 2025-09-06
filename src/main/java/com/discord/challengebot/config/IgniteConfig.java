@@ -23,6 +23,8 @@ public class IgniteConfig {
         System.setProperty("IGNITE_QUIET", "false");
         System.setProperty("IGNITE_NO_ASCII", "false");
         System.setProperty("IGNITE_UPDATE_NOTIFIER", "false");
+        // Отключение проверки доступа к приватным полям для совместимости с Java 17+
+        System.setProperty("IGNITE_DISABLE_ACCESS_CHECK", "true");
         
         IgniteConfiguration cfg = new IgniteConfiguration();
         

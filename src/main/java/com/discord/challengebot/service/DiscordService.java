@@ -44,6 +44,11 @@ public class DiscordService {
     public void init() {
         try {
             logger.info("Инициализация Discord бота");
+            
+            // Устанавливаем ссылку на DiscordService в StatisticsService ДО создания DiscordMessageListener
+            statisticsService.setDiscordService(this);
+            statisticsService.setUserService(userService);
+            
             jda = JDABuilder.createDefault(discordConfig.getToken())
                     .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
                     .addEventListeners(new DiscordMessageListener(this, discordConfig, challengeService, userService, statisticsService))
@@ -66,6 +71,13 @@ public class DiscordService {
         } catch (Exception e) {
             logger.error("Ошибка при выключении Discord бота", e);
         }
+    }
+
+    /**
+     * Получить экземпляр JDA
+     */
+    public JDA getJDA() {
+        return jda;
     }
 
     /**
