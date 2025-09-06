@@ -3,24 +3,13 @@
 # Для локали используем запятую как десятичный разделитель
 
 discord:
-  token: ${DISCORD_BOT_TOKEN} # Токен Discord бота из переменной окружения
+  token: # Токен Discord бота из переменной окружения
   channel: "качал-очка"        # Название канала, где бот отвечает
-  admin-user-id: ${DISCORD_ADMIN_USER_ID} # ID пользователя с правами администратора
-  report-channel: "reports"    # Название канала для отчетов и уведомлений о завершении испытаний
-  report-guild-id: ${DISCORD_REPORT_GUILD_ID} # ID сервера для отчетов (необязательно, если не задано, используется тот же сервер, что и команда)
+  report-guild-id: 651802173495181322 # ID сервера Discord для отправки отчетов
+  admin-user-ids: 
+    - 253576055317594114 # ID пользователя с правами администратора
+  report-channel: "качал-очка"    # Название канала для отчетов и уведомлений о завершении испытаний
 
-# Конфигурация испытаний
-challenges:
-  default:
-    daily-reminder-time: "07:00" # Время ежедневных отчетов о прогрессе (24-часовой формат)
-    timezone: "Europe/Moscow"    # Часовой пояс для планирования
-  
-# Конфигурация Apache Ignite
-ignite:
-  client-mode: true
-  addresses:
-    - "127.0.0.1:11800"  # Адрес сервера Ignite на нестандартном порту
-  
 # Конфигурация запланированных задач
 scheduled:
   enabled: true
@@ -33,10 +22,3 @@ visualization:
   max-width: 400
   max-height: 300
   format: "png"
-
-# Конфигурация логирования
-logging:
-  level:
-    com.discord.challengebot: INFO
-  pattern:
-    console: "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"

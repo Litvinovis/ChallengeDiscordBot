@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -113,7 +114,7 @@ public class DiscordMessageListener extends ListenerAdapter {
             
             switch (commandName) {
                 case "помощь":
-                    handleHelpCommand(channelId);
+                    handleHelpCommand(channelId, userId);
                     break;
                 case "статистика":
                     handleStatisticsCommand(parts, channelId);
@@ -132,6 +133,9 @@ public class DiscordMessageListener extends ListenerAdapter {
                     break;
                 case "изменить":
                     handleChangeTargetCommand(parts, channelId);
+                    break;
+                case "изменить_дату":
+                    handleChangeEndDateCommand(parts, channelId);
                     break;
                 case "установить_прогресс":
                     handleSetParticipantProgressCommand(parts, channelId);
@@ -179,14 +183,14 @@ public class DiscordMessageListener extends ListenerAdapter {
     /**
      * Обработать команду помощи
      */
-    private void handleHelpCommand(String channelId) {
+    private void handleHelpCommand(String channelId, String userId) {
         try {
-            logger.debug("Обработка команды помощи");
-            String helpMessage = discordService.generateHelpMessage();
+            logger.debug("Обработка команды помощи для пользователя: {}", userId);
+            String helpMessage = discordService.generateHelpMessage(userId);
             TextChannel channel = jda.getTextChannelById(channelId);
             if (channel != null) {
                 channel.sendMessage(helpMessage).queue();
-                logger.info("Сообщение помощи отправлено в канал {}", channelId);
+                logger.info("Сообщение помощи отправлено в канал {} для пользователя {}", channelId, userId);
             }
         } catch (Exception e) {
             logger.error("Ошибка обработки команды помощи", e);
@@ -220,7 +224,7 @@ public class DiscordMessageListener extends ListenerAdapter {
                 for (Challenge challenge : challenges) {
                     ChallengeStats stats = challengeService.getChallengeStats(challenge);
                     if (stats != null) {
-                        message.append(statisticsService.formatReportForDiscord(stats)).append("\n");
+                        message.append(statisticsService.formatReportForDiscord(challenge, stats)).append("\n");
                     }
                 }
                 
@@ -239,7 +243,7 @@ public class DiscordMessageListener extends ListenerAdapter {
                 
                 ChallengeStats stats = challengeService.getChallengeStats(challenge);
                 if (stats != null) {
-                    String formattedStats = discordService.formatChallengeStats(stats);
+                    String formattedStats = discordService.formatChallengeStats(challenge, stats);
                     channel.sendMessage(formattedStats).queue();
                     logger.info("Статистика по испытанию '{}' отправлена", challengeName);
                 } else {
@@ -264,8 +268,15 @@ public class DiscordMessageListener extends ListenerAdapter {
                 return;
             }
             
+            // Проверяем, является ли пользователь администратором
+            boolean isAdmin = userService.isAdminUser(userId);
+            
             if (parts.length < 3) {
-                channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания] [тип]").queue();
+                if (isAdmin) {
+                    channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания] [тип]").queue();
+                } else {
+                    channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания]").queue();
+                }
                 logger.warn("Недостаточно параметров для создания испытания: {}", parts.length);
                 return;
             }
@@ -274,6 +285,12 @@ public class DiscordMessageListener extends ListenerAdapter {
             long target;
             try {
                 target = Long.parseLong(parts[2]);
+                // Проверка на отрицательные числа
+                if (target < 0) {
+                    channel.sendMessage("Цель не может быть отрицательным числом.").queue();
+                    logger.warn("Попытка установить отрицательную цель '{}'", parts[2]);
+                    return;
+                }
             } catch (NumberFormatException e) {
                 channel.sendMessage("Цель должна быть числом.").queue();
                 logger.warn("Неверный формат цели '{}': {}", parts[2], e.getMessage());
@@ -281,20 +298,36 @@ public class DiscordMessageListener extends ListenerAdapter {
             }
             
             LocalDateTime endDate = LocalDateTime.now().plusDays(365); // По умолчанию год
-            ChallengeType type = ChallengeType.GROUP; // По умолчанию групповое
+            ChallengeType type = ChallengeType.GROUP; // По умолчанию групповое для администраторов
             String description = "Испытание по " + name;
             String unit = "единиц";
             
+            // Для обычных пользователей тип всегда индивидуальный
+            if (!isAdmin) {
+                type = ChallengeType.INDIVIDUAL;
+            }
+            
             if (parts.length > 3) {
                 try {
-                    endDate = LocalDateTime.parse(parts[3], DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                    // Парсим дату в формате dd.MM.yyyy и устанавливаем время на начало дня
+                    endDate = LocalDateTime.parse(parts[3] + " 00:00:00", DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
                 } catch (DateTimeParseException e) {
-                    logger.warn("Неверный формат даты '{}', используется значение по умолчанию: {}", parts[3], e.getMessage());
-                    // Если не удалось распарсить дату, используем значение по умолчанию
+                    try {
+                        // Если не удалось, пробуем формат dd.MM.yyyy без времени
+                        endDate = LocalDate.parse(parts[3], DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+                    } catch (DateTimeParseException e2) {
+                        try {
+                            // Если не удалось, пробуем формат yyyy-MM-dd для обратной совместимости
+                            endDate = LocalDateTime.parse(parts[3], DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                        } catch (DateTimeParseException e3) {
+                            logger.warn("Неверный формат даты '{}', используется значение по умолчанию: {}", parts[3], e.getMessage());
+                            // Если не удалось распарсить дату, используем значение по умолчанию
+                        }
+                    }
                 }
             }
             
-            if (parts.length > 4) {
+            if (parts.length > 4 && isAdmin) {
                 if ("индивидуальное".equalsIgnoreCase(parts[4])) {
                     type = ChallengeType.INDIVIDUAL;
                 }
@@ -448,6 +481,12 @@ public class DiscordMessageListener extends ListenerAdapter {
             long newTarget;
             try {
                 newTarget = Long.parseLong(parts[2]);
+                // Проверка на отрицательные числа
+                if (newTarget < 0) {
+                    channel.sendMessage("Цель не может быть отрицательным числом.").queue();
+                    logger.warn("Попытка установить отрицательную цель '{}'", parts[2]);
+                    return;
+                }
             } catch (NumberFormatException e) {
                 channel.sendMessage("Цель должна быть числом.").queue();
                 logger.warn("Неверный формат новой цели '{}': {}", parts[2], e.getMessage());
@@ -476,6 +515,66 @@ public class DiscordMessageListener extends ListenerAdapter {
     }
 
     /**
+     * Обработать команду изменения даты окончания испытания
+     */
+    private void handleChangeEndDateCommand(String[] parts, String channelId) {
+        try {
+            logger.debug("Обработка команды изменения даты окончания испытания с {} параметрами", parts.length);
+            TextChannel channel = jda.getTextChannelById(channelId);
+            if (channel == null) {
+                logger.warn("Канал {} не найден при обработке команды изменения даты окончания испытания", channelId);
+                return;
+            }
+            
+            if (parts.length < 3) {
+                channel.sendMessage("Недостаточно параметров. Используйте: +изменить_дату <название> <новая дата окончания>").queue();
+                logger.warn("Недостаточно параметров для изменения даты окончания испытания: {}", parts.length);
+                return;
+            }
+            
+            String challengeName = parts[1];
+            LocalDateTime newEndDate;
+            try {
+                // Парсим дату в формате dd.MM.yyyy и устанавливаем время на начало дня
+                newEndDate = LocalDateTime.parse(parts[2] + " 00:00:00", DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
+            } catch (DateTimeParseException e) {
+                try {
+                    // Если не удалось, пробуем формат dd.MM.yyyy без времени
+                    newEndDate = LocalDate.parse(parts[2], DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+                } catch (DateTimeParseException e2) {
+                    try {
+                        // Если не удалось, пробуем формат yyyy-MM-dd для обратной совместимости
+                        newEndDate = LocalDateTime.parse(parts[2], DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                    } catch (DateTimeParseException e3) {
+                        channel.sendMessage("Дата должна быть в формате dd.MM.yyyy (например: 31.12.2025).").queue();
+                        logger.warn("Неверный формат даты '{}': {}", parts[2], e.getMessage());
+                        return;
+                    }
+                }
+            }
+            
+            Challenge challenge = challengeService.getChallenge(challengeName);
+            
+            if (challenge == null) {
+                channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+                logger.warn("Испытание '{}' не найдено при попытке изменения даты окончания", challengeName);
+                return;
+            }
+            
+            Challenge updatedChallenge = challengeService.updateChallengeEndDate(challenge, newEndDate);
+            if (updatedChallenge != null) {
+                channel.sendMessage("Дата окончания испытания \"" + challengeName + "\" изменена на " + parts[2] + ".").queue();
+                logger.info("Дата окончания испытания '{}' успешно изменена на {}", challengeName, parts[2]);
+            } else {
+                channel.sendMessage("Ошибка при изменении даты окончания испытания \"" + challengeName + "\".").queue();
+                logger.error("Ошибка при изменении даты окончания испытания '{}'", challengeName);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка обработки команды изменения даты окончания испытания", e);
+        }
+    }
+
+    /**
      * Обработать команду установки прогресса участника
      */
     private void handleSetParticipantProgressCommand(String[] parts, String channelId) {
@@ -498,6 +597,12 @@ public class DiscordMessageListener extends ListenerAdapter {
             long progress;
             try {
                 progress = Long.parseLong(parts[3]);
+                // Проверка на отрицательные числа
+                if (progress < 0) {
+                    channel.sendMessage("Прогресс не может быть отрицательным числом.").queue();
+                    logger.warn("Попытка установить отрицательный прогресс '{}'", parts[3]);
+                    return;
+                }
             } catch (NumberFormatException e) {
                 channel.sendMessage("Количество должно быть числом.").queue();
                 logger.warn("Неверный формат количества '{}': {}", parts[3], e.getMessage());
@@ -846,6 +951,12 @@ public class DiscordMessageListener extends ListenerAdapter {
             long amount;
             try {
                 amount = Long.parseLong(parts[1]);
+                // Проверка на отрицательные числа
+                if (amount < 0) {
+                    channel.sendMessage("Количество не может быть отрицательным числом.").queue();
+                    logger.warn("Попытка установить отрицательное количество '{}'", parts[1]);
+                    return;
+                }
             } catch (NumberFormatException e) {
                 channel.sendMessage("Количество должно быть числом.").queue();
                 logger.warn("Неверный формат количества '{}': {}", parts[1], e.getMessage());

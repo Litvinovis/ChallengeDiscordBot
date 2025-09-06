@@ -199,9 +199,56 @@ public class DiscordService {
             sb.append("`+остановить <название>` - Остановить активное испытание\n");
             sb.append("`+продолжить <название>` - Продолжить остановленное испытание\n");
             sb.append("`+изменить <название> <новая цель>` - Изменить цель испытания\n");
+            sb.append("`+изменить_дату <название> <новая дата>` - Изменить дату окончания испытания\n");
             sb.append("`+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника\n");
             sb.append("`+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание\n");
             sb.append("`+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания\n\n");
+            
+            sb.append("**Команды пользователя:**\n");
+            sb.append("`+мои` - Показать личные испытания\n");
+            sb.append("`+топ <испытание> [количество]` - Показать таблицу лидеров по испытанию\n");
+            sb.append("`+прогресс <испытание>` - Показать личный прогресс по испытанию\n");
+            sb.append("`+регистрация <название>` - Зарегистрироваться на испытание\n");
+            
+            logger.debug("Сообщение справки успешно сгенерировано");
+            return sb.toString();
+        } catch (Exception e) {
+            logger.error("Ошибка при генерации сообщения справки", e);
+            return "**Ошибка при генерации справки. Пожалуйста, попробуйте позже.**";
+        }
+    }
+    
+    /**
+     * Сгенерировать сообщение справки для конкретного пользователя
+     */
+    public String generateHelpMessage(String userId) {
+        try {
+            logger.debug("Генерация сообщения справки для пользователя: {}", userId);
+            StringBuilder sb = new StringBuilder();
+            sb.append("**Справка по командам бота**\n\n");
+            
+            sb.append("**Основные команды:**\n");
+            sb.append("`+<испытание> <количество>` - Добавить прогресс к испытанию (например: `+отжимания 10`)\n");
+            sb.append("`+статистика` - Показать статистику по всем испытаниям\n");
+            sb.append("`+статистика <испытание>` - Показать статистику по конкретному испытанию\n");
+            sb.append("`+испытания` - Показать список всех активных испытаний\n");
+            sb.append("`+помощь` - Показать эту справку\n\n");
+            
+            // Проверяем, является ли пользователь администратором
+            boolean isAdmin = (userId != null) && userService.isAdminUser(userId);
+            
+            if (isAdmin) {
+                sb.append("**Команды управления испытаниями (только для администраторов):**\n");
+                sb.append("`+новый <название> <цель> [дата окончания] [тип]` - Создать новое испытание\n");
+                sb.append("`+удалить <название>` - Удалить испытание\n");
+                sb.append("`+остановить <название>` - Остановить активное испытание\n");
+                sb.append("`+продолжить <название>` - Продолжить остановленное испытание\n");
+                sb.append("`+изменить <название> <новая цель>` - Изменить цель испытания\n");
+                sb.append("`+изменить_дату <название> <новая дата>` - Изменить дату окончания испытания\n");
+                sb.append("`+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника\n");
+                sb.append("`+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание\n");
+                sb.append("`+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания\n\n");
+            }
             
             sb.append("**Команды пользователя:**\n");
             sb.append("`+мои` - Показать личные испытания\n");
@@ -239,7 +286,7 @@ public class DiscordService {
             for (Challenge challenge : challenges) {
                 ChallengeStats stats = challengeService.getChallengeStats(challenge);
                 if (stats != null) {
-                    report.append(statisticsService.formatReportForDiscord(stats)).append("\n");
+                    report.append(statisticsService.formatReportForDiscord(challenge, stats)).append("\n");
                 }
             }
             
@@ -285,10 +332,10 @@ public class DiscordService {
     /**
      * Форматировать статистику испытания для Discord
      */
-    public String formatChallengeStats(ChallengeStats stats) {
+    public String formatChallengeStats(Challenge challenge, ChallengeStats stats) {
         try {
             logger.debug("Форматирование статистики испытания для Discord");
-            return statisticsService.formatChallengeStats(stats);
+            return statisticsService.formatReportForDiscord(challenge, stats);
         } catch (Exception e) {
             logger.error("Ошибка при форматировании статистики испытания для Discord", e);
             return "**Ошибка при форматировании статистики. Пожалуйста, попробуйте позже.**";
@@ -315,7 +362,8 @@ public class DiscordService {
             // Некоторые команды доступны только администраторам
             if (command.startsWith("новый") || command.startsWith("удалить") || 
                 command.startsWith("остановить") || command.startsWith("продолжить") || 
-                command.startsWith("изменить") || command.startsWith("установить_прогресс") ||
+                command.startsWith("изменить") || command.startsWith("изменить_дату") ||
+                command.startsWith("установить_прогресс") ||
                 command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
                 boolean isAdmin = userService.isAdminUser(userId);
                 logger.debug("Пользователь {} {} администратором", userId, isAdmin ? "является" : "не является");

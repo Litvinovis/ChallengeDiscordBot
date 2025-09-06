@@ -38,7 +38,21 @@ public class StatisticsService {
             // Расчет дней до окончания
             LocalDateTime now = LocalDateTime.now();
             long daysRemaining = Duration.between(now, challenge.getEndDate()).toDays();
-            double dailyTarget = daysRemaining > 0 ? (double) remaining / daysRemaining : 0;
+            
+            // Расчет ежедневной цели с распределением между участниками
+            double dailyTarget = 0;
+            if (daysRemaining > 0) {
+                // Получаем количество участников
+                int participantCount = challenge.getParticipants().size();
+                
+                // Если нет участников, распределяем на одного участника
+                if (participantCount <= 0) {
+                    participantCount = 1;
+                }
+                
+                // Распределяем оставшуюся цель среди участников и делим на количество дней
+                dailyTarget = (double) remaining / participantCount / daysRemaining;
+            }
             
             ChallengeStats stats = new ChallengeStats(
                 challenge.getName(),
@@ -98,9 +112,25 @@ public class StatisticsService {
             long remaining = calculateRemaining(challenge);
             LocalDateTime now = LocalDateTime.now();
             long daysRemaining = Duration.between(now, challenge.getEndDate()).toDays();
-            double dailyTarget = daysRemaining > 0 ? (double) remaining / daysRemaining : 0;
             
-            logger.debug("Ежедневная цель для испытания '{}': {}", challenge.getName(), dailyTarget);
+            // Если дней не осталось, возвращаем 0
+            if (daysRemaining <= 0) {
+                return 0;
+            }
+            
+            // Получаем количество участников
+            int participantCount = challenge.getParticipants().size();
+            
+            // Если нет участников, распределяем на одного участника
+            if (participantCount <= 0) {
+                participantCount = 1;
+            }
+            
+            // Распределяем оставшуюся цель среди участников и делим на количество дней
+            double dailyTarget = (double) remaining / participantCount / daysRemaining;
+            
+            logger.debug("Ежедневная цель для испытания '{}': {} для {} участников", 
+                        challenge.getName(), dailyTarget, participantCount);
             return dailyTarget;
         } catch (Exception e) {
             logger.error("Ошибка при расчете ежедневной цели для испытания: {}", 
@@ -148,7 +178,7 @@ public class StatisticsService {
             }
             
             ChallengeStats stats = calculateStats(challenge);
-            String report = formatReportForDiscord(stats);
+            String report = formatReportForDiscord(challenge, stats);
             
             logger.debug("Отчет о прогрессе для испытания '{}' успешно сгенерирован", challenge.getName());
             return report;
@@ -195,9 +225,63 @@ public class StatisticsService {
     /**
      * Форматировать отчет для Discord
      */
-    public String formatReportForDiscord(ChallengeStats stats) {
+    public String formatReportForDiscord(Challenge challenge, ChallengeStats stats) {
         try {
             logger.debug("Форматирование отчета для Discord");
+            
+            if (stats == null) {
+                logger.warn("Попытка форматирования отчета для Discord с null статистикой");
+                return "";
+            }
+            
+            if (challenge == null) {
+                logger.warn("Попытка форматирования отчета для Discord с null испытанием");
+                return "";
+            }
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append("**Статистика по испытанию: ").append(stats.getChallengeName()).append("**\n");
+            sb.append("Цель: ").append(stats.getTargetValue()).append("\n");
+            sb.append("Выполнено: ").append(stats.getCurrentValue()).append("\n");
+            sb.append("Осталось: ").append(stats.getRemaining()).append("\n");
+            // Используем запятую как десятичный разделитель для русской локали
+            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.getPercentage()).replace('.', ',')).append("%\n");
+            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.getDailyTarget()).replace('.', ',')).append(" в день\n");
+            sb.append("Дней осталось: ").append(stats.getDaysRemaining()).append("\n");
+            
+            // Добавляем количество зарегистрированных участников
+            int participantCount = challenge.getParticipants().size();
+            sb.append("Зарегистрировано участников: ").append(participantCount).append("\n");
+            
+            // Добавляем топ-3 участников
+            List<Map.Entry<String, Long>> topParticipants = challenge.getParticipantProgress().entrySet().stream()
+                    .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                    .limit(3)
+                    .collect(Collectors.toList());
+            
+            if (!topParticipants.isEmpty()) {
+                sb.append("\n**Топ-3 участников:**\n");
+                for (int i = 0; i < topParticipants.size(); i++) {
+                    Map.Entry<String, Long> entry = topParticipants.get(i);
+                    sb.append((i + 1)).append(". <@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
+                }
+            }
+            
+            logger.debug("Отчет для Discord успешно отформатирован");
+            return sb.toString();
+        } catch (Exception e) {
+            logger.error("Ошибка при форматировании отчета для Discord", e);
+            return "";
+        }
+    }
+    
+    /**
+     * Форматировать отчет для Discord (устаревшая версия для обратной совместимости)
+     */
+    @Deprecated
+    public String formatReportForDiscord(ChallengeStats stats) {
+        try {
+            logger.debug("Форматирование отчета для Discord (устаревшая версия)");
             
             if (stats == null) {
                 logger.warn("Попытка форматирования отчета для Discord с null статистикой");
@@ -267,10 +351,10 @@ public class StatisticsService {
     /**
      * Форматировать статистику испытания
      */
-    public String formatChallengeStats(ChallengeStats stats) {
+    public String formatChallengeStats(Challenge challenge, ChallengeStats stats) {
         try {
             logger.debug("Форматирование статистики испытания");
-            return formatReportForDiscord(stats);
+            return formatReportForDiscord(challenge, stats);
         } catch (Exception e) {
             logger.error("Ошибка при форматировании статистики испытания", e);
             return "";

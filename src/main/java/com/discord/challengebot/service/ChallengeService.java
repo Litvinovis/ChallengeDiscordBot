@@ -80,8 +80,10 @@ public class ChallengeService {
      */
     public Challenge addProgress(Challenge challenge, String userId, String username, long amount) {
         try {
-            logger.info("Добавление прогресса {} для пользователя {} в испытание {}", 
-                       amount, username, challenge != null ? challenge.getName() : "null");
+            // Получаем текущий прогресс пользователя до обновления
+            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+            logger.info("Добавление прогресса {} для пользователя {} в испытание {}. Текущий прогресс пользователя: {}", 
+                       amount, username, challenge != null ? challenge.getName() : "null", currentUserProgress);
             
             if (challenge == null) {
                 logger.warn("Попытка добавить прогресс к null испытанию");
@@ -116,7 +118,10 @@ public class ChallengeService {
             // Сохраняем обновленное испытание
             dataStorageService.saveChallenge(challenge);
             
-            logger.info("Прогресс успешно добавлен. Текущий общий прогресс: {}", challenge.getCurrentValue());
+            // Получаем общий прогресс пользователя после обновления
+            long updatedUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+            logger.info("Прогресс успешно добавлен. Текущий общий прогресс: {}. Общий прогресс пользователя после обновления: {}", 
+                       challenge.getCurrentValue(), updatedUserProgress);
             return challenge;
         } catch (Exception e) {
             logger.error("Ошибка при добавлении прогресса к испытанию: {}", 
@@ -188,7 +193,21 @@ public class ChallengeService {
             // Расчет дней до окончания
             LocalDateTime now = LocalDateTime.now();
             long daysRemaining = java.time.Duration.between(now, challenge.getEndDate()).toDays();
-            double dailyTarget = daysRemaining > 0 ? (double) remaining / daysRemaining : 0;
+            
+            // Расчет ежедневной цели с распределением между участниками
+            double dailyTarget = 0;
+            if (daysRemaining > 0) {
+                // Получаем количество участников
+                int participantCount = challenge.getParticipants().size();
+                
+                // Если нет участников, распределяем на одного участника
+                if (participantCount <= 0) {
+                    participantCount = 1;
+                }
+                
+                // Распределяем оставшуюся цель среди участников и делим на количество дней
+                dailyTarget = (double) remaining / participantCount / daysRemaining;
+            }
             
             ChallengeStats stats = new ChallengeStats(
                 challenge.getName(),
@@ -328,12 +347,46 @@ public class ChallengeService {
     }
 
     /**
+     * Обновить дату окончания испытания
+     */
+    public Challenge updateChallengeEndDate(Challenge challenge, LocalDateTime newEndDate) {
+        try {
+            logger.info("Обновление даты окончания испытания {} с {} на {}", 
+                       challenge != null ? challenge.getName() : "null", 
+                       challenge != null ? challenge.getEndDate() : null, 
+                       newEndDate);
+            
+            if (challenge == null) {
+                logger.warn("Попытка обновить дату окончания null испытания");
+                return null;
+            }
+            
+            if (newEndDate == null) {
+                logger.warn("Попытка установить пустую дату окончания");
+                return challenge;
+            }
+            
+            challenge.setEndDate(newEndDate);
+            dataStorageService.saveChallenge(challenge);
+            
+            logger.info("Дата окончания испытания '{}' успешно обновлена", challenge.getName());
+            return challenge;
+        } catch (Exception e) {
+            logger.error("Ошибка при обновлении даты окончания испытания: {}", 
+                        challenge != null ? challenge.getName() : "null", e);
+            return challenge;
+        }
+    }
+
+    /**
      * Установить прогресс участника в испытании
      */
     public Challenge setParticipantProgress(Challenge challenge, String userId, long progress) {
         try {
-            logger.info("Установка прогресса {} для пользователя {} в испытании {}", 
-                       progress, userId, challenge != null ? challenge.getName() : "null");
+            // Получаем текущий прогресс пользователя до обновления
+            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+            logger.info("Установка прогресса {} для пользователя {} в испытании {}. Текущий прогресс пользователя: {}", 
+                       progress, userId, challenge != null ? challenge.getName() : "null", currentUserProgress);
             
             if (challenge == null) {
                 logger.warn("Попытка установить прогресс для null испытания");
@@ -363,7 +416,8 @@ public class ChallengeService {
             // Сохраняем обновленное испытание
             dataStorageService.saveChallenge(challenge);
             
-            logger.info("Прогресс участника '{}' в испытании '{}' успешно установлен", userId, challenge.getName());
+            logger.info("Прогресс участника '{}' в испытании '{}' успешно установлен. Общий прогресс после обновления: {}", 
+                       userId, challenge.getName(), totalProgress);
             return challenge;
         } catch (Exception e) {
             logger.error("Ошибка при установке прогресса участника '{}' в испытании '{}'", 

@@ -2,6 +2,7 @@ package com.discord.challengebot.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import java.util.List;
 
 /**
  * Конфигурация Discord бота
@@ -13,6 +14,7 @@ public class DiscordConfig {
     private String channel;
     private String guildId;
     private String adminUserId;
+    private List<String> adminUserIds;
     private String reportChannel;
     private String reportGuildId;
 
@@ -47,6 +49,14 @@ public class DiscordConfig {
 
     public void setAdminUserId(String adminUserId) {
         this.adminUserId = adminUserId;
+    }
+    
+    public List<String> getAdminUserIds() {
+        return adminUserIds;
+    }
+    
+    public void setAdminUserIds(List<String> adminUserIds) {
+        this.adminUserIds = adminUserIds;
     }
 
     public String getReportChannel() {

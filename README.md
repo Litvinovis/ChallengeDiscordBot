@@ -19,8 +19,6 @@ Discord бот для создания и участия в спортивных
 ### Требования
 
 - Java 17 или выше
-- Apache Ignite 2.17
-- Discord бот токен
 
 ### Сборка проекта
 
@@ -48,9 +46,7 @@ challenges:
   
 # Apache Ignite configuration
 ignite:
-  client-mode: true
-  addresses:
-    - "127.0.0.1:10800"  # Адрес сервера Ignite
+  # Встроенный режим Ignite (embedded), без необходимости отдельного сервера
 ```
 
 ### Запуск приложения
@@ -58,10 +54,14 @@ ignite:
 Для корректной работы Apache Ignite с Java 17+ необходимо запускать приложение со специальными JVM аргументами:
 
 ```bash
-java --add-opens java.base/java.nio=ALL-UNNAMED \
+$JAVA_HOME/bin/java --add-opens java.base/java.nio=ALL-UNNAMED \
      --add-opens java.base/sun.nio.ch=ALL-UNNAMED \
      --add-opens java.management/sun.management=ALL-UNNAMED \
      --add-opens jdk.management/com.sun.management.internal=ALL-UNNAMED \
+     --add-opens java.base/java.util=ALL-UNNAMED \
+     --add-opens java.base/java.lang=ALL-UNNAMED \
+     --add-opens java.base/java.time=ALL-UNNAMED \
+     --add-opens java.base/java.io=ALL-UNNAMED \
      -jar target/challenge-bot-1.0.0.jar
 ```
 
@@ -70,18 +70,18 @@ java --add-opens java.base/java.nio=ALL-UNNAMED \
 Для удобства запуска приложения в репозитории также предоставлены скрипты:
 
 - Для Windows: [start.bat](start.bat)
-- Для Linux/Mac: [start.sh](start.sh)
+- Для Linux/Mac: [challengeBot.sh](challengeBot.sh)
 
 Перед запуском скриптов убедитесь, что они имеют права на выполнение:
 
 ```bash
-chmod +x start.sh
+chmod +x challengeBot.sh
 ```
 
 Затем можно запустить приложение:
 
 ```bash
-./start.sh
+./challengeBot.sh start
 ```
 
 ## Команды бота
@@ -100,6 +100,10 @@ chmod +x start.sh
 - `+остановить <название>` - Остановить активное испытание
 - `+продолжить <название>` - Продолжить остановленное испытание
 - `+изменить <название> <новая цель>` - Изменить цель испытания
+- `+изменить_дату <название> <новая дата>` - Изменить дату окончания испытания
+- `+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника
+- `+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание
+- `+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания
 
 ### Команды пользователя
 
@@ -128,7 +132,7 @@ chmod +x start.sh
 4. **Command Processor** - Анализирует и направляет команды соответствующим сервисам
 5. **Challenge Service** - Управляет созданием, изменением и отслеживанием испытаний
 6. **Statistics Service** - Генерирует статистику и отчеты о прогрессе
-7. **Ignite Data Store** - Кластер Apache Ignite для хранения данных
+7. **Ignite Data Store** - Встроенный экземпляр Apache Ignite для хранения данных
 8. **Scheduled Tasks** - Запланированные задачи для ежедневных отчетов
 
 ### Модели данных
@@ -142,7 +146,7 @@ chmod +x start.sh
 
 ### Запуск тестов
 
-```bash
+```
 mvn test
 ```
 

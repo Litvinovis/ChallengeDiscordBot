@@ -1,17 +1,14 @@
 package com.discord.challengebot.service;
 
+import com.discord.challengebot.config.IgniteConfig;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.Participant;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
-import org.apache.ignite.Ignition;
-import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.configuration.CacheConfiguration;
-import org.apache.ignite.configuration.IgniteConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -26,13 +23,12 @@ import java.util.*;
 public class DataStorageService {
     private static final Logger logger = LoggerFactory.getLogger(DataStorageService.class);
     
-    @Value("${ignite.addresses:127.0.0.1:11800}")
-    private List<String> igniteAddresses;
-    
-    @Value("${ignite.client-mode:true}")
-    private boolean clientMode;
-    
+    @Autowired
     private Ignite ignite;
+    
+    @Autowired
+    private IgniteConfig igniteConfig;
+    
     private IgniteCache<String, Challenge> challengesCache;
     private IgniteCache<String, Participant> participantsCache;
     private boolean isTestMode = false;
@@ -45,36 +41,14 @@ public class DataStorageService {
         try {
             logger.info("Инициализация подключения к Apache Ignite");
             
-            // Проверяем, запущены ли тесты
-            if (isTestMode) {
-                logger.info("Работаем в тестовом режиме с embedded Ignite");
-                // Используем встроенный режим для тестов
-                IgniteConfiguration cfg = new IgniteConfiguration();
-                cfg.setClientMode(false); // Режим сервера для тестов
-                cfg.setIgniteInstanceName("test-ignite-instance");
-                
-                ignite = Ignition.start(cfg);
-            } else {
-                // Инициализация клиента Apache Ignite для production
-                IgniteConfiguration cfg = new IgniteConfiguration();
-                cfg.setClientMode(clientMode);
-                
-                // Настройка адресов серверов (из application.yml)
-                cfg.setDiscoverySpi(new org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi()
-                    .setIpFinder(new org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder()
-                        .setAddresses(igniteAddresses)));
-                
-                ignite = Ignition.start(cfg);
-            }
-            
-            // Создание или получение кэша для испытаний
+            // Создание или получение кэша для испытаний с включенной персистентностью
             CacheConfiguration<String, Challenge> challengeCacheCfg = new CacheConfiguration<>("challenges");
-            challengeCacheCfg.setCacheMode(CacheMode.PARTITIONED);
+            challengeCacheCfg.setBackups(1); // Резервные копии для надежности
             challengesCache = ignite.getOrCreateCache(challengeCacheCfg);
             
-            // Создание или получение кэша для участников
+            // Создание или получение кэша для участников с включенной персистентностью
             CacheConfiguration<String, Participant> participantCacheCfg = new CacheConfiguration<>("participants");
-            participantCacheCfg.setCacheMode(CacheMode.PARTITIONED);
+            participantCacheCfg.setBackups(1); // Резервные копии для надежности
             participantsCache = ignite.getOrCreateCache(participantCacheCfg);
             
             logger.info("Подключение к Apache Ignite успешно инициализировано");
@@ -97,16 +71,10 @@ public class DataStorageService {
     @PreDestroy
     public void destroy() {
         try {
-            if (ignite != null) {
-                logger.info("Закрытие подключения к Apache Ignite");
-                // Безопасное закрытие Ignite
-                try {
-                    ignite.close();
-                } catch (Exception e) {
-                    logger.warn("Ошибка при закрытии подключения к Apache Ignite (игнорируется)", e);
-                }
-                logger.info("Подключение к Apache Ignite успешно закрыто");
-            }
+            logger.info("Закрытие подключения к Apache Ignite");
+            // Закрываем экземпляр Ignite для корректного сохранения данных на диск
+            igniteConfig.closeIgnite();
+            logger.info("Подключение к Apache Ignite успешно закрыто");
         } catch (Exception e) {
             logger.error("Ошибка при закрытии подключения к Apache Ignite", e);
         }

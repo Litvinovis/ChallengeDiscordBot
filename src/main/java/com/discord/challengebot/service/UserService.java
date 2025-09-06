@@ -174,7 +174,15 @@ public class UserService {
                 return false;
             }
             
-            boolean isAdmin = discordConfig.getAdminUserId().equals(userId);
+            // Проверяем список администраторов, если он задан
+            if (discordConfig.getAdminUserIds() != null && !discordConfig.getAdminUserIds().isEmpty()) {
+                boolean isAdmin = discordConfig.getAdminUserIds().contains(userId);
+                logger.debug("Проверка прав администратора для пользователя {}: {}", userId, isAdmin);
+                return isAdmin;
+            }
+            
+            // Если список не задан, проверяем старый способ (для обратной совместимости)
+            boolean isAdmin = discordConfig.getAdminUserId() != null && discordConfig.getAdminUserId().equals(userId);
             logger.debug("Проверка прав администратора для пользователя {}: {}", userId, isAdmin);
             return isAdmin;
         } catch (Exception e) {

@@ -72,12 +72,12 @@ class DiscordServiceTest {
     @Test
     void testFormatChallengeStats() {
         // This is a pass-through method, so we just verify it calls the statistics service
-        when(statisticsService.formatChallengeStats(any())).thenReturn("formatted stats");
+        when(statisticsService.formatReportForDiscord(any(), any())).thenReturn("formatted stats");
         
-        String result = discordService.formatChallengeStats(null);
+        String result = discordService.formatChallengeStats(null, null);
         
         assertEquals("formatted stats", result);
-        verify(statisticsService).formatChallengeStats(null);
+        verify(statisticsService).formatReportForDiscord(null, null);
     }
     
     @Test

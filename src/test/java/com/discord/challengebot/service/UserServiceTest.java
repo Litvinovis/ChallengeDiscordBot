@@ -8,6 +8,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -30,24 +32,26 @@ class UserServiceTest {
     @Test
     void testIsAdminUserWhenAdmin() {
         String adminUserId = "12345";
+        when(discordConfig.getAdminUserIds()).thenReturn(null);
         when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
 
         boolean isAdmin = userService.isAdminUser(adminUserId);
 
         assertTrue(isAdmin);
-        verify(discordConfig).getAdminUserId();
+        verify(discordConfig, atLeastOnce()).getAdminUserId();
     }
 
     @Test
     void testIsAdminUserWhenNotAdmin() {
         String adminUserId = "12345";
         String regularUserId = "67890";
+        when(discordConfig.getAdminUserIds()).thenReturn(null);
         when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
 
         boolean isAdmin = userService.isAdminUser(regularUserId);
 
         assertFalse(isAdmin);
-        verify(discordConfig).getAdminUserId();
+        verify(discordConfig, atLeastOnce()).getAdminUserId();
     }
 
     @Test
