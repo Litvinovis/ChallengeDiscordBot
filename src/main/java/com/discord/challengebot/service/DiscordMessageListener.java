@@ -162,6 +162,9 @@ public class DiscordMessageListener extends ListenerAdapter {
                 case "испытания":
                     handleListChallengesCommand(channelId);
                     break;
+                case "обновить_имя":
+                    handleUpdateUsernameCommand(parts, userId, username, channelId);
+                    break;
                 default:
                     // Считаем, что это команда добавления прогресса к испытанию
                     handleProgressUpdateCommand(command, userId, username, channelId);
@@ -1007,6 +1010,41 @@ public class DiscordMessageListener extends ListenerAdapter {
             logger.info("Список из {} активных испытаний отправлен", activeChallenges.size());
         } catch (Exception e) {
             logger.error("Ошибка обработки команды списка испытаний", e);
+        }
+    }
+
+    /**
+     * Обработать команду обновления имени пользователя
+     */
+    private void handleUpdateUsernameCommand(String[] parts, String userId, String currentUsername, String channelId) {
+        try {
+            logger.debug("Обработка команды обновления имени пользователя для пользователя {}", currentUsername);
+            TextChannel channel = jda.getTextChannelById(channelId);
+            if (channel == null) {
+                logger.warn("Канал {} не найден при обработке команды обновления имени пользователя", channelId);
+                return;
+            }
+            
+            // Получаем новое имя пользователя из команды или используем текущее имя из Discord
+            String newUsername = currentUsername; // По умолчанию используем текущее имя
+            
+            if (parts.length > 1) {
+                // Если указано новое имя в команде, используем его
+                newUsername = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
+            }
+            
+            // Обновляем информацию об участнике в хранилище
+            boolean updated = userService.updateParticipantUsername(userId, newUsername);
+            
+            if (updated) {
+                channel.sendMessage("Ваше имя успешно обновлено на: " + newUsername).queue();
+                logger.info("Имя пользователя {} успешно обновлено на {}", userId, newUsername);
+            } else {
+                channel.sendMessage("Ошибка при обновлении вашего имени. Пожалуйста, попробуйте позже.").queue();
+                logger.error("Ошибка при обновлении имени пользователя {}", userId);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка обработки команды обновления имени пользователя для пользователя {}", currentUsername, e);
         }
     }
 

@@ -213,4 +213,43 @@ public class UserService {
             return false;
         }
     }
+
+    /**
+     * Обновить имя пользователя в хранилище
+     */
+    public boolean updateParticipantUsername(String userId, String username) {
+        try {
+            logger.info("Обновление имени пользователя: {} для ID: {}", username, userId);
+            
+            if (userId == null || userId.isEmpty()) {
+                logger.warn("Попытка обновления имени пользователя с пустым ID");
+                return false;
+            }
+            
+            if (username == null || username.isEmpty()) {
+                logger.warn("Попытка обновления имени пользователя с пустым именем");
+                return false;
+            }
+            
+            // Получаем информацию об участнике или создаем новую
+            Participant participant = dataStorageService.getParticipant(userId);
+            if (participant == null) {
+                logger.debug("Участник с ID {} не найден, создаем нового участника с именем {}", userId, username);
+                participant = new Participant(userId, username);
+            } else {
+                logger.debug("Участник с ID {} найден, обновляем имя пользователя с {} на {}", 
+                           userId, participant.getUsername(), username);
+                participant.setUsername(username);
+            }
+            
+            // Сохраняем обновленную информацию об участнике
+            dataStorageService.saveParticipant(participant);
+            
+            logger.info("Имя пользователя {} успешно обновлено для ID {}", username, userId);
+            return true;
+        } catch (Exception e) {
+            logger.error("Ошибка при обновлении имени пользователя: {} для ID: {}", username, userId, e);
+            return false;
+        }
+    }
 }
