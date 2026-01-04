@@ -55,11 +55,18 @@ public class DailyReportScheduler {
             
             int completedChallenges = 0;
             for (Challenge challenge : challenges) {
-                if (challenge.isActive() && challenge.getEndDate().isBefore(now)) {
-                    logger.info("Испытание '{}' завершено", challenge.getName());
-                    // Испытание завершено
+                // Проверяем, активно ли испытание и достигнута ли цель
+                if (challenge.isActive() && isChallengeCompleted(challenge)) {
+                    logger.info("Испытание '{}' завершено по достижению цели", challenge.getName());
+                    // Испытание завершено успешно по достижению цели
                     challengeService.completeChallenge(challenge);
                     discordService.sendChallengeCompletionNotification(challenge);
+                    completedChallenges++;
+                } else if (challenge.isActive() && challenge.getEndDate().isBefore(now)) {
+                    logger.info("Испытание '{}' завершено по истечению срока", challenge.getName());
+                    // Испытание завершено по истечению срока без достижения цели
+                    challengeService.completeChallenge(challenge);
+                    discordService.sendChallengeFailureNotification(challenge);
                     completedChallenges++;
                 }
             }
@@ -67,6 +74,26 @@ public class DailyReportScheduler {
             logger.info("Проверка завершения испытаний завершена. Завершено {} испытаний", completedChallenges);
         } catch (Exception e) {
             logger.error("Ошибка при проверке завершения испытаний", e);
+        }
+    }
+    
+    /**
+     * Проверить, достигнуто ли завершение испытания по цели
+     */
+    private boolean isChallengeCompleted(Challenge challenge) {
+        try {
+            logger.debug("Проверка завершения испытания по цели: {} (текущее значение: {}, целевое значение: {})", 
+                        challenge.getName(), challenge.getCurrentValue(), challenge.getTargetValue());
+            
+            // Испытание считается завершенным, если текущее значение больше или равно целевому
+            boolean isCompleted = challenge.getCurrentValue() >= challenge.getTargetValue();
+            
+            logger.debug("Статус завершения по цели для испытания '{}': {}", challenge.getName(), isCompleted);
+            return isCompleted;
+        } catch (Exception e) {
+            logger.error("Ошибка при проверке завершения испытания по цели: {}", 
+                        challenge != null ? challenge.getName() : "null", e);
+            return false;
         }
     }
 
