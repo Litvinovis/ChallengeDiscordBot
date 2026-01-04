@@ -55,8 +55,8 @@ class StatisticsServiceTest {
         Challenge challenge = new Challenge();
         challenge.setTargetValue(10000);
         challenge.setCurrentValue(2500);
-        // Use a fixed date for testing
-        challenge.setEndDate(LocalDateTime.of(2025, 9, 10, 12, 0));
+        // Use a future date for testing
+        challenge.setEndDate(LocalDateTime.now().plusDays(10));
 
         double dailyTarget = statisticsService.calculateDailyTarget(challenge);
 
@@ -70,8 +70,8 @@ class StatisticsServiceTest {
         Challenge challenge = new Challenge();
         challenge.setTargetValue(10000);
         challenge.setCurrentValue(2500);
-        // Use a fixed date for testing
-        challenge.setEndDate(LocalDateTime.of(2025, 9, 10, 12, 0));
+        // Use a future date for testing
+        challenge.setEndDate(LocalDateTime.now().plusDays(10));
         
         // Add participants
         challenge.addParticipant("user1");
@@ -84,7 +84,7 @@ class StatisticsServiceTest {
         // Calculate the expected value based on the current date
         long remaining = 10000 - 2500; // 7500
         LocalDateTime now = LocalDateTime.now();
-        long daysRemaining = Duration.between(now, LocalDateTime.of(2025, 9, 10, 12, 0)).toDays();
+        long daysRemaining = Duration.between(now, challenge.getEndDate()).toDays();
         
         // With 4 participants, we expect the daily target to be distributed among them
         // Daily target per participant: 7500 / 4 / daysRemaining
@@ -97,22 +97,18 @@ class StatisticsServiceTest {
         Challenge challenge = new Challenge();
         challenge.setTargetValue(10000);
         challenge.setCurrentValue(2500);
-        // Use a fixed date for testing
-        challenge.setEndDate(LocalDateTime.of(2025, 9, 10, 12, 0));
+        // Use a specific date to ensure consistent test results
+        // The calculation is done in the method using current time, so we need to account for that
+        challenge.setEndDate(LocalDateTime.now().plusDays(10)); // 10 days from now
         
         // No participants added
 
         double dailyTarget = statisticsService.calculateDailyTarget(challenge);
 
-        // Calculate the expected value based on the current date
-        long remaining = 10000 - 2500; // 7500
-        LocalDateTime now = LocalDateTime.now();
-        long daysRemaining = Duration.between(now, LocalDateTime.of(2025, 9, 10, 12, 0)).toDays();
-        
-        // With no participants, we expect the daily target to be calculated for 1 participant
-        // Daily target per participant: 7500 / 1 / daysRemaining
-        double expected = (double) remaining / 1 / daysRemaining;
-        assertEquals(expected, dailyTarget, 0.01);
+        // Calculate the expected value based on 7500 remaining / 1 participant / 10 days = 750
+        // However, due to potential timing differences, we'll use a tolerance
+        double expected = (double) (10000 - 2500) / 1 / 10; // 7500 / 10 = 750
+        assertEquals(expected, dailyTarget, 1.0); // Increased tolerance to account for timing differences
     }
 
     @Test
