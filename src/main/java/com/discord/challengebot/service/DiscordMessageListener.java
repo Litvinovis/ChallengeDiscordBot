@@ -24,7 +24,8 @@ import java.util.Map;
  */
 public class DiscordMessageListener extends ListenerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(DiscordMessageListener.class);
-    
+    private static final String OPENCLAW_ROVER_BOT_ID = "1481319611533365483";
+
     private final DiscordService discordService;
     private final DiscordConfig discordConfig;
     private final ChallengeService challengeService;
@@ -48,9 +49,9 @@ public class DiscordMessageListener extends ListenerAdapter {
             // Сохраняем ссылку на JDA
             this.jda = event.getJDA();
             
-            // Игнорируем сообщения от ботов
-            if (event.getAuthor().isBot()) {
-                logger.debug("Игнорирование сообщения от бота: {}", event.getAuthor().getName());
+            // Игнорируем сообщения от ботов, кроме доверенного OpenClawRover (для автопроверок)
+            if (event.getAuthor().isBot() && !OPENCLAW_ROVER_BOT_ID.equals(event.getAuthor().getId())) {
+                logger.debug("Игнорирование сообщения от бота: {} ({})", event.getAuthor().getName(), event.getAuthor().getId());
                 return;
             }
 
