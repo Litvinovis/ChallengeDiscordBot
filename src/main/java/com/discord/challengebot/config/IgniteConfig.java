@@ -3,14 +3,15 @@ package com.discord.challengebot.config;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.configuration.DataStorageConfiguration;
-import org.apache.ignite.configuration.DataRegionConfiguration;
+import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
+import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import java.nio.file.Paths;
+
+import java.util.Collections;
 
 /**
- * Конфигурация Apache Ignite
+ * Конфигурация Apache Ignite (client mode, shared node)
  */
 @Configuration
 public class IgniteConfig {
@@ -19,52 +20,31 @@ public class IgniteConfig {
 
     @Bean
     public Ignite igniteInstance() {
-        // Установка системных свойств для совместимости с новыми версиями Java
         System.setProperty("IGNITE_QUIET", "false");
         System.setProperty("IGNITE_NO_ASCII", "false");
         System.setProperty("IGNITE_UPDATE_NOTIFIER", "false");
-        // Отключение проверки доступа к приватным полям для совместимости с Java 17+
         System.setProperty("IGNITE_DISABLE_ACCESS_CHECK", "true");
-        
+
         IgniteConfiguration cfg = new IgniteConfiguration();
-        
-        // Установка абсолютного пути к рабочей директории
-        String workDir = Paths.get("ignite/work").toAbsolutePath().toString();
-        cfg.setWorkDirectory(workDir);
-        
-        // Настройка персистентности (сохранение данных на диск)
-        DataStorageConfiguration storageCfg = new DataStorageConfiguration();
-        storageCfg.setDefaultDataRegionConfiguration(
-            new DataRegionConfiguration()
-                .setName("default")
-                .setPersistenceEnabled(true) // Включение персистентности
-        );
-        cfg.setDataStorageConfiguration(storageCfg);
-        
-        // Запуск Ignite в embedded режиме
-        // В этом режиме Ignite запускается внутри приложения
-        
+        cfg.setIgniteInstanceName("challenge-client");
+        cfg.setClientMode(true);
+
+        TcpDiscoverySpi discoverySpi = new TcpDiscoverySpi();
+        discoverySpi.setLocalAddress("192.168.1.120");
+        TcpDiscoveryVmIpFinder ipFinder = new TcpDiscoveryVmIpFinder();
+        ipFinder.setAddresses(Collections.singletonList("192.168.1.120:47650..47659"));
+        discoverySpi.setIpFinder(ipFinder);
+        cfg.setDiscoverySpi(discoverySpi);
+
         igniteInstance = Ignition.start(cfg);
-        
-        // Активация кластера после запуска, если используется персистентность
-        if (!igniteInstance.cluster().active()) {
-            igniteInstance.cluster().state(org.apache.ignite.cluster.ClusterState.ACTIVE);
-        }
-        
         return igniteInstance;
     }
-    
-    /**
-     * Корректное закрытие экземпляра Ignite при завершении приложения
-     */
+
     public void closeIgnite() {
         if (igniteInstance != null) {
             try {
-                // Останавливаем экземпляр Ignite для корректного сохранения данных на диск
                 igniteInstance.close();
-            } catch (Exception e) {
-                // Логируем ошибку, но не прерываем завершение приложения
-                System.err.println("Ошибка при закрытии экземпляра Ignite: " + e.getMessage());
+            } catch (Exception ignored) {
             }
         }
     }
