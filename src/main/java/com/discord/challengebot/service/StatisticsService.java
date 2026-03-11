@@ -8,8 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,9 +52,10 @@ public class StatisticsService {
             double percentage = challenge.getTargetValue() > 0 ? 
                                (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
             
-            // Расчет дней до окончания
-            LocalDateTime now = LocalDateTime.now();
-            long daysRemaining = Duration.between(now, challenge.getEndDate()).toDays();
+            // Расчет дней до окончания (по календарным дням, без потери из-за времени суток)
+            LocalDate today = LocalDate.now();
+            LocalDate endDate = challenge.getEndDate().toLocalDate();
+            long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
             
             // Расчет ежедневной цели с распределением между участниками
             double dailyTarget = 0;
@@ -126,8 +128,9 @@ public class StatisticsService {
             }
             
             long remaining = calculateRemaining(challenge);
-            LocalDateTime now = LocalDateTime.now();
-            long daysRemaining = Duration.between(now, challenge.getEndDate()).toDays();
+            LocalDate today = LocalDate.now();
+            LocalDate endDate = challenge.getEndDate().toLocalDate();
+            long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
             
             // Если дней не осталось, возвращаем 0
             if (daysRemaining <= 0) {
