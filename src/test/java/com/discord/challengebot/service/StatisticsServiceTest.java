@@ -7,8 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.MockitoAnnotations;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -81,13 +82,11 @@ class StatisticsServiceTest {
 
         double dailyTarget = statisticsService.calculateDailyTarget(challenge);
 
-        // Calculate the expected value based on the current date
+        // Calculate expected value with the same calendar-day logic as service
         long remaining = 10000 - 2500; // 7500
-        LocalDateTime now = LocalDateTime.now();
-        long daysRemaining = Duration.between(now, challenge.getEndDate()).toDays();
-        
-        // With 4 participants, we expect the daily target to be distributed among them
-        // Daily target per participant: 7500 / 4 / daysRemaining
+        long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), challenge.getEndDate().toLocalDate());
+
+        // With 4 participants, daily target per participant = remaining / participants / daysRemaining
         double expected = (double) remaining / 4 / daysRemaining;
         assertEquals(expected, dailyTarget, 0.01);
     }
