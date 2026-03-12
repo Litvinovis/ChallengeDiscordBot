@@ -23,6 +23,9 @@ public class IgniteConfig {
     @Value("${ignite.discovery-addresses:192.168.1.120:47650..47659}")
     private List<String> discoveryAddresses;
 
+    @Value("${ignite.work-dir:/tmp/ignite-challenge-client}")
+    private String workDir;
+
     private Ignite igniteInstance;
 
     @Bean
@@ -35,6 +38,7 @@ public class IgniteConfig {
         IgniteConfiguration cfg = new IgniteConfiguration();
         cfg.setIgniteInstanceName("challenge-client");
         cfg.setClientMode(true);
+        cfg.setWorkDirectory(workDir);
 
         TcpDiscoverySpi discoverySpi = new TcpDiscoverySpi();
         discoverySpi.setLocalAddress(localAddress);
