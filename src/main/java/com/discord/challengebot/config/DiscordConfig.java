@@ -13,6 +13,7 @@ public class DiscordConfig {
     private String token;
     private String channel;
     private String channelId;
+    private List<String> channelIds;
     private String guildId;
     private String adminUserId;
     private List<String> adminUserIds;
@@ -42,6 +43,14 @@ public class DiscordConfig {
 
     public void setChannelId(String channelId) {
         this.channelId = channelId;
+    }
+
+    public List<String> getChannelIds() {
+        return channelIds;
+    }
+
+    public void setChannelIds(List<String> channelIds) {
+        this.channelIds = channelIds;
     }
 
     public String getGuildId() {

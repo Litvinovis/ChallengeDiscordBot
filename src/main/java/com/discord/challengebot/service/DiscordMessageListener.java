@@ -57,8 +57,14 @@ public class DiscordMessageListener extends ListenerAdapter {
 
             // Проверяем, что сообщение в правильном канале (с приоритетом channel-id)
             TextChannel channel = event.getChannel().asTextChannel();
+            List<String> configuredChannelIds = discordConfig.getChannelIds();
             String configuredChannelId = discordConfig.getChannelId();
-            if (configuredChannelId != null && !configuredChannelId.isBlank()) {
+            if (configuredChannelIds != null && !configuredChannelIds.isEmpty()) {
+                if (!configuredChannelIds.contains(channel.getId())) {
+                    logger.debug("Игнорирование сообщения из канала id='{}', ожидается один из ids='{}'", channel.getId(), configuredChannelIds);
+                    return;
+                }
+            } else if (configuredChannelId != null && !configuredChannelId.isBlank()) {
                 if (!channel.getId().equals(configuredChannelId)) {
                     logger.debug("Игнорирование сообщения из канала id='{}', ожидается id='{}'", channel.getId(), configuredChannelId);
                     return;
