@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -84,15 +85,20 @@ public class ChallengeService {
      */
     public Challenge addProgress(Challenge challenge, String userId, String username, long amount) {
         try {
-            // Получаем текущий прогресс пользователя до обновления
-            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-            logger.info("Добавление прогресса {} для пользователя {} в испытание {}. Текущий прогресс пользователя: {}", 
-                       amount, username, challenge != null ? challenge.getName() : "null", currentUserProgress);
-            
+            // Bug fix #2: null check BEFORE accessing participantProgress to avoid NPE
             if (challenge == null) {
                 logger.warn("Попытка добавить прогресс к null испытанию");
                 return null;
             }
+            // Инициализируем participantProgress если null (defensive)
+            if (challenge.getParticipantProgress() == null) {
+                challenge.setParticipantProgress(new java.util.concurrent.ConcurrentHashMap<>());
+            }
+
+            // Получаем текущий прогресс пользователя до обновления
+            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+            logger.info("Добавление прогресса {} для пользователя {} в испытание {}. Текущий прогресс пользователя: {}",
+                       amount, username, challenge.getName(), currentUserProgress);
             
             if (userId == null || userId.isEmpty()) {
                 logger.warn("Попытка добавить прогресс с пустым ID пользователя");
@@ -396,15 +402,20 @@ public class ChallengeService {
      */
     public Challenge setParticipantProgress(Challenge challenge, String userId, long progress) {
         try {
-            // Получаем текущий прогресс пользователя до обновления
-            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-            logger.info("Установка прогресса {} для пользователя {} в испытании {}. Текущий прогресс пользователя: {}", 
-                       progress, userId, challenge != null ? challenge.getName() : "null", currentUserProgress);
-            
+            // Bug fix #2: null check BEFORE accessing participantProgress to avoid NPE
             if (challenge == null) {
                 logger.warn("Попытка установить прогресс для null испытания");
                 return null;
             }
+            // Инициализируем participantProgress если null (defensive)
+            if (challenge.getParticipantProgress() == null) {
+                challenge.setParticipantProgress(new java.util.concurrent.ConcurrentHashMap<>());
+            }
+
+            // Получаем текущий прогресс пользователя до обновления
+            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+            logger.info("Установка прогресса {} для пользователя {} в испытании {}. Текущий прогресс пользователя: {}",
+                       progress, userId, challenge.getName(), currentUserProgress);
             
             if (userId == null || userId.isEmpty()) {
                 logger.warn("Попытка установить прогресс для пользователя с пустым ID");
