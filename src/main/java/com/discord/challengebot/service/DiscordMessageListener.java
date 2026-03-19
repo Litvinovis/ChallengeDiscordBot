@@ -6,6 +6,7 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
 import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -55,6 +56,12 @@ public class DiscordMessageListener extends ListenerAdapter {
                 return;
             }
 
+            // Bug fix #1: ThreadChannel crash — check channel type before casting
+            if (!event.getChannel().getType().equals(ChannelType.TEXT)) {
+                logger.debug("Игнорирование сообщения из канала типа {}: {}", event.getChannel().getType(), event.getChannel().getName());
+                return;
+            }
+
             // Проверяем, что сообщение в правильном канале (с приоритетом channel-id)
             TextChannel channel = event.getChannel().asTextChannel();
             List<String> configuredChannelIds = discordConfig.getChannelIds();
@@ -96,8 +103,10 @@ public class DiscordMessageListener extends ListenerAdapter {
                         event.getAuthor() != null ? event.getAuthor().getName() : "unknown", e);
             
             try {
-                TextChannel channel = event.getChannel().asTextChannel();
-                channel.sendMessage("Произошла ошибка при обработке команды. Пожалуйста, попробуйте позже.").queue();
+                if (event.getChannel().getType().equals(ChannelType.TEXT)) {
+                    TextChannel channel = event.getChannel().asTextChannel();
+                    channel.sendMessage("Произошла ошибка при обработке команды. Пожалуйста, попробуйте позже.").queue();
+                }
             } catch (Exception sendException) {
                 logger.error("Ошибка отправки сообщения об ошибке", sendException);
             }

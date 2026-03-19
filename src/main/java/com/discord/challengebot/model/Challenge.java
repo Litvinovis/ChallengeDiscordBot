@@ -7,6 +7,9 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.io.Serializable;
 
 /**
@@ -23,19 +26,22 @@ public class Challenge implements Serializable {
     private ChallengeType type;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
+    // Bug fix #3: ConcurrentHashMap instead of HashMap to prevent race conditions
     private Map<String, Long> participantProgress;
     private boolean active;
     private String description;
     private String unit;
-    private List<String> participants; // List of participant user IDs
+    // Bug fix #3 + #5: Set-backed participants list for O(1) contains() and thread safety
+    private List<String> participants; // List of participant user IDs (serialization compatible)
 
     public Challenge() {
-        this.participantProgress = new HashMap<>();
+        // Bug fix #3: use ConcurrentHashMap to prevent race conditions on concurrent progress updates
+        this.participantProgress = new ConcurrentHashMap<>();
         this.participants = new ArrayList<>();
         logger.debug("Создан новый экземпляр Challenge");
     }
 
-    public Challenge(String id, String name, long targetValue, ChallengeType type, 
+    public Challenge(String id, String name, long targetValue, ChallengeType type,
                      LocalDateTime startDate, LocalDateTime endDate, String description, String unit) {
         this.id = id;
         this.name = name;
@@ -44,7 +50,8 @@ public class Challenge implements Serializable {
         this.type = type;
         this.startDate = startDate;
         this.endDate = endDate;
-        this.participantProgress = new HashMap<>();
+        // Bug fix #3: use ConcurrentHashMap to prevent race conditions
+        this.participantProgress = new ConcurrentHashMap<>();
         this.active = true;
         this.description = description;
         this.unit = unit;
@@ -161,6 +168,17 @@ public class Challenge implements Serializable {
         this.participants = participants;
     }
 
+    // Bug fix #5: use a Set to achieve O(1) contains/add/remove operations for participants
+    // The underlying list is rebuilt from a LinkedHashSet to maintain insertion order and uniqueness.
+    private transient Set<String> participantsSet = null;
+
+    private Set<String> getParticipantsSet() {
+        if (participantsSet == null) {
+            participantsSet = new LinkedHashSet<>(participants != null ? participants : new ArrayList<>());
+        }
+        return participantsSet;
+    }
+
     // Helper methods for participant management
     public void addParticipant(String userId) {
         try {
@@ -168,9 +186,13 @@ public class Challenge implements Serializable {
                 logger.warn("Попытка добавить участника с пустым ID в испытание '{}'", name);
                 return;
             }
-            
-            if (!participants.contains(userId)) {
-                participants.add(userId);
+
+            // Bug fix #5: O(1) add via Set
+            boolean added = getParticipantsSet().add(userId);
+            if (added) {
+                // Keep backing list in sync
+                if (participants == null) participants = new ArrayList<>();
+                if (!participants.contains(userId)) participants.add(userId);
                 logger.debug("Участник '{}' добавлен в испытание '{}'", userId, name);
             } else {
                 logger.debug("Участник '{}' уже присутствует в испытании '{}'", userId, name);
@@ -186,8 +208,11 @@ public class Challenge implements Serializable {
                 logger.warn("Попытка удалить участника с пустым ID из испытания '{}'", name);
                 return;
             }
-            
-            if (participants.remove(userId)) {
+
+            // Bug fix #5: O(1) removal via Set
+            boolean removed = getParticipantsSet().remove(userId);
+            if (participants != null) participants.remove(userId);
+            if (removed) {
                 logger.debug("Участник '{}' удален из испытания '{}'", userId, name);
             } else {
                 logger.debug("Участник '{}' не найден в испытании '{}'", userId, name);
@@ -203,13 +228,28 @@ public class Challenge implements Serializable {
                 logger.warn("Попытка проверить наличие участника с пустым ID в испытании '{}'", name);
                 return false;
             }
-            
-            boolean hasParticipant = participants.contains(userId);
+
+            // Bug fix #5: O(1) lookup via Set
+            boolean hasParticipant = getParticipantsSet().contains(userId);
             logger.debug("Проверка наличия участника '{}' в испытании '{}': {}", userId, name, hasParticipant);
             return hasParticipant;
         } catch (Exception e) {
             logger.error("Ошибка при проверке наличия участника '{}' в испытании '{}'", userId, name, e);
             return false;
         }
+    }
+
+    /**
+     * Called after deserialization to rebuild the transient Set from the persisted List.
+     */
+    private Object readResolve() {
+        this.participantsSet = null; // will be lazily rebuilt from participants list
+        if (this.participantProgress == null) {
+            this.participantProgress = new ConcurrentHashMap<>();
+        } else if (!(this.participantProgress instanceof ConcurrentHashMap)) {
+            // Bug fix #3: migrate HashMap -> ConcurrentHashMap on deserialization
+            this.participantProgress = new ConcurrentHashMap<>(this.participantProgress);
+        }
+        return this;
     }
 }

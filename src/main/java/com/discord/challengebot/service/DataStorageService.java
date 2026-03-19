@@ -134,22 +134,31 @@ public class DataStorageService {
                 logger.warn("Кэш испытаний не инициализирован, возвращаем null");
                 return null;
             }
-            
+
             logger.debug("Получение испытания из Apache Ignite: {}", name);
             if (name == null || name.isEmpty()) {
                 logger.warn("Попытка получить испытание с пустым именем");
                 return null;
             }
-            
-            // Поиск испытания по имени в кэше Ignite
+
+            // Bug fix #4: O(1) direct key lookup instead of O(n) iteration.
+            // Challenge id is always derived as name.toLowerCase().replace(" ","_")
+            String id = name.toLowerCase().replace(" ", "_");
+            Challenge challenge = challengesCache.get(id);
+            if (challenge != null) {
+                logger.debug("Испытание '{}' успешно получено из Apache Ignite по ключу '{}'", name, id);
+                return challenge;
+            }
+
+            // Fallback: O(n) scan for challenges saved with legacy/different id convention
             for (javax.cache.Cache.Entry<String, Challenge> entry : challengesCache) {
-                Challenge challenge = entry.getValue();
-                if (name.equals(challenge.getName())) {
-                    logger.debug("Испытание '{}' успешно получено из Apache Ignite", name);
-                    return challenge;
+                Challenge c = entry.getValue();
+                if (name.equals(c.getName())) {
+                    logger.debug("Испытание '{}' найдено через полный перебор (legacy id)", name);
+                    return c;
                 }
             }
-            
+
             logger.debug("Испытание '{}' не найдено в Apache Ignite", name);
             return null;
         } catch (Exception e) {
@@ -195,23 +204,31 @@ public class DataStorageService {
                 logger.warn("Кэш испытаний не инициализирован, возвращаем false");
                 return false;
             }
-            
+
             logger.debug("Удаление испытания из Apache Ignite: {}", challengeName);
             if (challengeName == null || challengeName.isEmpty()) {
                 logger.warn("Попытка удалить испытание с пустым именем");
                 return false;
             }
-            
-            // Поиск и удаление испытания по имени
+
+            // Bug fix #4: O(1) direct key removal first
+            String id = challengeName.toLowerCase().replace(" ", "_");
+            boolean removed = challengesCache.remove(id);
+            if (removed) {
+                logger.info("Испытание '{}' успешно удалено из Apache Ignite по ключу '{}'", challengeName, id);
+                return true;
+            }
+
+            // Fallback: O(n) scan for legacy id conventions
             for (javax.cache.Cache.Entry<String, Challenge> entry : challengesCache) {
                 Challenge challenge = entry.getValue();
                 if (challengeName.equals(challenge.getName())) {
                     challengesCache.remove(entry.getKey());
-                    logger.info("Испытание '{}' успешно удалено из Apache Ignite", challengeName);
+                    logger.info("Испытание '{}' успешно удалено из Apache Ignite (legacy id)", challengeName);
                     return true;
                 }
             }
-            
+
             logger.warn("Испытание '{}' не найдено для удаления в Apache Ignite", challengeName);
             return false;
         } catch (Exception e) {
