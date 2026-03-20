@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
  * Сервис для управления пользователями
  */
 @Service
-public class UserService {
+public class UserService implements IUserService {
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
     
     @Autowired

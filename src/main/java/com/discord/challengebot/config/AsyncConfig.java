@@ -1,0 +1,25 @@
+package com.discord.challengebot.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
+
+/**
+ * Configuration for async task execution
+ */
+@Configuration
+public class AsyncConfig {
+
+    @Bean(name = "visualizationExecutor")
+    public Executor visualizationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("visualization-");
+        executor.initialize();
+        return executor;
+    }
+}

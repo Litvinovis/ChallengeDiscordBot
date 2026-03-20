@@ -7,23 +7,27 @@ import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 import org.jfree.chart.ChartUtils;
 
 /**
  * Сервис для генерации визуализаций
  */
 @Service
-public class VisualizationService {
+public class VisualizationService implements IVisualizationService {
     private static final Logger logger = LoggerFactory.getLogger(VisualizationService.class);
 
     /**
-     * Сгенерировать изображение прогресса испытания
+     * Сгенерировать изображение прогресса испытания (async)
      */
-    public byte[] generateProgressChart(ChallengeStats stats) {
+    @Async("visualizationExecutor")
+    @Override
+    public CompletableFuture<byte[]> generateProgressChart(ChallengeStats stats) {
         try {
             DefaultCategoryDataset dataset = new DefaultCategoryDataset();
             dataset.addValue(stats.getCurrentValue(), "Выполнено", "");
@@ -39,17 +43,19 @@ public class VisualizationService {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ChartUtils.writeChartAsPNG(out, barChart, 400, 300);
-            return out.toByteArray();
+            return CompletableFuture.completedFuture(out.toByteArray());
         } catch (IOException e) {
             logger.error("Ошибка генерации изображения прогресса", e);
-            return new byte[0];
+            return CompletableFuture.completedFuture(new byte[0]);
         }
     }
 
     /**
-     * Сгенерировать изображение процента выполнения
+     * Сгенерировать изображение процента выполнения (async)
      */
-    public byte[] generatePercentageChart(ChallengeStats stats) {
+    @Async("visualizationExecutor")
+    @Override
+    public CompletableFuture<byte[]> generatePercentageChart(ChallengeStats stats) {
         try {
             DefaultCategoryDataset dataset = new DefaultCategoryDataset();
             dataset.addValue(stats.getPercentage(), "Выполнено (%)", "");
@@ -65,10 +71,10 @@ public class VisualizationService {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ChartUtils.writeChartAsPNG(out, barChart, 400, 300);
-            return out.toByteArray();
+            return CompletableFuture.completedFuture(out.toByteArray());
         } catch (IOException e) {
             logger.error("Ошибка генерации изображения процента выполнения", e);
-            return new byte[0];
+            return CompletableFuture.completedFuture(new byte[0]);
         }
     }
 }

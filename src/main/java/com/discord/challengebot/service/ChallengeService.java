@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  * Сервис для управления испытаниями
  */
 @Service
-public class ChallengeService {
+public class ChallengeService implements IChallengeService {
     private static final Logger logger = LoggerFactory.getLogger(ChallengeService.class);
     
     @Autowired

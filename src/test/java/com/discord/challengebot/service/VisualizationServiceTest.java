@@ -4,6 +4,8 @@ import com.discord.challengebot.dto.ChallengeStats;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CompletableFuture;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -27,15 +29,17 @@ class VisualizationServiceTest {
     // ---------- generateProgressChart ----------
 
     @Test
-    void generateProgressChart_returnsNonEmptyBytes() {
-        byte[] result = visualizationService.generateProgressChart(stats);
+    void generateProgressChart_returnsNonEmptyBytes() throws Exception {
+        CompletableFuture<byte[]> future = visualizationService.generateProgressChart(stats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length > 0, "Result must not be empty");
     }
 
     @Test
-    void generateProgressChart_returnsPngBytes() {
-        byte[] result = visualizationService.generateProgressChart(stats);
+    void generateProgressChart_returnsPngBytes() throws Exception {
+        CompletableFuture<byte[]> future = visualizationService.generateProgressChart(stats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length >= PNG_MAGIC.length);
         for (int i = 0; i < PNG_MAGIC.length; i++) {
@@ -44,17 +48,19 @@ class VisualizationServiceTest {
     }
 
     @Test
-    void generateProgressChart_withZeroValues_returnsNonEmptyBytes() {
+    void generateProgressChart_withZeroValues_returnsNonEmptyBytes() throws Exception {
         ChallengeStats zeroStats = new ChallengeStats("Empty", 0L, 0L, 0L, 0.0, 0.0, 0);
-        byte[] result = visualizationService.generateProgressChart(zeroStats);
+        CompletableFuture<byte[]> future = visualizationService.generateProgressChart(zeroStats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length > 0);
     }
 
     @Test
-    void generateProgressChart_withGoalReached_returnsNonEmptyBytes() {
+    void generateProgressChart_withGoalReached_returnsNonEmptyBytes() throws Exception {
         ChallengeStats fullStats = new ChallengeStats("Done", 100L, 100L, 0L, 100.0, 0.0, 0);
-        byte[] result = visualizationService.generateProgressChart(fullStats);
+        CompletableFuture<byte[]> future = visualizationService.generateProgressChart(fullStats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length > 0);
     }
@@ -62,15 +68,17 @@ class VisualizationServiceTest {
     // ---------- generatePercentageChart ----------
 
     @Test
-    void generatePercentageChart_returnsNonEmptyBytes() {
-        byte[] result = visualizationService.generatePercentageChart(stats);
+    void generatePercentageChart_returnsNonEmptyBytes() throws Exception {
+        CompletableFuture<byte[]> future = visualizationService.generatePercentageChart(stats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length > 0);
     }
 
     @Test
-    void generatePercentageChart_returnsPngBytes() {
-        byte[] result = visualizationService.generatePercentageChart(stats);
+    void generatePercentageChart_returnsPngBytes() throws Exception {
+        CompletableFuture<byte[]> future = visualizationService.generatePercentageChart(stats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length >= PNG_MAGIC.length);
         for (int i = 0; i < PNG_MAGIC.length; i++) {
@@ -79,17 +87,19 @@ class VisualizationServiceTest {
     }
 
     @Test
-    void generatePercentageChart_at100Percent_returnsNonEmptyBytes() {
+    void generatePercentageChart_at100Percent_returnsNonEmptyBytes() throws Exception {
         ChallengeStats fullStats = new ChallengeStats("Done", 100L, 100L, 0L, 100.0, 0.0, 0);
-        byte[] result = visualizationService.generatePercentageChart(fullStats);
+        CompletableFuture<byte[]> future = visualizationService.generatePercentageChart(fullStats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length > 0);
     }
 
     @Test
-    void generatePercentageChart_at0Percent_returnsNonEmptyBytes() {
+    void generatePercentageChart_at0Percent_returnsNonEmptyBytes() throws Exception {
         ChallengeStats emptyStats = new ChallengeStats("New", 100L, 0L, 100L, 0.0, 10.0, 10);
-        byte[] result = visualizationService.generatePercentageChart(emptyStats);
+        CompletableFuture<byte[]> future = visualizationService.generatePercentageChart(emptyStats);
+        byte[] result = future.get();
         assertNotNull(result);
         assertTrue(result.length > 0);
     }

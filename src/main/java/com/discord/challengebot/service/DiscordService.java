@@ -1,5 +1,6 @@
 package com.discord.challengebot.service;
 
+import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
@@ -23,21 +24,24 @@ import java.util.Map;
  * Сервис для взаимодействия с Discord
  */
 @Service
-public class DiscordService {
+public class DiscordService implements IDiscordService {
     private static final Logger logger = LoggerFactory.getLogger(DiscordService.class);
     
     @Autowired
     private DiscordConfig discordConfig;
-    
+
     @Autowired
     private ChallengeService challengeService;
-    
+
     @Autowired
     private UserService userService;
-    
+
     @Autowired
     private StatisticsService statisticsService;
-    
+
+    @Autowired
+    private CommandRegistry commandRegistry;
+
     private JDA jda;
 
     @PostConstruct
@@ -51,7 +55,7 @@ public class DiscordService {
             
             jda = JDABuilder.createDefault(discordConfig.getToken())
                     .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
-                    .addEventListeners(new DiscordMessageListener(this, discordConfig, challengeService, userService, statisticsService))
+                    .addEventListeners(new DiscordMessageListener(this, discordConfig, challengeService, userService, statisticsService, commandRegistry))
                     .build();
             jda.awaitReady();
             logger.info("Discord бот успешно инициализирован");
@@ -217,6 +221,7 @@ public class DiscordService {
 					        "`+мои` - Показать личные испытания\n" +
 					        "`+топ <испытание> [количество]` - Показать таблицу лидеров по испытанию\n" +
 					        "`+прогресс <испытание>` - Показать личный прогресс по испытанию\n" +
+					        "`+прогноз <испытание>` - Прогноз даты завершения при текущем темпе\n" +
 					        "`+регистрация <название>` - Зарегистрироваться на испытание\n" +
 					        "`+обновить_имя [новое имя]` - Обновить ваше имя в системе\n";
             
@@ -264,6 +269,7 @@ public class DiscordService {
             sb.append("`+мои` - Показать личные испытания\n");
             sb.append("`+топ <испытание> [количество]` - Показать таблицу лидеров по испытанию\n");
             sb.append("`+прогресс <испытание>` - Показать личный прогресс по испытанию\n");
+            sb.append("`+прогноз <испытание>` - Прогноз даты завершения при текущем темпе\n");
             sb.append("`+регистрация <название>` - Зарегистрироваться на испытание\n");
             sb.append("`+обновить_имя [новое имя]` - Обновить ваше имя в системе\n");
             
@@ -403,8 +409,8 @@ public class DiscordService {
             }
             
             // Некоторые команды доступны только администраторам
-            if (command.startsWith("новый") || command.startsWith("удалить") || 
-                command.startsWith("остановить") || command.startsWith("продолжить") || 
+            if (command.startsWith("новый") || command.startsWith("удалить") ||
+                command.startsWith("остановить") || command.startsWith("продолжить") ||
                 command.startsWith("изменить") || command.startsWith("изменить_дату") ||
                 command.startsWith("установить_прогресс") ||
                 command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
