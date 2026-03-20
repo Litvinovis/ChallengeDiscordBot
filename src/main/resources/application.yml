@@ -4,20 +4,20 @@
 
 discord:
   token: ${DISCORD_BOT_TOKEN:} # Токен Discord бота из переменной окружения
-  channel: "качал-очка"        # Название канала, где бот отвечает (fallback)
+  channel: ${DISCORD_CHANNEL_NAME:качал-очка}        # Название канала, где бот отвечает (fallback)
   channel-ids:                 # Приоритетный список ID каналов для команд
-    - "1068647322373861416"
-    - "1413824920881729557"
-  report-guild-id: 651802173495181322 # ID сервера Discord для отправки отчетов
-  admin-user-ids: 
-    - 253576055317594114 # ID пользователя с правами администратора
-  report-channel: "качал-очка"    # Название канала для отчетов и уведомлений о завершении испытаний
+    - ${DISCORD_CHANNEL_ID_1:}
+    - ${DISCORD_CHANNEL_ID_2:}
+  report-guild-id: ${DISCORD_REPORT_GUILD_ID:} # ID сервера Discord для отправки отчетов
+  admin-user-ids:
+    - ${DISCORD_ADMIN_USER_ID:} # ID пользователя с правами администратора
+  report-channel: ${DISCORD_REPORT_CHANNEL:качал-очка}    # Название канала для отчетов и уведомлений о завершении испытаний
 
 ignite:
-  local-address: "192.168.1.120"
+  local-address: ${IGNITE_LOCAL_ADDRESS:127.0.0.1}
   discovery-addresses:
-    - "192.168.1.120:47650..47659"
-  work-dir: "/tmp/ignite-challenge-client"
+    - ${IGNITE_DISCOVERY_ADDRESSES:127.0.0.1:47650..47659}
+  work-dir: "${IGNITE_WORK_DIR:/tmp/ignite-challenge-client}"
 
 # Конфигурация запланированных задач
 scheduled:

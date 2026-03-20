@@ -43,7 +43,22 @@ target/
 # Mac OS
 .DS_Store
 
+# Windows
+Thumbs.db
+
 # Spring Boot
 .mvn/wrapper/
 mvnw
 mvnw.cmd
+
+# Secrets and environment variables
+.env
+*.env
+.env.local
+.env.*.local
+
+# Runtime config (contains environment-specific settings, deployed separately)
+config/application.yml
+
+# Logs directory
+logs/
