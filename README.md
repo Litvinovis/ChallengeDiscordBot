@@ -1,10 +1,10 @@
-# Discord Challenge Bot
+# Sport Challenge Bot
 
-Discord бот для создания и участия в спортивных испытаниях в духе "10 000 отжиманий до конца года".
+Discord бот для создания и отслеживания спортивных челленджей — например, "10 000 отжиманий до конца года".
 
 ## Описание
 
-Бот позволяет создавать индивидуальные и групповые спортивные испытания, отслеживать прогресс участников и получать ежедневную статистику. Участники взаимодействуют с ботом через команды, начинающиеся с символа "+", в специально отведенном канале Discord.
+Sport Challenge Bot позволяет организовывать индивидуальные и групповые спортивные испытания прямо в Discord. Участники записывают свой прогресс простыми командами в канале, бот считает суммарный результат, ведёт таблицы лидеров и каждое утро в 7:00 присылает автоматический отчёт с топ-3 участниками по каждому испытанию.
 
 ## Технологии
 
@@ -28,26 +28,25 @@ mvn clean package
 
 ### Настройка конфигурации
 
-Перед запуском необходимо настроить [application.yml](src/main/resources/application.yml):
+Бот читает чувствительные параметры из переменных окружения. Скопируйте `.env.example` в `.env` и заполните реальными значениями:
 
-```yaml
-# Discord bot configuration
-discord:
-  token: ${DISCORD_BOT_TOKEN} # Токен Discord бота
-  channel: "качал-очка"        # Название канала для взаимодействия с ботом
-  guild-id: ${DISCORD_GUILD_ID} # ID сервера Discord
-  admin-user-id: ${DISCORD_ADMIN_USER_ID} # ID пользователя с правами администратора
-
-# Challenge configuration
-challenges:
-  default:
-    daily-reminder-time: "07:00" # Время ежедневных напоминаний
-    timezone: "Europe/Moscow"    # Часовой пояс
-  
-# Apache Ignite configuration
-ignite:
-  # Встроенный режим Ignite (embedded), без необходимости отдельного сервера
+```bash
+cp .env.example .env
 ```
+
+Основные переменные:
+
+| Переменная | Описание |
+|---|---|
+| `DISCORD_BOT_TOKEN` | Токен бота с портала разработчиков Discord |
+| `DISCORD_CHANNEL_ID_1` | ID основного канала для команд |
+| `DISCORD_CHANNEL_ID_2` | ID дополнительного канала (опционально) |
+| `DISCORD_REPORT_GUILD_ID` | ID сервера Discord для ежедневных отчётов |
+| `DISCORD_ADMIN_USER_ID` | ID пользователя-администратора |
+| `IGNITE_LOCAL_ADDRESS` | Локальный адрес узла Apache Ignite |
+| `IGNITE_DISCOVERY_ADDRESSES` | Адреса для обнаружения кластера Ignite |
+
+На сервере конфигурация хранится в `/opt/challengeBot/config/application.yml` (этот файл не коммитится в репозиторий).
 
 ### Запуск приложения
 
@@ -143,6 +142,64 @@ chmod +x challengeBot.sh
 2. **Participant** - Модель участника
 3. **ProgressEntry** - Модель записи о прогрессе
 4. **ChallengeType** - Тип испытания (индивидуальное/групповое)
+
+## Деплой через GitHub Actions
+
+Проект настроен на автоматический деплой при пуше в ветку `main`.
+
+### Как устроен пайплайн
+
+Файл: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+
+1. **Checkout** — клонирует репозиторий на self-hosted runner.
+2. **Build & Test** — собирает проект и прогоняет тесты: `mvn package -B`.
+3. **Deploy** — копирует собранный `.jar` в `/opt/challengeBot/`, делает резервную копию предыдущей версии и перезапускает systemd-сервис `bot-challenge`.
+4. **Smoke test** — проверяет, что сервис поднялся; в случае неудачи автоматически восстанавливает резервную копию.
+5. **Notify Telegram** — отправляет уведомление в Telegram о результате деплоя (успех / ошибка).
+
+### Необходимые GitHub Secrets
+
+| Secret | Описание |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота для уведомлений |
+| `TELEGRAM_CHAT_ID` | ID чата для отправки уведомлений |
+
+> Токен Discord бота и ID каналов хранятся в `config/application.yml` на сервере (`/opt/challengeBot/config/application.yml`) — они не передаются через GitHub Secrets.
+
+### Ручной запуск деплоя
+
+Деплой можно запустить вручную через вкладку **Actions** → **Build & Deploy — Challenge Bot** → **Run workflow**.
+
+### Структура директории на сервере
+
+```
+/opt/challengeBot/
+├── challenge-bot-1.0.0.jar       # Текущий jar-файл
+├── challengeBot.sh               # Скрипт управления (start/stop/restart/status)
+├── config/
+│   ├── application.yml           # Конфиг с реальными значениями (не в git)
+│   └── logback.xml               # Конфиг логирования
+└── logs/
+    ├── challengebot.log
+    ├── challengebot-error.log
+    └── challengebot-warn.log
+```
+
+### Управление сервисом на сервере
+
+```bash
+# Через systemd
+sudo systemctl start bot-challenge
+sudo systemctl stop bot-challenge
+sudo systemctl restart bot-challenge
+sudo systemctl status bot-challenge
+
+# Или через скрипт
+/opt/challengeBot/challengeBot.sh start
+/opt/challengeBot/challengeBot.sh stop
+/opt/challengeBot/challengeBot.sh restart
+/opt/challengeBot/challengeBot.sh status
+```
 
 ## Разработка
 
