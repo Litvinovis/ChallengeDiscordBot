@@ -1,5 +1,6 @@
 package com.discord.challengebot.model;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
@@ -15,6 +16,11 @@ public class Participant implements Serializable {
     private String username;
     private LocalDateTime joinDate;
     private List<String> registeredChallenges;
+
+    // Streak fields
+    private int currentStreak;
+    private int longestStreak;
+    private LocalDate lastActivityDate;
 
     public Participant() {
         this.registeredChallenges = new ArrayList<>();
@@ -60,6 +66,30 @@ public class Participant implements Serializable {
         this.registeredChallenges = registeredChallenges;
     }
     
+    public int getCurrentStreak() {
+        return currentStreak;
+    }
+
+    public void setCurrentStreak(int currentStreak) {
+        this.currentStreak = currentStreak;
+    }
+
+    public int getLongestStreak() {
+        return longestStreak;
+    }
+
+    public void setLongestStreak(int longestStreak) {
+        this.longestStreak = longestStreak;
+    }
+
+    public LocalDate getLastActivityDate() {
+        return lastActivityDate;
+    }
+
+    public void setLastActivityDate(LocalDate lastActivityDate) {
+        this.lastActivityDate = lastActivityDate;
+    }
+
     // Helper methods
     public void addChallenge(String challengeName) {
         if (!registeredChallenges.contains(challengeName)) {

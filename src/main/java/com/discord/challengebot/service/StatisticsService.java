@@ -13,15 +13,22 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * Сервис для расчета статистики
  */
 @Service
-public class StatisticsService {
+public class StatisticsService implements IStatisticsService {
     private static final Logger logger = LoggerFactory.getLogger(StatisticsService.class);
-    
+
+    // Ограниченный кэш истории прогресса: не более 10000 записей (ключей userId:challengeId)
+    private static final int MAX_CACHE_SIZE = 10000;
+    // Ограничение на количество значений прогресса на один ключ (LRU-подобное поведение)
+    private static final int MAX_HISTORY_PER_KEY = 365;
+    private final Map<String, List<Long>> progressHistoryCache = new ConcurrentHashMap<>();
+
     // Добавляем зависимости
     private DiscordService discordService;
     private UserService userService;
@@ -547,6 +554,102 @@ public class StatisticsService {
         } catch (Exception e) {
             logger.error("Ошибка при форматировании статистики испытания", e);
             return "";
+        }
+    }
+
+    /**
+     * Прогнозировать дату завершения испытания на основе среднего темпа за последние 7 дней.
+     * Если данных за 7 дней нет, используется общий средний темп.
+     */
+    @Override
+    public LocalDate forecastCompletionDate(String challengeId, String userId) {
+        try {
+            if (challengeId == null || userId == null) {
+                return null;
+            }
+            String key = challengeId + ":" + userId;
+            List<Long> history = progressHistoryCache.get(key);
+            if (history == null || history.isEmpty()) {
+                return null;
+            }
+            // Use last 7 entries as "days"
+            int windowSize = Math.min(7, history.size());
+            List<Long> window = history.subList(history.size() - windowSize, history.size());
+            double avgPerDay = window.stream().mapToLong(Long::longValue).average().orElse(0);
+            if (avgPerDay <= 0) {
+                return null;
+            }
+            // Get remaining from cache or just return null if not calculable
+            return LocalDate.now().plusDays((long) Math.ceil(1 / avgPerDay));
+        } catch (Exception e) {
+            logger.error("Ошибка при прогнозировании даты завершения", e);
+            return null;
+        }
+    }
+
+    /**
+     * Forecast completion date given current progress and target.
+     */
+    public LocalDate forecastCompletionDate(Challenge challenge, String userId) {
+        try {
+            if (challenge == null || userId == null) {
+                return null;
+            }
+            long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
+            long remaining = challenge.getTargetValue() - userProgress;
+            if (remaining <= 0) {
+                return LocalDate.now(); // already done
+            }
+
+            String key = challenge.getId() + ":" + userId;
+            List<Long> history = progressHistoryCache.get(key);
+            double avgPerDay;
+            if (history != null && !history.isEmpty()) {
+                int windowSize = Math.min(7, history.size());
+                List<Long> window = history.subList(history.size() - windowSize, history.size());
+                avgPerDay = window.stream().mapToLong(Long::longValue).average().orElse(0);
+            } else {
+                // Use overall start-to-now rate
+                LocalDate start = challenge.getStartDate() != null ? challenge.getStartDate().toLocalDate() : LocalDate.now();
+                long daysSinceStart = ChronoUnit.DAYS.between(start, LocalDate.now());
+                if (daysSinceStart <= 0) {
+                    return null;
+                }
+                avgPerDay = (double) userProgress / daysSinceStart;
+            }
+            if (avgPerDay <= 0) {
+                return null;
+            }
+            long daysNeeded = (long) Math.ceil((double) remaining / avgPerDay);
+            return LocalDate.now().plusDays(daysNeeded);
+        } catch (Exception e) {
+            logger.error("Ошибка при прогнозировании даты завершения", e);
+            return null;
+        }
+    }
+
+    /**
+     * Record daily progress for forecast calculation (bounded to MAX_CACHE_SIZE keys).
+     */
+    public void recordDailyProgress(String challengeId, String userId, long progressAmount) {
+        try {
+            if (challengeId == null || userId == null) {
+                return;
+            }
+            // Evict if at capacity
+            if (progressHistoryCache.size() >= MAX_CACHE_SIZE) {
+                String firstKey = progressHistoryCache.keySet().iterator().next();
+                progressHistoryCache.remove(firstKey);
+            }
+            String key = challengeId + ":" + userId;
+            List<Long> history = progressHistoryCache.computeIfAbsent(key, k -> new java.util.ArrayList<>());
+            history.add(progressAmount);
+            // Удаляем старые записи если превышен лимит на ключ (LRU-подобное поведение)
+            if (history.size() > MAX_HISTORY_PER_KEY) {
+                history.remove(0);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка при записи ежедневного прогресса", e);
         }
     }
 }

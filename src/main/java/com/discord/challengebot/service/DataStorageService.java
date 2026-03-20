@@ -21,7 +21,7 @@ import java.util.*;
  * Сервис для работы с хранилищем данных (Apache Ignite)
  */
 @Service
-public class DataStorageService {
+public class DataStorageService implements IDataStorageService {
     private static final Logger logger = LoggerFactory.getLogger(DataStorageService.class);
     
     @Autowired

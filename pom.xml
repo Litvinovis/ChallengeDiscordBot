@@ -154,10 +154,7 @@
                         -XX:+EnableDynamicAgentLoading 
                         -Dnet.bytebuddy.experimental=true
                     </argLine>
-                    <!-- Исключаем тесты, которые несовместимы с Java 22 -->
-                    <excludes>
-                        <exclude>**/DataStorageServiceTest.java</exclude>
-                    </excludes>
+                    <!-- All tests are now included (DataStorageServiceTest compatible with Java 22+ via Mockito) -->
                 </configuration>
             </plugin>
         </plugins>
