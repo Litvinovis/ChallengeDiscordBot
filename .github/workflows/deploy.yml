@@ -1,0 +1,83 @@
+name: Build & Deploy — Challenge Bot
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy'
+        default: 'main'
+        required: false
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Build & Test
+        run: mvn package -B
+
+      - name: Deploy (only on push/dispatch to main)
+        if: github.event_name != 'pull_request'
+        run: |
+          DEPLOY_DIR=/opt/challengeBot
+          SERVICE=bot-challenge
+
+          # Find current and new jar
+          NEW_JAR=$(ls target/challenge-bot-*.jar | grep -v original | head -1)
+          JAR_NAME=$(basename "$NEW_JAR")
+
+          # Backup current jar
+          CURRENT_JAR=$(ls ${DEPLOY_DIR}/challenge-bot-*.jar 2>/dev/null | grep -v bak | head -1)
+          if [ -n "$CURRENT_JAR" ]; then
+            sudo cp "$CURRENT_JAR" "${CURRENT_JAR}.backup.$(date +%Y%m%d_%H%M)"
+            sudo rm "$CURRENT_JAR"
+          fi
+
+          # Deploy new jar
+          sudo cp "$NEW_JAR" "${DEPLOY_DIR}/${JAR_NAME}"
+
+          # Restart service
+          sudo systemctl restart ${SERVICE}
+
+      - name: Smoke test
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "Waiting for bot to start..."
+          sleep 20
+          STATUS=$(sudo systemctl is-active bot-challenge)
+          if [ "$STATUS" != "active" ]; then
+            echo "❌ Bot failed to start, rolling back..."
+            LATEST_BACKUP=$(ls -t /opt/challengeBot/challenge-bot-*.backup.* 2>/dev/null | head -1)
+            if [ -n "$LATEST_BACKUP" ]; then
+              RESTORE_NAME=$(echo "$LATEST_BACKUP" | sed 's/\.backup\.[0-9_]*//')
+              sudo cp "$LATEST_BACKUP" "$RESTORE_NAME"
+              sudo systemctl restart bot-challenge
+            fi
+            exit 1
+          fi
+          echo "✅ Bot is running fine"
+
+      - name: Notify Telegram
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            MSG="✅ *Challenge Bot* задеплоен%0Aветка: \`${{ github.ref_name }}\`%0Aкоммит: ${{ github.sha }}"
+          else
+            MSG="❌ *Challenge Bot* — деплой упал%0Aветка: \`${{ github.ref_name }}\`%0Aсмотри: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+          curl -s "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}&text=${MSG}&parse_mode=Markdown" > /dev/null
