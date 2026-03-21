@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.io.Serializable;
 
 /**
@@ -35,8 +34,7 @@ public class Challenge implements Serializable {
     private List<String> participants; // List of participant user IDs (serialization compatible)
 
     public Challenge() {
-        // Bug fix #3: use ConcurrentHashMap to prevent race conditions on concurrent progress updates
-        this.participantProgress = new ConcurrentHashMap<>();
+        this.participantProgress = new HashMap<>();
         this.participants = new ArrayList<>();
         logger.debug("Создан новый экземпляр Challenge");
     }
@@ -50,8 +48,7 @@ public class Challenge implements Serializable {
         this.type = type;
         this.startDate = startDate;
         this.endDate = endDate;
-        // Bug fix #3: use ConcurrentHashMap to prevent race conditions
-        this.participantProgress = new ConcurrentHashMap<>();
+        this.participantProgress = new HashMap<>();
         this.active = true;
         this.description = description;
         this.unit = unit;
@@ -245,10 +242,7 @@ public class Challenge implements Serializable {
     private Object readResolve() {
         this.participantsSet = null; // will be lazily rebuilt from participants list
         if (this.participantProgress == null) {
-            this.participantProgress = new ConcurrentHashMap<>();
-        } else if (!(this.participantProgress instanceof ConcurrentHashMap)) {
-            // Bug fix #3: migrate HashMap -> ConcurrentHashMap on deserialization
-            this.participantProgress = new ConcurrentHashMap<>(this.participantProgress);
+            this.participantProgress = new HashMap<>();
         }
         return this;
     }
