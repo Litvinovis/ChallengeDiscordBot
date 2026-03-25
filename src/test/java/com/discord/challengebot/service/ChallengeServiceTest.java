@@ -101,17 +101,19 @@ class ChallengeServiceTest {
     }
 
     /**
-     * Bug fix #3: ConcurrentHashMap on Challenge — concurrent progress updates should not corrupt data.
+     * Bug fix #3: Thread safety for concurrent progress updates is ensured via ReentrantLock
+     * in the service layer. The model uses HashMap (not ConcurrentHashMap) to avoid
+     * Ignite serialization issues under Java 21.
      */
     @Test
-    void testChallengeParticipantProgressIsConcurrentHashMap() {
+    void testChallengeParticipantProgressIsInitialized() {
         Challenge challenge = challengeService.createChallenge(
                 "ConcurrencyTest", 1000L, LocalDateTime.now().plusDays(30),
                 ChallengeType.GROUP, "desc", "rep");
 
         assertNotNull(challenge);
-        assertTrue(challenge.getParticipantProgress() instanceof ConcurrentHashMap,
-                "participantProgress must be a ConcurrentHashMap to prevent race conditions");
+        assertNotNull(challenge.getParticipantProgress(),
+                "participantProgress must be initialized (thread safety via ReentrantLock in service layer)");
     }
 
     /**
