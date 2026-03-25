@@ -45,8 +45,12 @@ public class AchievementService {
     private IChallengeService challengeService;
 
     /**
-     * Проверить и выдать достижения для пользователя на основе общего прогресса.
+     * Проверяет и выдаёт достижения для пользователя на основе общего прогресса.
      * При получении нового бейджа отправляет поздравление в общий канал.
+     *
+     * @param userId        идентификатор пользователя
+     * @param challengeId   идентификатор испытания
+     * @param totalProgress общий накопленный прогресс пользователя в испытании
      */
     public void checkAndAwardAchievements(String userId, String challengeId, long totalProgress) {
         try {
@@ -77,6 +81,13 @@ public class AchievementService {
         }
     }
 
+    /**
+     * Отправляет поздравительное сообщение о получении достижения в общий канал.
+     *
+     * @param userId        идентификатор пользователя
+     * @param achievement   полученное достижение
+     * @param challengeName название испытания
+     */
     private void sendAchievementAnnouncement(String userId, Achievement achievement, String challengeName) {
         try {
             String channel = resolveAnnouncementChannel();
@@ -92,7 +103,10 @@ public class AchievementService {
     }
 
     /**
-     * Определить канал для объявлений: сначала report-channel из конфига, иначе канал по умолчанию.
+     * Определяет канал для публикации объявлений о достижениях.
+     * Приоритет: report-channel из конфига, затем основной канал, иначе "announcements".
+     *
+     * @return имя канала для объявлений
      */
     private String resolveAnnouncementChannel() {
         if (discordConfig != null) {
@@ -109,7 +123,12 @@ public class AchievementService {
     }
 
     /**
-     * Проверить, есть ли у пользователя конкретное достижение
+     * Проверяет, получено ли пользователем конкретное достижение в испытании.
+     *
+     * @param userId        идентификатор пользователя
+     * @param challengeId   идентификатор испытания
+     * @param achievementId идентификатор достижения
+     * @return {@code true}, если достижение уже выдано
      */
     public boolean hasAchievement(String userId, String challengeId, String achievementId) {
         Set<String> userAwards = awardedAchievements.get(userId);
@@ -118,7 +137,11 @@ public class AchievementService {
     }
 
     /**
-     * Получить все выданные ключи достижений для пользователя (для тестирования/отладки)
+     * Возвращает все ключи выданных достижений для пользователя.
+     * Используется для тестирования и отладки.
+     *
+     * @param userId идентификатор пользователя
+     * @return множество строк вида "userId:challengeId:achievementId"
      */
     public Set<String> getUserAchievements(String userId) {
         return awardedAchievements.getOrDefault(userId, ConcurrentHashMap.newKeySet());

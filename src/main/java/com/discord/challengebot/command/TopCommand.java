@@ -13,6 +13,11 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Команда {@code +топ} — выводит таблицу лидеров по испытанию.
+ * Использование: {@code +топ <испытание> [количество]}.
+ * По умолчанию показываются топ-5 участников, максимум 20.
+ */
 @Component
 public class TopCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(TopCommand.class);
@@ -22,11 +27,27 @@ public class TopCommand implements Command {
     @Autowired
     private IStatisticsService statisticsService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code топ}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "топ"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "топ".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Отправляет в канал отформатированную таблицу лидеров.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1] — название испытания, args[2] — количество участников (необязательно)
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

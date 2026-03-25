@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Обработчик сообщений Discord
+ * Обработчик входящих сообщений Discord.
+ * Фильтрует сообщения по каналам, разбирает команды с префиксом '+' и делегирует
+ * их выполнение в {@link CommandRegistry}. Игнорирует сообщения от ботов (кроме доверенного).
  */
 public class DiscordMessageListener extends ListenerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(DiscordMessageListener.class);
@@ -29,6 +31,16 @@ public class DiscordMessageListener extends ListenerAdapter {
     private final CommandRegistry commandRegistry;
     private JDA jda;
 
+    /**
+     * Конструктор с внедрением всех зависимостей.
+     *
+     * @param discordService   сервис взаимодействия с Discord
+     * @param discordConfig    конфигурация Discord бота
+     * @param challengeService сервис управления испытаниями
+     * @param userService      сервис управления пользователями
+     * @param statisticsService сервис статистики
+     * @param commandRegistry  реестр команд
+     */
     public DiscordMessageListener(IDiscordService discordService, DiscordConfig discordConfig,
                                    IChallengeService challengeService, IUserService userService,
                                    IStatisticsService statisticsService,

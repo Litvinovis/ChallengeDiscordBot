@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Health check service for Apache Ignite connection
+ * Сервис проверки работоспособности подключения к Apache Ignite.
+ * Периодически (каждые 5 минут) проверяет состояние кластера Ignite
+ * и при необходимости пытается переподключиться.
  */
 @Component
 public class IgniteHealthCheckService {
@@ -22,8 +24,8 @@ public class IgniteHealthCheckService {
     private final AtomicBoolean healthy = new AtomicBoolean(true);
 
     /**
-     * Периодически проверяет подключение к Ignite каждые 5 минут.
-     * При недоступности логирует ERROR и пытается переподключиться.
+     * Периодически (каждые 5 минут) проверяет состояние подключения к кластеру Ignite.
+     * При обнаружении проблем логирует ошибку и вызывает попытку переподключения.
      */
     @Scheduled(fixedDelay = 300000)
     public void checkIgniteHealth() {
@@ -52,7 +54,7 @@ public class IgniteHealthCheckService {
     }
 
     /**
-     * Attempt to reconnect to Ignite cluster
+     * Пытается восстановить соединение с кластером Ignite путём его активации.
      */
     private void attemptReconnect() {
         try {
@@ -69,7 +71,9 @@ public class IgniteHealthCheckService {
     }
 
     /**
-     * Returns true if Ignite is healthy and connected
+     * Возвращает состояние подключения к кластеру Ignite.
+     *
+     * @return {@code true}, если соединение активно и кластер работает
      */
     public boolean isHealthy() {
         return healthy.get();

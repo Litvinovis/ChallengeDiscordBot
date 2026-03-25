@@ -17,7 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Сервис для расчета статистики
+ * Сервис расчёта статистики по испытаниям.
+ * Вычисляет показатели прогресса, формирует отчёты для Discord,
+ * ведёт in-memory историю прогресса и прогнозирует дату завершения испытания.
  */
 @Service
 public class StatisticsService implements IStatisticsService {
@@ -33,12 +35,20 @@ public class StatisticsService implements IStatisticsService {
     private DiscordService discordService;
     private UserService userService;
     
-    // Setter для внедрения зависимости
+    /**
+     * Устанавливает зависимость на {@link DiscordService} (вызывается вручную для обхода циклической зависимости).
+     *
+     * @param discordService сервис Discord
+     */
     public void setDiscordService(DiscordService discordService) {
         this.discordService = discordService;
     }
-    
-    // Setter для внедрения зависимости UserService
+
+    /**
+     * Устанавливает зависимость на {@link UserService} (вызывается вручную для обхода циклической зависимости).
+     *
+     * @param userService сервис пользователей
+     */
     public void setUserService(UserService userService) {
         this.userService = userService;
     }
@@ -387,7 +397,11 @@ public class StatisticsService implements IStatisticsService {
     }
     
     /**
-     * Форматировать отчет для Discord (устаревшая версия для обратной совместимости)
+     * Форматирует отчёт по статистике без данных об участниках (устаревший метод).
+     *
+     * @param stats объект статистики
+     * @return отформатированная строка
+     * @deprecated Используйте {@link #formatReportForDiscord(Challenge, ChallengeStats)}
      */
     @Deprecated
     public String formatReportForDiscord(ChallengeStats stats) {
@@ -588,7 +602,12 @@ public class StatisticsService implements IStatisticsService {
     }
 
     /**
-     * Forecast completion date given current progress and target.
+     * Прогнозирует дату завершения испытания для пользователя на основе текущего прогресса и истории.
+     * Использует историю за последние 7 дней, при отсутствии — общий средний темп.
+     *
+     * @param challenge испытание
+     * @param userId    идентификатор пользователя
+     * @return прогнозируемая дата или {@code null} при недостатке данных
      */
     public LocalDate forecastCompletionDate(Challenge challenge, String userId) {
         try {
@@ -629,7 +648,12 @@ public class StatisticsService implements IStatisticsService {
     }
 
     /**
-     * Record daily progress for forecast calculation (bounded to MAX_CACHE_SIZE keys).
+     * Записывает ежедневный прогресс в in-memory кэш для последующего прогнозирования.
+     * Кэш ограничен {@code MAX_CACHE_SIZE} ключами, для каждого — {@code MAX_HISTORY_PER_KEY} значений.
+     *
+     * @param challengeId    идентификатор испытания
+     * @param userId         идентификатор пользователя
+     * @param progressAmount добавленное количество прогресса за день
      */
     public void recordDailyProgress(String challengeId, String userId, long progressAmount) {
         try {

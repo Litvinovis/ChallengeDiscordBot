@@ -11,6 +11,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/**
+ * Команда {@code +добавить_участника} — добавляет указанного пользователя в испытание.
+ * Использование: {@code +добавить_участника <испытание> <@пользователь>}.
+ * Доступна только администраторам.
+ */
 @Component
 public class AddParticipantCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(AddParticipantCommand.class);
@@ -20,11 +25,27 @@ public class AddParticipantCommand implements Command {
     @Autowired
     private IUserService userService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code добавить_участника}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "добавить_участника"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "добавить_участника".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Добавляет пользователя из Discord-упоминания в указанное испытание.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1] — название испытания, args[2] — упоминание пользователя
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

@@ -46,6 +46,10 @@ public class DiscordService implements IDiscordService {
 
     private JDA jda;
 
+    /**
+     * Инициализирует Discord бота: создаёт экземпляр JDA, регистрирует слушатель событий
+     * и ожидает готовности к работе.
+     */
     @PostConstruct
     public void init() {
         try {
@@ -66,6 +70,9 @@ public class DiscordService implements IDiscordService {
         }
     }
 
+    /**
+     * Корректно завершает работу Discord бота при остановке приложения.
+     */
     @PreDestroy
     public void shutdown() {
         try {

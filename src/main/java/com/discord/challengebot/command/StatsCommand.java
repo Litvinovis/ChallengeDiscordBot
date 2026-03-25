@@ -14,6 +14,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Команда {@code +статистика} — выводит статистику по всем испытаниям или по конкретному.
+ * Использование: {@code +статистика} или {@code +статистика <название>}.
+ */
 @Component
 public class StatsCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(StatsCommand.class);
@@ -25,11 +29,27 @@ public class StatsCommand implements Command {
     @Autowired
     private IStatisticsService statisticsService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code статистика}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "статистика"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "статистика".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Без аргументов выводит статистику по всем испытаниям, с аргументом — по конкретному.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: при наличии args[1..] — название испытания
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

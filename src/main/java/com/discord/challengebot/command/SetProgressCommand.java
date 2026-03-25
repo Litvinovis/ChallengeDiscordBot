@@ -10,6 +10,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/**
+ * Команда {@code +установить_прогресс} — устанавливает конкретное значение прогресса участника.
+ * Использование: {@code +установить_прогресс <испытание> <@пользователь> <количество>}.
+ * Доступна только администраторам.
+ */
 @Component
 public class SetProgressCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(SetProgressCommand.class);
@@ -19,11 +24,27 @@ public class SetProgressCommand implements Command {
     @Autowired
     private IUserService userService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code установить_прогресс}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "установить_прогресс"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "установить_прогресс".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Устанавливает прогресс участника в абсолютное значение и пересчитывает общий прогресс.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1] — название, args[2] — упоминание, args[3] — количество
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

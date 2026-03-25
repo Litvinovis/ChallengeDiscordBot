@@ -9,6 +9,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/**
+ * Команда {@code +регистрация} — регистрирует пользователя на испытание.
+ * Использование: {@code +регистрация <название>}.
+ */
 @Component
 public class RegistrationCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(RegistrationCommand.class);
@@ -16,11 +20,27 @@ public class RegistrationCommand implements Command {
     @Autowired
     private IChallengeService challengeService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code регистрация}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "регистрация"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "регистрация".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Регистрирует автора сообщения в качестве участника испытания.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1..] — название испытания
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {
