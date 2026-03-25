@@ -14,6 +14,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
+/**
+ * Команда {@code +изменить_дату} — изменяет дату окончания испытания.
+ * Использование: {@code +изменить_дату <название> <новая дата>}.
+ * Поддерживаемые форматы даты: {@code dd.MM.yyyy}, {@code yyyy-MM-dd}.
+ * Доступна только администраторам.
+ */
 @Component
 public class ChangeDateCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(ChangeDateCommand.class);
@@ -21,11 +27,27 @@ public class ChangeDateCommand implements Command {
     @Autowired
     private IChallengeService challengeService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code изменить_дату}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "изменить_дату"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "изменить_дату".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Изменяет дату окончания испытания.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1] — название испытания, args[2] — новая дата
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

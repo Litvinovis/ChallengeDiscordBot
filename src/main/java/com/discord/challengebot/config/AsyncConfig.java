@@ -7,11 +7,18 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 /**
- * Configuration for async task execution
+ * Конфигурация асинхронного выполнения задач.
+ * Определяет пул потоков для генерации визуализаций (графиков прогресса).
  */
 @Configuration
 public class AsyncConfig {
 
+    /**
+     * Создаёт пул потоков для генерации визуализаций.
+     * Параметры: 2 базовых потока, максимум 4 потока, очередь на 50 задач.
+     *
+     * @return настроенный исполнитель задач
+     */
     @Bean(name = "visualizationExecutor")
     public Executor visualizationExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

@@ -13,6 +13,11 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 
+/**
+ * Команда {@code +прогресс} — выводит личный прогресс пользователя по указанному испытанию,
+ * включая серию активности и прогнозируемую дату завершения.
+ * Использование: {@code +прогресс <название испытания>}.
+ */
 @Component
 public class ProgressCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(ProgressCommand.class);
@@ -24,11 +29,27 @@ public class ProgressCommand implements Command {
     @Autowired
     private StreakService streakService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code прогресс}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "прогресс"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "прогресс".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Отправляет в канал детальный отчёт о прогрессе пользователя.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1..] — название испытания
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

@@ -12,7 +12,9 @@ import org.springframework.context.annotation.Configuration;
 import java.util.List;
 
 /**
- * Конфигурация Apache Ignite (client mode, shared node)
+ * Конфигурация Apache Ignite в режиме клиента.
+ * Создаёт и регистрирует экземпляр Ignite, настраивает TCP Discovery на основе параметров
+ * из application.yml (локальный адрес, адреса обнаружения, рабочая директория).
  */
 @Configuration
 public class IgniteConfig {
@@ -28,6 +30,11 @@ public class IgniteConfig {
 
     private Ignite igniteInstance;
 
+    /**
+     * Создаёт и запускает экземпляр Apache Ignite в режиме клиента.
+     *
+     * @return запущенный экземпляр {@link Ignite}
+     */
     @Bean
     public Ignite igniteInstance() {
         System.setProperty("IGNITE_QUIET", "false");
@@ -51,6 +58,9 @@ public class IgniteConfig {
         return igniteInstance;
     }
 
+    /**
+     * Корректно завершает работу экземпляра Ignite, сохраняя данные.
+     */
     public void closeIgnite() {
         if (igniteInstance != null) {
             try {

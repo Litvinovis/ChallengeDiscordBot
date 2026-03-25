@@ -9,6 +9,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/**
+ * Команда {@code +удалить_участника} — удаляет участника из испытания.
+ * Использование: {@code +удалить_участника <испытание> <@пользователь>}.
+ * Доступна только администраторам.
+ */
 @Component
 public class RemoveParticipantCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(RemoveParticipantCommand.class);
@@ -16,11 +21,27 @@ public class RemoveParticipantCommand implements Command {
     @Autowired
     private IChallengeService challengeService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code удалить_участника}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "удалить_участника"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "удалить_участника".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Удаляет участника из испытания и пересчитывает общий прогресс.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1] — название испытания, args[2] — упоминание пользователя
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

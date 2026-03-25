@@ -15,9 +15,9 @@ import java.time.LocalDate;
 import java.util.Arrays;
 
 /**
- * Команда +прогноз — показывает прогнозируемую дату завершения испытания
- * на основе среднего темпа за последние 7 дней.
- * Использование: +прогноз <название испытания>
+ * Команда {@code +прогноз} — показывает прогнозируемую дату завершения испытания
+ * на основе среднего темпа пользователя за последние 7 дней.
+ * Использование: {@code +прогноз <название испытания>}.
  */
 @Component
 public class ForecastCommand implements Command {
@@ -29,11 +29,27 @@ public class ForecastCommand implements Command {
     @Autowired
     private IStatisticsService statisticsService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code прогноз}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "прогноз"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "прогноз".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Отправляет прогнозируемую дату завершения испытания для пользователя.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1..] — название испытания
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

@@ -16,6 +16,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
+/**
+ * Команда {@code +новый} — создаёт новое испытание.
+ * Использование: {@code +новый <название> <цель> [дата окончания] [тип]}.
+ * Не-администраторы могут создавать только индивидуальные испытания.
+ */
 @Component
 public class NewChallengeCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(NewChallengeCommand.class);
@@ -25,11 +30,27 @@ public class NewChallengeCommand implements Command {
     @Autowired
     private IUserService userService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code новый}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "новый"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "новый".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Создаёт новое испытание с указанными параметрами.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1] — название, args[2] — цель, args[3] — дата, args[4] — тип
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

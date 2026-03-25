@@ -13,7 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Handles default progress update commands like "+отжимания 10"
+ * Обработчик команд обновления прогресса по умолчанию, например {@code +отжимания 10}.
+ * Срабатывает как запасной вариант, если ни одна другая команда не подошла.
+ * Добавляет прогресс, обновляет серию активности, записывает историю прогноза и проверяет достижения.
  */
 @Component
 public class DefaultProgressCommand implements Command {
@@ -28,12 +30,28 @@ public class DefaultProgressCommand implements Command {
     @Autowired
     private StatisticsService statisticsService;
 
+    /**
+     * {@inheritDoc}
+     * Всегда возвращает {@code true}, так как является запасным обработчиком любой команды.
+     *
+     * @param cmd строка команды
+     * @return {@code true} всегда
+     */
     @Override
     public boolean canHandle(String cmd) {
         // This is the catch-all command - matches any command
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     * Интерпретирует args[0] как название испытания и args[1] как количество прогресса.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[0] — название испытания, args[1] — количество
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

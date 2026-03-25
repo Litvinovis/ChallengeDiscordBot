@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Registry holding all Command beans, finds matching command for a given input
+ * Реестр команд бота.
+ * Хранит все зарегистрированные бины {@link Command} и ищет подходящую команду по входной строке.
  */
 @Component
 public class CommandRegistry {
@@ -17,13 +18,21 @@ public class CommandRegistry {
 
     private final List<Command> commands;
 
+    /**
+     * Конструктор с внедрением списка всех доступных команд.
+     *
+     * @param commands список всех зарегистрированных команд в контексте Spring
+     */
     @Autowired
     public CommandRegistry(List<Command> commands) {
         this.commands = commands;
     }
 
     /**
-     * Find the first command that can handle the given command string
+     * Находит первую команду, способную обработать указанную строку.
+     *
+     * @param cmd строка команды (без префикса '+')
+     * @return Optional с найденной командой, либо пустой Optional
      */
     public Optional<Command> findCommand(String cmd) {
         if (cmd == null) return Optional.empty();

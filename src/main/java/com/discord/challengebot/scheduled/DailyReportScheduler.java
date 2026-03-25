@@ -13,7 +13,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Планировщик ежедневных отчетов
+ * Планировщик периодических задач бота.
+ * Отправляет ежедневные отчёты о прогрессе, проверяет завершение испытаний
+ * и очищает устаревшие данные по расписанию из конфигурации.
  */
 @Component
 public class DailyReportScheduler {
@@ -78,7 +80,10 @@ public class DailyReportScheduler {
     }
     
     /**
-     * Проверить, достигнуто ли завершение испытания по цели
+     * Проверяет, достигнуто ли целевое значение испытания.
+     *
+     * @param challenge испытание для проверки
+     * @return {@code true}, если текущее значение >= целевого
      */
     private boolean isChallengeCompleted(Challenge challenge) {
         try {

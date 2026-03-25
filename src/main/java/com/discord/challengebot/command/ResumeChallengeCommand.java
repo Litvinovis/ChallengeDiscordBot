@@ -9,6 +9,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/**
+ * Команда {@code +продолжить} — возобновляет остановленное испытание.
+ * Использование: {@code +продолжить <название>}.
+ * Доступна только администраторам.
+ */
 @Component
 public class ResumeChallengeCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(ResumeChallengeCommand.class);
@@ -16,11 +21,27 @@ public class ResumeChallengeCommand implements Command {
     @Autowired
     private IChallengeService challengeService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code продолжить}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "продолжить"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "продолжить".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Устанавливает флаг активности испытания в {@code true}.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы: args[1..] — название испытания
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {

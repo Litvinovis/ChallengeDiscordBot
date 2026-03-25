@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Команда {@code +мои} — выводит список испытаний, в которых участвует пользователь,
+ * с текущим прогрессом по каждому из них.
+ */
 @Component
 public class MyCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(MyCommand.class);
@@ -19,11 +23,27 @@ public class MyCommand implements Command {
     @Autowired
     private IChallengeService challengeService;
 
+    /**
+     * {@inheritDoc}
+     * Обрабатывает команду {@code мои}.
+     *
+     * @param cmd строка команды
+     * @return {@code true}, если команда равна "мои"
+     */
     @Override
     public boolean canHandle(String cmd) {
         return "мои".equals(cmd);
     }
 
+    /**
+     * {@inheritDoc}
+     * Отправляет в канал список личных испытаний с прогрессом.
+     *
+     * @param event    событие получения сообщения Discord
+     * @param args     аргументы команды (не используются)
+     * @param authorId идентификатор автора команды
+     * @param username имя автора команды
+     */
     @Override
     public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
         try {
