@@ -10,6 +10,8 @@ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Component;
  * Добавляет прогресс, обновляет серию активности, записывает историю прогноза и проверяет достижения.
  */
 @Component
+@Order(Ordered.LOWEST_PRECEDENCE)
 public class DefaultProgressCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(DefaultProgressCommand.class);
 
