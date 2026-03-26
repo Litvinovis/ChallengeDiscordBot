@@ -2,8 +2,10 @@ package com.discord.challengebot.model;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.io.Serializable;
 
 /**
@@ -22,6 +24,9 @@ public class Participant implements Serializable {
     private int currentStreak;
     private int longestStreak;
     private LocalDate lastActivityDate;
+
+    // Persisted set of awarded achievement keys: "userId:challengeId:achievementId"
+    private Set<String> awardedAchievements = new HashSet<>();
 
     /**
      * Конструктор по умолчанию. Инициализирует пустой список испытаний.
@@ -168,6 +173,28 @@ public class Participant implements Serializable {
      */
     public void setLastActivityDate(LocalDate lastActivityDate) {
         this.lastActivityDate = lastActivityDate;
+    }
+
+    /**
+     * Возвращает множество ключей выданных достижений вида "userId:challengeId:achievementId".
+     * Используется для персистентной проверки, чтобы достижения не выдавались повторно после рестарта.
+     *
+     * @return множество ключей выданных достижений
+     */
+    public Set<String> getAwardedAchievements() {
+        if (awardedAchievements == null) {
+            awardedAchievements = new HashSet<>();
+        }
+        return awardedAchievements;
+    }
+
+    /**
+     * Устанавливает множество ключей выданных достижений.
+     *
+     * @param awardedAchievements множество ключей
+     */
+    public void setAwardedAchievements(Set<String> awardedAchievements) {
+        this.awardedAchievements = awardedAchievements != null ? awardedAchievements : new HashSet<>();
     }
 
     // Helper methods

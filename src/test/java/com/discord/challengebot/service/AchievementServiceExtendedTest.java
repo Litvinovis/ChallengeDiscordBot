@@ -3,6 +3,7 @@ package com.discord.challengebot.service;
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
+import com.discord.challengebot.model.Participant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -31,6 +34,9 @@ class AchievementServiceExtendedTest {
 
     @Mock
     private IChallengeService challengeService;
+
+    @Mock
+    private IDataStorageService dataStorageService;
 
     @Mock
     private DiscordConfig discordConfig;
@@ -157,5 +163,52 @@ class AchievementServiceExtendedTest {
         for (int i = 0; i < expectedThresholds.length; i++) {
             assertEquals(expectedThresholds[i], AchievementService.ACHIEVEMENTS.get(i).getThreshold());
         }
+    }
+
+    /**
+     * Регрессионный тест на повторную выдачу достижений после перезапуска бота.
+     *
+     * Сценарий: пользователь уже получил достижение "100_reps" (данные сохранены
+     * в Participant в Apache Ignite). После перезапуска бота in-memory кэш пуст,
+     * но dataStorageService возвращает Participant с уже выданным достижением.
+     * При повторном вызове checkAndAwardAchievements достижение НЕ должно
+     * выдаваться снова.
+     */
+    @Test
+    void testAlreadyPersistedAchievementIsNotReawardedAfterRestart() {
+        // Имитируем состояние после перезапуска: in-memory кэш пуст,
+        // но в Participant уже записано достижение "100_reps".
+        Participant participant = new Participant("user1", "TestUser");
+        Set<String> alreadyAwarded = new HashSet<>();
+        alreadyAwarded.add("user1:test_challenge:100_reps");
+        participant.setAwardedAchievements(alreadyAwarded);
+
+        when(dataStorageService.getParticipant("user1")).thenReturn(participant);
+        when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
+
+        // Пользователь добавляет упражнения — прогресс 150 (выше порога 100)
+        achievementService.checkAndAwardAchievements("user1", "test_challenge", 150);
+
+        // Достижение "100_reps" уже было выдано — сообщение НЕ должно отправляться
+        verify(discordService, never()).sendMessageToChannel(anyString(), anyString());
+    }
+
+    /**
+     * Проверяет, что при повторном вызове в той же сессии (in-memory кэш заполнен)
+     * достижение также не выдаётся дважды.
+     */
+    @Test
+    void testAlreadyAwardedInSessionNotReawarded() {
+        when(dataStorageService.getParticipant("user1")).thenReturn(null);
+        when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
+
+        // Первый вызов — достижение выдаётся
+        achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
+        // Второй вызов с тем же или большим прогрессом — достижение НЕ должно выдаваться снова
+        achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
+        achievementService.checkAndAwardAchievements("user1", "test_challenge", 120);
+
+        // Только одно сообщение за всё время
+        verify(discordService, times(1)).sendMessageToChannel(anyString(), contains("100"));
     }
 }
