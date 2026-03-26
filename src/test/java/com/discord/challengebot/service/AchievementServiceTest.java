@@ -25,6 +25,9 @@ class AchievementServiceTest {
     @Mock
     private IChallengeService challengeService;
 
+    @Mock
+    private IDataStorageService dataStorageService;
+
     @InjectMocks
     private AchievementService achievementService;
 

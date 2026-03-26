@@ -3,6 +3,7 @@ package com.discord.challengebot.service;
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.model.Achievement;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.model.Participant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +32,10 @@ public class AchievementService {
             new Achievement("5000_reps", "Легенда: 5000",      "Выполнено 5000 повторений в испытании",  5000)
     );
 
-    // Ограниченное in-memory хранилище: userId -> Set<"userId:challengeId:achievementId">
+    // In-memory cache: userId -> Set<"userId:challengeId:achievementId">
+    // Acts as a read-through cache over the persisted Participant records.
+    // On cache miss the Participant record is loaded from IDataStorageService
+    // so that achievements survive bot restarts.
     private static final int MAX_USERS = 1000;
     private final Map<String, Set<String>> awardedAchievements = new ConcurrentHashMap<>();
 
@@ -43,6 +47,9 @@ public class AchievementService {
 
     @Autowired
     private IChallengeService challengeService;
+
+    @Autowired
+    private IDataStorageService dataStorageService;
 
     /**
      * Проверяет и выдаёт достижения для пользователя на основе общего прогресса.
@@ -58,13 +65,27 @@ public class AchievementService {
                 return;
             }
 
-            // Вытесняем старые записи при достижении лимита
+            // Вытесняем старые записи при достижении лимита кэша
             if (awardedAchievements.size() >= MAX_USERS && !awardedAchievements.containsKey(userId)) {
                 String first = awardedAchievements.keySet().iterator().next();
                 awardedAchievements.remove(first);
             }
 
-            Set<String> userAwards = awardedAchievements.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet());
+            // Инициализируем кэш для пользователя из персистентного хранилища при первом обращении.
+            // Это гарантирует, что после перезапуска бота уже выданные достижения не будут
+            // выданы повторно, т.к. они хранятся в записи Participant в Apache Ignite.
+            Set<String> userAwards = awardedAchievements.computeIfAbsent(userId, k -> {
+                Set<String> persisted = ConcurrentHashMap.newKeySet();
+                try {
+                    Participant participant = dataStorageService.getParticipant(k);
+                    if (participant != null && participant.getAwardedAchievements() != null) {
+                        persisted.addAll(participant.getAwardedAchievements());
+                    }
+                } catch (Exception ex) {
+                    logger.warn("Не удалось загрузить выданные достижения из хранилища для пользователя {}", k, ex);
+                }
+                return persisted;
+            });
 
             Challenge challenge = challengeService.getChallenge(challengeId);
             String challengeName = challenge != null ? challenge.getName() : challengeId;
@@ -73,11 +94,34 @@ public class AchievementService {
                 String key = userId + ":" + challengeId + ":" + achievement.getId();
                 if (totalProgress >= achievement.getThreshold() && !userAwards.contains(key)) {
                     userAwards.add(key);
+                    // Персистентно сохраняем выданное достижение в записи Participant,
+                    // чтобы оно пережило перезапуск бота.
+                    persistAwardedAchievement(userId, key);
                     sendAchievementAnnouncement(userId, achievement, challengeName);
                 }
             }
         } catch (Exception e) {
             logger.error("Ошибка при проверке достижений для пользователя {}", userId, e);
+        }
+    }
+
+    /**
+     * Сохраняет ключ выданного достижения в записи участника в Apache Ignite.
+     * Если участник не найден, создаёт минимальную запись.
+     *
+     * @param userId идентификатор пользователя
+     * @param key    ключ достижения вида "userId:challengeId:achievementId"
+     */
+    private void persistAwardedAchievement(String userId, String key) {
+        try {
+            Participant participant = dataStorageService.getParticipant(userId);
+            if (participant == null) {
+                participant = new Participant(userId, userId);
+            }
+            participant.getAwardedAchievements().add(key);
+            dataStorageService.saveParticipant(participant);
+        } catch (Exception e) {
+            logger.warn("Не удалось персистентно сохранить достижение '{}' для пользователя {}", key, userId, e);
         }
     }
 
@@ -131,9 +175,22 @@ public class AchievementService {
      * @return {@code true}, если достижение уже выдано
      */
     public boolean hasAchievement(String userId, String challengeId, String achievementId) {
+        String key = userId + ":" + challengeId + ":" + achievementId;
+        // Проверяем кэш
         Set<String> userAwards = awardedAchievements.get(userId);
-        if (userAwards == null) return false;
-        return userAwards.contains(userId + ":" + challengeId + ":" + achievementId);
+        if (userAwards != null) {
+            return userAwards.contains(key);
+        }
+        // При отсутствии в кэше проверяем персистентное хранилище напрямую
+        try {
+            Participant participant = dataStorageService.getParticipant(userId);
+            if (participant != null && participant.getAwardedAchievements() != null) {
+                return participant.getAwardedAchievements().contains(key);
+            }
+        } catch (Exception e) {
+            logger.warn("Не удалось проверить достижение '{}' в хранилище для пользователя {}", key, userId, e);
+        }
+        return false;
     }
 
     /**
