@@ -120,7 +120,7 @@ public class ChallengeRepository {
         ch.setTargetValue(row.longValue("TARGET_VALUE"));
         ch.setCurrentValue(row.longValue("CURRENT_VALUE"));
 
-        String typeStr = row.stringValue("CHALLENGE_TYPE");
+        String typeStr = row.stringValue("challenge_type");
         if (typeStr != null && !typeStr.isBlank()) {
             try {
                 ch.setType(ChallengeType.valueOf(typeStr));
