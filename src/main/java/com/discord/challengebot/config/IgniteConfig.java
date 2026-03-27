@@ -1,72 +1,30 @@
 package com.discord.challengebot.config;
 
-import org.apache.ignite.Ignite;
-import org.apache.ignite.Ignition;
-import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
-import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
+import org.apache.ignite.client.IgniteClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
-
 /**
- * Конфигурация Apache Ignite в режиме клиента.
- * Создаёт и регистрирует экземпляр Ignite, настраивает TCP Discovery на основе параметров
- * из application.yml (локальный адрес, адреса обнаружения, рабочая директория).
+ * Конфигурация Apache Ignite 3 thin client.
+ * Создаёт IgniteClient, подключающийся к Ignite 3 узлу по адресу из application.yml.
  */
 @Configuration
 public class IgniteConfig {
 
-    @Value("${ignite.local-address:192.168.1.120}")
-    private String localAddress;
-
-    @Value("${ignite.discovery-addresses:192.168.1.120:47650..47659}")
-    private List<String> discoveryAddresses;
-
-    @Value("${ignite.work-dir:/tmp/ignite-challenge-client}")
-    private String workDir;
-
-    private Ignite igniteInstance;
+    @Value("${ignite3.address:127.0.0.1:10300}")
+    private String ignite3Address;
 
     /**
-     * Создаёт и запускает экземпляр Apache Ignite в режиме клиента.
+     * Создаёт и возвращает подключённый Ignite 3 thin client.
+     * Spring автоматически вызовет close() при завершении контекста.
      *
-     * @return запущенный экземпляр {@link Ignite}
+     * @return подключённый экземпляр {@link IgniteClient}
      */
-    @Bean
-    public Ignite igniteInstance() {
-        System.setProperty("IGNITE_QUIET", "false");
-        System.setProperty("IGNITE_NO_ASCII", "false");
-        System.setProperty("IGNITE_UPDATE_NOTIFIER", "false");
-        System.setProperty("IGNITE_DISABLE_ACCESS_CHECK", "true");
-
-        IgniteConfiguration cfg = new IgniteConfiguration();
-        cfg.setIgniteInstanceName("challenge-client");
-        cfg.setClientMode(true);
-        cfg.setWorkDirectory(workDir);
-
-        TcpDiscoverySpi discoverySpi = new TcpDiscoverySpi();
-        discoverySpi.setLocalAddress(localAddress);
-        TcpDiscoveryVmIpFinder ipFinder = new TcpDiscoveryVmIpFinder();
-        ipFinder.setAddresses(discoveryAddresses);
-        discoverySpi.setIpFinder(ipFinder);
-        cfg.setDiscoverySpi(discoverySpi);
-
-        igniteInstance = Ignition.start(cfg);
-        return igniteInstance;
-    }
-
-    /**
-     * Корректно завершает работу экземпляра Ignite, сохраняя данные.
-     */
-    public void closeIgnite() {
-        if (igniteInstance != null) {
-            try {
-                igniteInstance.close();
-            } catch (Exception ignored) {
-            }
-        }
+    @Bean(destroyMethod = "close")
+    public IgniteClient igniteClient() {
+        return IgniteClient.builder()
+                .addresses(ignite3Address)
+                .build();
     }
 }

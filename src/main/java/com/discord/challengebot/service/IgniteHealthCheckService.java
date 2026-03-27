@@ -1,6 +1,6 @@
 package com.discord.challengebot.service;
 
-import org.apache.ignite.Ignite;
+import org.apache.ignite.client.IgniteClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,70 +10,66 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Сервис проверки работоспособности подключения к Apache Ignite.
- * Периодически (каждые 5 минут) проверяет состояние кластера Ignite
- * и при необходимости пытается переподключиться.
+ * Сервис проверки работоспособности подключения к Apache Ignite 3.
+ * Периодически (каждые 5 минут) проверяет доступность таблиц через IgniteClient.
  */
 @Component
 public class IgniteHealthCheckService {
     private static final Logger logger = LoggerFactory.getLogger(IgniteHealthCheckService.class);
 
     @Autowired
-    private Ignite ignite;
+    private IgniteClient igniteClient;
 
     private final AtomicBoolean healthy = new AtomicBoolean(true);
 
     /**
-     * Периодически (каждые 5 минут) проверяет состояние подключения к кластеру Ignite.
-     * При обнаружении проблем логирует ошибку и вызывает попытку переподключения.
+     * Периодически (каждые 5 минут) проверяет состояние подключения к Ignite 3.
+     * При обнаружении проблем логирует предупреждение.
      */
     @Scheduled(fixedDelay = 300000)
     public void checkIgniteHealth() {
         try {
-            if (ignite == null) {
-                logger.error("Ignite instance is null - connection lost");
-                healthy.set(false);
+            if (igniteClient == null) {
+                markUnhealthy("IgniteClient instance is null");
                 return;
             }
-            // Simple health check: verify cluster is active
-            boolean clusterActive = ignite.cluster().active();
-            if (clusterActive) {
-                if (!healthy.get()) {
-                    logger.info("Ignite connection restored");
-                }
-                healthy.set(true);
-            } else {
-                logger.error("Ignite cluster is not active - attempting to verify state");
-                healthy.set(false);
+            // Проверяем доступность основных таблиц
+            checkTable("challenges");
+            checkTable("challenge_participants");
+
+            if (!healthy.get()) {
+                logger.info("Ignite 3 восстановлен и доступен");
             }
+            healthy.set(true);
         } catch (Exception e) {
-            logger.error("Ignite health check failed - connection may be lost", e);
-            healthy.set(false);
-            attemptReconnect();
+            markUnhealthy("Исключение при проверке: " + e.getMessage());
         }
     }
 
-    /**
-     * Пытается восстановить соединение с кластером Ignite путём его активации.
-     */
-    private void attemptReconnect() {
+    private void checkTable(String tableName) {
         try {
-            logger.info("Attempting to reconnect to Ignite cluster...");
-            if (ignite != null && !ignite.cluster().active()) {
-                // Try to activate the cluster
-                ignite.cluster().active(true);
-                healthy.set(true);
-                logger.info("Successfully reconnected to Ignite cluster");
+            var table = igniteClient.tables().table(tableName);
+            if (table == null) {
+                logger.warn("[IgniteHealth] Таблица '{}' недоступна (null)", tableName);
             }
         } catch (Exception e) {
-            logger.error("Failed to reconnect to Ignite cluster", e);
+            logger.warn("[IgniteHealth] Ошибка доступа к таблице '{}': {}", tableName, e.getMessage());
         }
     }
 
+    private void markUnhealthy(String reason) {
+        if (healthy.get()) {
+            logger.warn("[IgniteHealth] WARNING: Apache Ignite 3 недоступен! Причина: {}", reason);
+        } else {
+            logger.warn("[IgniteHealth] Apache Ignite 3 всё ещё недоступен. Причина: {}", reason);
+        }
+        healthy.set(false);
+    }
+
     /**
-     * Возвращает состояние подключения к кластеру Ignite.
+     * Возвращает состояние подключения к Ignite 3.
      *
-     * @return {@code true}, если соединение активно и кластер работает
+     * @return {@code true}, если последняя проверка прошла успешно
      */
     public boolean isHealthy() {
         return healthy.get();

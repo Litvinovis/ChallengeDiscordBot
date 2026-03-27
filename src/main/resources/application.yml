@@ -13,11 +13,8 @@ discord:
     - ${DISCORD_ADMIN_USER_ID:} # ID пользователя с правами администратора
   report-channel: ${DISCORD_REPORT_CHANNEL:качал-очка}    # Название канала для отчетов и уведомлений о завершении испытаний
 
-ignite:
-  local-address: ${IGNITE_LOCAL_ADDRESS:127.0.0.1}
-  discovery-addresses:
-    - ${IGNITE_DISCOVERY_ADDRESSES:127.0.0.1:47650..47659}
-  work-dir: "${IGNITE_WORK_DIR:/tmp/ignite-challenge-client}"
+ignite3:
+  address: ${IGNITE3_ADDRESS:127.0.0.1:10300}
 
 # Конфигурация запланированных задач
 scheduled:
