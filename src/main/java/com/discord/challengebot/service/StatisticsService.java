@@ -670,7 +670,7 @@ public class StatisticsService implements IStatisticsService {
             history.add(progressAmount);
             // Удаляем старые записи если превышен лимит на ключ (LRU-подобное поведение)
             if (history.size() > MAX_HISTORY_PER_KEY) {
-                history.remove(0);
+                history.removeFirst();
             }
         } catch (Exception e) {
             logger.error("Ошибка при записи ежедневного прогресса", e);
