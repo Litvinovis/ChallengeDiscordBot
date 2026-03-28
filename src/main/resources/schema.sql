@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS challenges (
     participants         VARCHAR NOT NULL DEFAULT '[]'
 ) ZONE challengebot;
 
+-- Добавляем challenge_type если таблица была создана без неё (idempotent fix)
+ALTER TABLE challenges ADD COLUMN "challenge_type" VARCHAR NOT NULL DEFAULT 'INDIVIDUAL';
+
 -- Таблица участников (participants)
 -- registered_challenges хранится как JSON: ["challengeName1", ...]
 -- awarded_achievements хранится как JSON: ["key1", ...]

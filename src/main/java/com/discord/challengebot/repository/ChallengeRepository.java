@@ -120,7 +120,7 @@ public class ChallengeRepository {
         ch.setTargetValue(row.longValue("TARGET_VALUE"));
         ch.setCurrentValue(row.longValue("CURRENT_VALUE"));
 
-        String typeStr = row.stringValue("challenge_type");
+        String typeStr = row.stringValue("\"challenge_type\"");
         if (typeStr != null && !typeStr.isBlank()) {
             try {
                 ch.setType(ChallengeType.valueOf(typeStr));
@@ -167,7 +167,7 @@ public class ChallengeRepository {
                 .set("name", ch.getName())
                 .set("target_value", ch.getTargetValue())
                 .set("current_value", ch.getCurrentValue())
-                .set("challenge_type", ch.getType() != null ? ch.getType().name() : ChallengeType.INDIVIDUAL.name())
+                .set("\"challenge_type\"", ch.getType() != null ? ch.getType().name() : ChallengeType.INDIVIDUAL.name())
                 .set("start_date", ch.getStartDate() != null ? ch.getStartDate().toString() : null)
                 .set("end_date", ch.getEndDate() != null ? ch.getEndDate().toString() : null)
                 .set("active", ch.isActive())
