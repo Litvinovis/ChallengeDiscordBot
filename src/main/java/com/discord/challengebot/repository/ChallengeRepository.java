@@ -5,6 +5,8 @@ import com.discord.challengebot.model.ChallengeType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.ignite.client.IgniteClient;
+import org.apache.ignite.sql.ResultSet;
+import org.apache.ignite.sql.SqlRow;
 import org.apache.ignite.table.KeyValueView;
 import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
@@ -29,6 +31,7 @@ public class ChallengeRepository {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private final IgniteClient igniteClient;
     private final KeyValueView<Tuple, Tuple> view;
 
     /**
@@ -37,6 +40,7 @@ public class ChallengeRepository {
      * @param igniteClient подключённый Ignite 3 thin client
      */
     public ChallengeRepository(IgniteClient igniteClient) {
+        this.igniteClient = igniteClient;
         this.view = igniteClient.tables().table("challenges").keyValueView();
     }
 
@@ -76,16 +80,53 @@ public class ChallengeRepository {
      */
     public List<Challenge> findAll() {
         List<Challenge> result = new ArrayList<>();
-        try {
-            // Используем SQL для получения всех записей
-            view.query(null, null).forEachRemaining(entry -> {
-                String id = entry.getKey().stringValue("ID");
-                result.add(rowToChallenge(id, entry.getValue()));
-            });
+        try (ResultSet<SqlRow> rs = igniteClient.sql().execute(null,
+                "SELECT id, name, target_value, current_value, challenge_type, " +
+                "start_date, end_date, active, description, unit, " +
+                "participant_progress, participants FROM challenges")) {
+            while (rs.hasNext()) {
+                SqlRow row = rs.next();
+                result.add(sqlRowToChallenge(row));
+            }
         } catch (Exception e) {
             log.error("Ошибка при получении всех испытаний из Ignite 3: {}", e.getMessage());
         }
         return result;
+    }
+
+    private Challenge sqlRowToChallenge(SqlRow row) {
+        Challenge ch = new Challenge();
+        ch.setId(row.stringValue("id"));
+        ch.setName(row.stringValue("name"));
+        ch.setTargetValue(row.longValue("target_value"));
+        ch.setCurrentValue(row.longValue("current_value"));
+
+        String typeStr = row.stringValue("challenge_type");
+        if (typeStr != null && !typeStr.isBlank()) {
+            try {
+                ch.setType(ChallengeType.valueOf(typeStr));
+            } catch (IllegalArgumentException e) {
+                ch.setType(ChallengeType.INDIVIDUAL);
+            }
+        } else {
+            ch.setType(ChallengeType.INDIVIDUAL);
+        }
+
+        String startDateStr = row.stringValue("start_date");
+        if (startDateStr != null && !startDateStr.isBlank()) {
+            try { ch.setStartDate(LocalDateTime.parse(startDateStr)); } catch (Exception ignored) {}
+        }
+        String endDateStr = row.stringValue("end_date");
+        if (endDateStr != null && !endDateStr.isBlank()) {
+            try { ch.setEndDate(LocalDateTime.parse(endDateStr)); } catch (Exception ignored) {}
+        }
+
+        ch.setActive(Boolean.TRUE.equals(row.value("active")));
+        ch.setDescription(row.stringValue("description"));
+        ch.setUnit(row.stringValue("unit"));
+        ch.setParticipantProgress(fromJsonToMapStringLong(row.stringValue("participant_progress")));
+        ch.setParticipants(fromJsonToListString(row.stringValue("participants")));
+        return ch;
     }
 
     /**
