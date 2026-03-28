@@ -64,7 +64,7 @@ public class DailyReportScheduler {
                     challengeService.completeChallenge(challenge);
                     discordService.sendChallengeCompletionNotification(challenge);
                     completedChallenges++;
-                } else if (challenge.isActive() && challenge.getEndDate().isBefore(now)) {
+                } else if (challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(now)) {
                     logger.info("Испытание '{}' завершено по истечению срока", challenge.getName());
                     // Испытание завершено по истечению срока без достижения цели
                     challengeService.completeChallenge(challenge);
@@ -116,7 +116,7 @@ public class DailyReportScheduler {
             
             // Удаляем завершенные испытания старше 30 дней
             for (Challenge challenge : allChallenges) {
-                if (!challenge.isActive() && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
+                if (!challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
                     if (challengeService.deleteChallenge(challenge.getName())) {
                         deletedCount++;
                         logger.info("Удалено старое завершенное испытание: {}", challenge.getName());
