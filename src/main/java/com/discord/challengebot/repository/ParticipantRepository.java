@@ -29,7 +29,8 @@ public class ParticipantRepository {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final KeyValueView<Tuple, Tuple> view;
+    private final IgniteClient igniteClient;
+    private volatile KeyValueView<Tuple, Tuple> view;
 
     /**
      * Создаёт репозиторий участников.
@@ -37,7 +38,18 @@ public class ParticipantRepository {
      * @param igniteClient подключённый Ignite 3 thin client
      */
     public ParticipantRepository(IgniteClient igniteClient) {
-        this.view = igniteClient.tables().table("challenge_participants").keyValueView();
+        this.igniteClient = igniteClient;
+    }
+
+    private KeyValueView<Tuple, Tuple> view() {
+        if (view == null) {
+            synchronized (this) {
+                if (view == null) {
+                    view = igniteClient.tables().table("challenge_participants").keyValueView();
+                }
+            }
+        }
+        return view;
     }
 
     /**
@@ -52,7 +64,7 @@ public class ParticipantRepository {
         }
         Tuple key = Tuple.create().set("user_id", participant.getUserId());
         Tuple val = participantToRow(participant);
-        view.put(null, key, val);
+        view().put(null, key, val);
     }
 
     /**
@@ -64,7 +76,7 @@ public class ParticipantRepository {
     public Optional<Participant> findById(String userId) {
         if (userId == null) return Optional.empty();
         Tuple key = Tuple.create().set("user_id", userId);
-        Tuple row = view.get(null, key);
+        Tuple row = view().get(null, key);
         if (row == null) return Optional.empty();
         return Optional.of(rowToParticipant(userId, row));
     }
@@ -77,7 +89,7 @@ public class ParticipantRepository {
     public List<Participant> findAll() {
         List<Participant> result = new ArrayList<>();
         try {
-            view.query(null, null).forEachRemaining(entry -> {
+            view().query(null, null).forEachRemaining(entry -> {
                 String userId = entry.getKey().stringValue("USER_ID");
                 result.add(rowToParticipant(userId, entry.getValue()));
             });
@@ -95,7 +107,7 @@ public class ParticipantRepository {
     public void deleteById(String userId) {
         if (userId == null) return;
         Tuple key = Tuple.create().set("user_id", userId);
-        view.remove(null, key);
+        view().remove(null, key);
     }
 
     /**
@@ -107,7 +119,7 @@ public class ParticipantRepository {
     public boolean existsById(String userId) {
         if (userId == null) return false;
         Tuple key = Tuple.create().set("user_id", userId);
-        return view.contains(null, key);
+        return view().contains(null, key);
     }
 
     // ---- маппинг ----
