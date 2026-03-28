@@ -5,6 +5,8 @@ import com.discord.challengebot.model.ChallengeType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.ignite.client.IgniteClient;
+import org.apache.ignite.sql.ResultSet;
+import org.apache.ignite.sql.SqlRow;
 import org.apache.ignite.table.KeyValueView;
 import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
@@ -29,7 +31,8 @@ public class ChallengeRepository {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final KeyValueView<Tuple, Tuple> view;
+    private final IgniteClient igniteClient;
+    private volatile KeyValueView<Tuple, Tuple> view;
 
     /**
      * Создаёт репозиторий испытаний.
@@ -37,7 +40,18 @@ public class ChallengeRepository {
      * @param igniteClient подключённый Ignite 3 thin client
      */
     public ChallengeRepository(IgniteClient igniteClient) {
-        this.view = igniteClient.tables().table("challenges").keyValueView();
+        this.igniteClient = igniteClient;
+    }
+
+    private KeyValueView<Tuple, Tuple> view() {
+        if (view == null) {
+            synchronized (this) {
+                if (view == null) {
+                    view = igniteClient.tables().table("challenges").keyValueView();
+                }
+            }
+        }
+        return view;
     }
 
     /**
@@ -52,7 +66,7 @@ public class ChallengeRepository {
         }
         Tuple key = Tuple.create().set("id", challenge.getId());
         Tuple val = challengeToRow(challenge);
-        view.put(null, key, val);
+        view().put(null, key, val);
     }
 
     /**
@@ -64,7 +78,7 @@ public class ChallengeRepository {
     public Optional<Challenge> findById(String id) {
         if (id == null) return Optional.empty();
         Tuple key = Tuple.create().set("id", id);
-        Tuple row = view.get(null, key);
+        Tuple row = view().get(null, key);
         if (row == null) return Optional.empty();
         return Optional.of(rowToChallenge(id, row));
     }
@@ -76,16 +90,53 @@ public class ChallengeRepository {
      */
     public List<Challenge> findAll() {
         List<Challenge> result = new ArrayList<>();
-        try {
-            // Используем SQL для получения всех записей
-            view.query(null, null).forEachRemaining(entry -> {
-                String id = entry.getKey().stringValue("ID");
-                result.add(rowToChallenge(id, entry.getValue()));
-            });
+        try (ResultSet<SqlRow> rs = igniteClient.sql().execute(null,
+                "SELECT id, name, target_value, current_value, chal_type, " +
+                "start_date, end_date, active, description, unit, " +
+                "participant_progress, participants FROM challenges ORDER BY name")) {
+            while (rs.hasNext()) {
+                SqlRow row = rs.next();
+                result.add(sqlRowToChallenge(row));
+            }
         } catch (Exception e) {
             log.error("Ошибка при получении всех испытаний из Ignite 3: {}", e.getMessage());
         }
         return result;
+    }
+
+    private Challenge sqlRowToChallenge(SqlRow row) {
+        Challenge ch = new Challenge();
+        ch.setId(row.stringValue("id"));
+        ch.setName(row.stringValue("name"));
+        ch.setTargetValue(row.longValue("target_value"));
+        ch.setCurrentValue(row.longValue("current_value"));
+
+        String typeStr = row.stringValue("CHAL_TYPE");
+        if (typeStr != null && !typeStr.isBlank()) {
+            try {
+                ch.setType(ChallengeType.valueOf(typeStr));
+            } catch (IllegalArgumentException e) {
+                ch.setType(ChallengeType.INDIVIDUAL);
+            }
+        } else {
+            ch.setType(ChallengeType.INDIVIDUAL);
+        }
+
+        String startDateStr = row.stringValue("start_date");
+        if (startDateStr != null && !startDateStr.isBlank()) {
+            try { ch.setStartDate(LocalDateTime.parse(startDateStr)); } catch (Exception ignored) {}
+        }
+        String endDateStr = row.stringValue("end_date");
+        if (endDateStr != null && !endDateStr.isBlank()) {
+            try { ch.setEndDate(LocalDateTime.parse(endDateStr)); } catch (Exception ignored) {}
+        }
+
+        ch.setActive(Boolean.TRUE.equals(row.value("active")));
+        ch.setDescription(row.stringValue("description"));
+        ch.setUnit(row.stringValue("unit"));
+        ch.setParticipantProgress(fromJsonToMapStringLong(row.stringValue("participant_progress")));
+        ch.setParticipants(fromJsonToListString(row.stringValue("participants")));
+        return ch;
     }
 
     /**
@@ -96,7 +147,7 @@ public class ChallengeRepository {
     public void deleteById(String id) {
         if (id == null) return;
         Tuple key = Tuple.create().set("id", id);
-        view.remove(null, key);
+        view().remove(null, key);
     }
 
     /**
@@ -108,7 +159,7 @@ public class ChallengeRepository {
     public boolean existsById(String id) {
         if (id == null) return false;
         Tuple key = Tuple.create().set("id", id);
-        return view.contains(null, key);
+        return view().contains(null, key);
     }
 
     // ---- маппинг ----
@@ -120,7 +171,7 @@ public class ChallengeRepository {
         ch.setTargetValue(row.longValue("TARGET_VALUE"));
         ch.setCurrentValue(row.longValue("CURRENT_VALUE"));
 
-        String typeStr = row.stringValue("challenge_type");
+        String typeStr = row.stringValue("CHAL_TYPE");
         if (typeStr != null && !typeStr.isBlank()) {
             try {
                 ch.setType(ChallengeType.valueOf(typeStr));
@@ -167,7 +218,7 @@ public class ChallengeRepository {
                 .set("name", ch.getName())
                 .set("target_value", ch.getTargetValue())
                 .set("current_value", ch.getCurrentValue())
-                .set("challenge_type", ch.getType() != null ? ch.getType().name() : ChallengeType.INDIVIDUAL.name())
+                .set("chal_type", ch.getType() != null ? ch.getType().name() : ChallengeType.INDIVIDUAL.name())
                 .set("start_date", ch.getStartDate() != null ? ch.getStartDate().toString() : null)
                 .set("end_date", ch.getEndDate() != null ? ch.getEndDate().toString() : null)
                 .set("active", ch.isActive())

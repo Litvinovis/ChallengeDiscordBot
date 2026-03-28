@@ -211,7 +211,9 @@ public class ChallengeService implements IChallengeService {
             
             // Расчет дней до окончания
             LocalDateTime now = LocalDateTime.now();
-            long daysRemaining = java.time.Duration.between(now, challenge.getEndDate()).toDays();
+            long daysRemaining = challenge.getEndDate() != null
+                ? java.time.Duration.between(now, challenge.getEndDate()).toDays()
+                : 0;
             
             // Расчет ежедневной цели с распределением между участниками
             double dailyTarget = 0;
