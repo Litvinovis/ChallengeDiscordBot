@@ -8,12 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 /**
  * Команда {@code +регистрация} — регистрирует пользователя на испытание.
  * Использование: {@code +регистрация <название>}.
  */
 @Component
+@Order(1)
 public class RegistrationCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(RegistrationCommand.class);
 

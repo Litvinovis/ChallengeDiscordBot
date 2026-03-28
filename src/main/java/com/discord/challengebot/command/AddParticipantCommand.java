@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 /**
  * Команда {@code +добавить_участника} — добавляет указанного пользователя в испытание.
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
  * Доступна только администраторам.
  */
 @Component
+@Order(1)
 public class AddParticipantCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(AddParticipantCommand.class);
 

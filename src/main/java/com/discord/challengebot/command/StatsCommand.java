@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 import java.util.List;
 
@@ -19,6 +20,7 @@ import java.util.List;
  * Использование: {@code +статистика} или {@code +статистика <название>}.
  */
 @Component
+@Order(1)
 public class StatsCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(StatsCommand.class);
 

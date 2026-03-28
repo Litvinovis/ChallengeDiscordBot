@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 /**
  * Команда {@code +продолжить} — возобновляет остановленное испытание.
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
  * Доступна только администраторам.
  */
 @Component
+@Order(1)
 public class ResumeChallengeCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(ResumeChallengeCommand.class);
 
