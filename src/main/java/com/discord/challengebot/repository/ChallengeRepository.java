@@ -101,7 +101,7 @@ public class ChallengeRepository {
         ch.setTargetValue(row.longValue("target_value"));
         ch.setCurrentValue(row.longValue("current_value"));
 
-        String typeStr = row.stringValue("challenge_type");
+        String typeStr = row.stringValue("CHALLENGE_TYPE");
         if (typeStr != null && !typeStr.isBlank()) {
             try {
                 ch.setType(ChallengeType.valueOf(typeStr));
@@ -161,7 +161,7 @@ public class ChallengeRepository {
         ch.setTargetValue(row.longValue("TARGET_VALUE"));
         ch.setCurrentValue(row.longValue("CURRENT_VALUE"));
 
-        String typeStr = row.stringValue("challenge_type");
+        String typeStr = row.stringValue("CHALLENGE_TYPE");
         if (typeStr != null && !typeStr.isBlank()) {
             try {
                 ch.setType(ChallengeType.valueOf(typeStr));
