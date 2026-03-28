@@ -6,6 +6,7 @@ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
  * Для администраторов показываются дополнительные административные команды.
  */
 @Component
+@Order(1)
 public class HelpCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(HelpCommand.class);
 

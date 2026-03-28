@@ -1,12 +1,10 @@
 package com.discord.challengebot.service;
 
-import com.discord.challengebot.config.IgniteConfig;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
-import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.configuration.CacheConfiguration;
+import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ParticipantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,12 +15,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-
-import javax.cache.Cache;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,30 +29,17 @@ import static org.mockito.Mockito.*;
 class DataStorageServiceTest {
 
     @Mock
-    private Ignite ignite;
+    private ChallengeRepository challengeRepository;
 
     @Mock
-    private IgniteConfig igniteConfig;
-
-    @Mock
-    private IgniteCache<String, Challenge> challengesCache;
-
-    @Mock
-    private IgniteCache<String, Participant> participantsCache;
+    private ParticipantRepository participantRepository;
 
     @InjectMocks
     private DataStorageService dataStorageService;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setUp() {
-        when(ignite.getOrCreateCache(any(CacheConfiguration.class)))
-                .thenReturn((IgniteCache) challengesCache)
-                .thenReturn((IgniteCache) participantsCache);
-        // Empty iterators by default
-        when(challengesCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
-        when(participantsCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
-        dataStorageService.init();
+        // Репозитории готовы — дополнительная инициализация не нужна
     }
 
     private Challenge buildChallenge(String name) {
@@ -79,13 +61,13 @@ class DataStorageServiceTest {
     void testSaveChallenge() {
         Challenge challenge = buildChallenge("Отжимания");
         dataStorageService.saveChallenge(challenge);
-        verify(challengesCache).put("отжимания", challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
     void testGetChallenge_found() {
         Challenge challenge = buildChallenge("Отжимания");
-        when(challengesCache.get("отжимания")).thenReturn(challenge);
+        when(challengeRepository.findById("отжимания")).thenReturn(Optional.of(challenge));
 
         Challenge result = dataStorageService.getChallenge("Отжимания");
         assertNotNull(result);
@@ -94,9 +76,8 @@ class DataStorageServiceTest {
 
     @Test
     void testGetChallenge_notFound() {
-        when(challengesCache.get(anyString())).thenReturn(null);
-        // Empty iterator for fallback scan
-        when(challengesCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
+        when(challengeRepository.findById(anyString())).thenReturn(Optional.empty());
+        when(challengeRepository.findAll()).thenReturn(Collections.emptyList());
 
         Challenge result = dataStorageService.getChallenge("НесуществующееИспытание");
         assertNull(result);
@@ -104,16 +85,17 @@ class DataStorageServiceTest {
 
     @Test
     void testDeleteChallenge_found() {
-        when(challengesCache.remove("отжимания")).thenReturn(true);
+        when(challengeRepository.existsById("отжимания")).thenReturn(true);
 
         boolean deleted = dataStorageService.deleteChallenge("Отжимания");
         assertTrue(deleted);
+        verify(challengeRepository).deleteById("отжимания");
     }
 
     @Test
     void testDeleteChallenge_notFound() {
-        when(challengesCache.remove(anyString())).thenReturn(false);
-        when(challengesCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
+        when(challengeRepository.existsById(anyString())).thenReturn(false);
+        when(challengeRepository.findAll()).thenReturn(Collections.emptyList());
 
         boolean deleted = dataStorageService.deleteChallenge("НесуществующееИспытание");
         assertFalse(deleted);
@@ -123,14 +105,13 @@ class DataStorageServiceTest {
     void testSaveParticipant() {
         Participant participant = new Participant("user1", "TestUser");
         dataStorageService.saveParticipant(participant);
-        verify(participantsCache).put("user1", participant);
+        verify(participantRepository).save(participant);
     }
 
     @Test
     void testGetParticipant_found() {
         Participant participant = new Participant("user1", "TestUser");
-        when(participantsCache.get("user1")).thenReturn(participant);
-        when(participantsCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         Participant result = dataStorageService.getParticipant("user1");
         assertNotNull(result);
@@ -139,8 +120,7 @@ class DataStorageServiceTest {
 
     @Test
     void testGetParticipant_notFound() {
-        when(participantsCache.get(anyString())).thenReturn(null);
-        when(participantsCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
+        when(participantRepository.findById(anyString())).thenReturn(Optional.empty());
 
         Participant result = dataStorageService.getParticipant("unknownUser");
         assertNull(result);
@@ -148,24 +128,33 @@ class DataStorageServiceTest {
 
     @Test
     void testDeleteParticipant_found() {
-        when(participantsCache.remove("user1")).thenReturn(true);
+        when(participantRepository.existsById("user1")).thenReturn(true);
         boolean deleted = dataStorageService.deleteParticipant("user1");
         assertTrue(deleted);
+        verify(participantRepository).deleteById("user1");
     }
 
     @Test
     void testDeleteParticipant_notFound() {
-        when(participantsCache.remove(anyString())).thenReturn(false);
+        when(participantRepository.existsById(anyString())).thenReturn(false);
         boolean deleted = dataStorageService.deleteParticipant("unknownUser");
         assertFalse(deleted);
     }
 
     @Test
     void testGetAllChallenges() {
-        when(challengesCache.iterator()).thenReturn(java.util.Collections.emptyIterator());
+        when(challengeRepository.findAll()).thenReturn(Collections.emptyList());
         List<Challenge> challenges = dataStorageService.getAllChallenges();
         assertNotNull(challenges);
         assertTrue(challenges.isEmpty());
+    }
+
+    @Test
+    void testGetAllParticipants() {
+        when(participantRepository.findAll()).thenReturn(Collections.emptyList());
+        List<Participant> participants = dataStorageService.getAllParticipants();
+        assertNotNull(participants);
+        assertTrue(participants.isEmpty());
     }
 
     @Test
@@ -173,11 +162,5 @@ class DataStorageServiceTest {
         // Should not throw
         assertDoesNotThrow(() -> dataStorageService.saveChallenge(null));
         assertDoesNotThrow(() -> dataStorageService.saveParticipant(null));
-    }
-
-    @Test
-    void testDestroyCallsIgniteConfig() {
-        dataStorageService.destroy();
-        verify(igniteConfig).closeIgnite();
     }
 }
