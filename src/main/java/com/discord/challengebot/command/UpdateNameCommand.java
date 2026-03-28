@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 /**
  * Команда {@code +обновить_имя} — обновляет отображаемое имя пользователя в системе.
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * Если новое имя не указано, используется текущее имя пользователя в Discord.
  */
 @Component
+@Order(1)
 public class UpdateNameCommand implements Command {
     private static final Logger logger = LoggerFactory.getLogger(UpdateNameCommand.class);
 
