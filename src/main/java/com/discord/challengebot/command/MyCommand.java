@@ -62,8 +62,8 @@ public class MyCommand implements Command {
                 ChallengeStats stats = challengeService.getChallengeStats(challenge);
                 if (stats != null) {
                     message.append("- ").append(challenge.getName()).append(": ")
-                            .append(stats.getCurrentValue()).append("/").append(stats.getTargetValue())
-                            .append(" (").append(String.format("%.2f", stats.getPercentage())).append("%)\n");
+                            .append(stats.currentValue()).append("/").append(stats.targetValue())
+                            .append(" (").append(String.format("%.2f", stats.percentage())).append("%)\n");
                 }
             }
             channel.sendMessage(message.toString()).queue();

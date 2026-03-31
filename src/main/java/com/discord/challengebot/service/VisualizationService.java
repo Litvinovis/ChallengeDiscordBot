@@ -30,11 +30,11 @@ public class VisualizationService implements IVisualizationService {
     public CompletableFuture<byte[]> generateProgressChart(ChallengeStats stats) {
         try {
             DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-            dataset.addValue(stats.getCurrentValue(), "Выполнено", "");
-            dataset.addValue(stats.getRemaining(), "Осталось", "");
+            dataset.addValue(stats.currentValue(), "Выполнено", "");
+            dataset.addValue(stats.remaining(), "Осталось", "");
 
             JFreeChart barChart = ChartFactory.createBarChart(
-                    "Прогресс по испытанию: " + stats.getChallengeName(),
+                    "Прогресс по испытанию: " + stats.challengeName(),
                     "Статус",
                     "Количество",
                     dataset,
@@ -58,11 +58,11 @@ public class VisualizationService implements IVisualizationService {
     public CompletableFuture<byte[]> generatePercentageChart(ChallengeStats stats) {
         try {
             DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-            dataset.addValue(stats.getPercentage(), "Выполнено (%)", "");
-            dataset.addValue(100 - stats.getPercentage(), "Осталось (%)", "");
+            dataset.addValue(stats.percentage(), "Выполнено (%)", "");
+            dataset.addValue(100 - stats.percentage(), "Осталось (%)", "");
 
             JFreeChart barChart = ChartFactory.createBarChart(
-                    "Процент выполнения: " + String.format("%.2f", stats.getPercentage()) + "%",
+                    "Процент выполнения: " + String.format("%.2f", stats.percentage()) + "%",
                     "Процент",
                     "Значение",
                     dataset,

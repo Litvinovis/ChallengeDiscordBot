@@ -45,7 +45,7 @@ class StatisticsServiceExtendedTest {
 
         ChallengeStats stats = statisticsService.calculateStats(challenge);
         assertNotNull(stats);
-        assertEquals(0.0, stats.getPercentage(), 0.0001);
+        assertEquals(0.0, stats.percentage(), 0.0001);
     }
 
     // ---- calculateRemaining null guard ----

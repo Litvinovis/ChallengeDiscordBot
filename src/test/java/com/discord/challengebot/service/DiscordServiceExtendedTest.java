@@ -146,7 +146,7 @@ class DiscordServiceExtendedTest {
     @Test
     void formatChallengeStats_delegatesToStatisticsService() {
         Challenge challenge = new Challenge();
-        ChallengeStats stats = new ChallengeStats();
+        ChallengeStats stats = new ChallengeStats(null, 0L, 0L, 0L, 0.0, 0.0, 0);
         when(statisticsService.formatReportForDiscord(challenge, stats)).thenReturn("formatted");
 
         String result = discordService.formatChallengeStats(challenge, stats);

@@ -276,14 +276,14 @@ public class StatisticsService implements IStatisticsService {
             }
             
             StringBuilder sb = new StringBuilder();
-            sb.append("**Статистика по испытанию: ").append(stats.getChallengeName()).append("**\n");
-            sb.append("Цель: ").append(stats.getTargetValue()).append("\n");
-            sb.append("Выполнено: ").append(stats.getCurrentValue()).append("\n");
-            sb.append("Осталось: ").append(stats.getRemaining()).append("\n");
+            sb.append("**Статистика по испытанию: ").append(stats.challengeName()).append("**\n");
+            sb.append("Цель: ").append(stats.targetValue()).append("\n");
+            sb.append("Выполнено: ").append(stats.currentValue()).append("\n");
+            sb.append("Осталось: ").append(stats.remaining()).append("\n");
             // Используем запятую как десятичный разделитель для русской локали
-            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.getPercentage()).replace('.', ',')).append("%\n");
-            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.getDailyTarget()).replace('.', ',')).append(" в день\n");
-            sb.append("Дней осталось: ").append(stats.getDaysRemaining()).append("\n");
+            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.percentage()).replace('.', ',')).append("%\n");
+            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.dailyTarget()).replace('.', ',')).append(" в день\n");
+            sb.append("Дней осталось: ").append(stats.daysRemaining()).append("\n");
             
             // Добавляем количество зарегистрированных участников
             int participantCount = challenge.getParticipants().size();
@@ -414,14 +414,14 @@ public class StatisticsService implements IStatisticsService {
             }
             
             StringBuilder sb = new StringBuilder();
-            sb.append("**Статистика по испытанию: ").append(stats.getChallengeName()).append("**\n");
-            sb.append("Цель: ").append(stats.getTargetValue()).append("\n");
-            sb.append("Выполнено: ").append(stats.getCurrentValue()).append("\n");
-            sb.append("Осталось: ").append(stats.getRemaining()).append("\n");
+            sb.append("**Статистика по испытанию: ").append(stats.challengeName()).append("**\n");
+            sb.append("Цель: ").append(stats.targetValue()).append("\n");
+            sb.append("Выполнено: ").append(stats.currentValue()).append("\n");
+            sb.append("Осталось: ").append(stats.remaining()).append("\n");
             // Используем запятую как десятичный разделитель для русской локали
-            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.getPercentage()).replace('.', ',')).append("%\n");
-            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.getDailyTarget()).replace('.', ',')).append(" в день\n");
-            sb.append("Дней осталось: ").append(stats.getDaysRemaining()).append("\n");
+            sb.append("Процент выполнения: ").append(String.format("%.2f", stats.percentage()).replace('.', ',')).append("%\n");
+            sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.dailyTarget()).replace('.', ',')).append(" в день\n");
+            sb.append("Дней осталось: ").append(stats.daysRemaining()).append("\n");
             
             logger.debug("Отчет для Discord успешно отформатирован");
             return sb.toString();

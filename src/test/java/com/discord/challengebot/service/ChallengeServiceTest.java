@@ -193,10 +193,10 @@ class ChallengeServiceTest {
         ChallengeStats stats = challengeService.getChallengeStats(mockChallenge);
 
         assertNotNull(stats);
-        assertEquals("Отжимания", stats.getChallengeName());
-        assertEquals(10000L, stats.getTargetValue());
-        assertEquals(2500L, stats.getCurrentValue());
-        assertEquals(7500L, stats.getRemaining());
-        assertEquals(25.0, stats.getPercentage(), 0.01);
+        assertEquals("Отжимания", stats.challengeName());
+        assertEquals(10000L, stats.targetValue());
+        assertEquals(2500L, stats.currentValue());
+        assertEquals(7500L, stats.remaining());
+        assertEquals(25.0, stats.percentage(), 0.01);
     }
 }
