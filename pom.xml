@@ -26,7 +26,7 @@
         <jakarta.annotation.version>2.1.1</jakarta.annotation.version>
         <mockito.version>5.12.0</mockito.version>
         <mockito.inline.version>5.2.0</mockito.inline.version>
-        <maven.surefire.version>3.2.5</maven.surefire.version>
+        <maven.surefire.version>3.5.5</maven.surefire.version>
     </properties>
 
     <dependencies>
