@@ -161,7 +161,7 @@ class AchievementServiceExtendedTest {
     void testAchievementThresholds() {
         int[] expectedThresholds = {100, 500, 1000, 5000};
         for (int i = 0; i < expectedThresholds.length; i++) {
-            assertEquals(expectedThresholds[i], AchievementService.ACHIEVEMENTS.get(i).getThreshold());
+            assertEquals(expectedThresholds[i], AchievementService.ACHIEVEMENTS.get(i).threshold());
         }
     }
 

@@ -34,10 +34,10 @@ class StatisticsServiceTest {
         ChallengeStats stats = statisticsService.calculateStats(challenge);
 
         assertNotNull(stats);
-        assertEquals("Отжимания", stats.getChallengeName());
-        assertEquals(10000L, stats.getTargetValue());
-        assertEquals(2500L, stats.getCurrentValue());
-        assertEquals(7500L, stats.getRemaining());
+        assertEquals("Отжимания", stats.challengeName());
+        assertEquals(10000L, stats.targetValue());
+        assertEquals(2500L, stats.currentValue());
+        assertEquals(7500L, stats.remaining());
     }
 
     @Test
@@ -137,14 +137,7 @@ class StatisticsServiceTest {
         challenge.getParticipantProgress().put("user2", 800L);
         challenge.getParticipantProgress().put("user3", 600L);
         
-        ChallengeStats stats = new ChallengeStats();
-        stats.setChallengeName("Отжимания");
-        stats.setTargetValue(10000);
-        stats.setCurrentValue(2500);
-        stats.setRemaining(7500);
-        stats.setPercentage(25.0);
-        stats.setDailyTarget(750.0);
-        stats.setDaysRemaining(10);
+        ChallengeStats stats = new ChallengeStats("Отжимания", 10000L, 2500L, 7500L, 25.0, 750.0, 10);
 
         String formatted = statisticsService.formatReportForDiscord(challenge, stats);
         
@@ -173,14 +166,7 @@ class StatisticsServiceTest {
         challenge.setName("Отжимания");
         challenge.setUnit("раз");
         
-        ChallengeStats stats = new ChallengeStats();
-        stats.setChallengeName("Отжимания");
-        stats.setTargetValue(10000);
-        stats.setCurrentValue(2500);
-        stats.setRemaining(7500);
-        stats.setPercentage(25.0);
-        stats.setDailyTarget(750.0);
-        stats.setDaysRemaining(10);
+        ChallengeStats stats = new ChallengeStats("Отжимания", 10000L, 2500L, 7500L, 25.0, 750.0, 10);
 
         String formatted = statisticsService.formatReportForDiscord(challenge, stats);
         

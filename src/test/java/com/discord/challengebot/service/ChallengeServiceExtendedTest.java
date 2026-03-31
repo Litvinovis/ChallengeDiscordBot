@@ -417,7 +417,7 @@ class ChallengeServiceExtendedTest {
         ChallengeStats stats = challengeService.getChallengeStats(challenge);
 
         assertNotNull(stats);
-        assertTrue(stats.getPercentage() > 100.0);
-        assertTrue(stats.getRemaining() < 0);
+        assertTrue(stats.percentage() > 100.0);
+        assertTrue(stats.remaining() < 0);
     }
 }

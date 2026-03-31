@@ -91,8 +91,8 @@ public class AchievementService {
             String challengeName = challenge != null ? challenge.getName() : challengeId;
 
             for (Achievement achievement : ACHIEVEMENTS) {
-                String key = userId + ":" + challengeId + ":" + achievement.getId();
-                if (totalProgress >= achievement.getThreshold() && !userAwards.contains(key)) {
+                String key = userId + ":" + challengeId + ":" + achievement.id();
+                if (totalProgress >= achievement.threshold() && !userAwards.contains(key)) {
                     userAwards.add(key);
                     // Персистентно сохраняем выданное достижение в записи Participant,
                     // чтобы оно пережило перезапуск бота.
@@ -137,10 +137,10 @@ public class AchievementService {
             String channel = resolveAnnouncementChannel();
             String message = String.format(
                     "🏆 <@%s> получил достижение **%s**! Выполнено %d повторений в испытании %s",
-                    userId, achievement.getName(), achievement.getThreshold(), challengeName
+                    userId, achievement.name(), achievement.threshold(), challengeName
             );
             discordService.sendMessageToChannel(channel, message);
-            logger.info("Достижение '{}' выдано пользователю {}", achievement.getName(), userId);
+            logger.info("Достижение '{}' выдано пользователю {}", achievement.name(), userId);
         } catch (Exception e) {
             logger.error("Ошибка отправки сообщения о достижении для пользователя {}", userId, e);
         }
