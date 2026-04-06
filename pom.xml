@@ -18,7 +18,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.version>4.0.5</spring.boot.version>
-        <ignite3.version>3.0.0</ignite3.version>
+        <ignite3.version>3.1.0</ignite3.version>
         <jackson.version>2.21.2</jackson.version>
         <jda.version>6.4.1</jda.version>
         <logback.version>1.5.32</logback.version>
