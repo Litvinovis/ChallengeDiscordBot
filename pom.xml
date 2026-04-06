@@ -20,7 +20,7 @@
         <spring.boot.version>4.0.5</spring.boot.version>
         <ignite3.version>3.0.0</ignite3.version>
         <jackson.version>2.21.2</jackson.version>
-        <jda.version>6.4.0</jda.version>
+        <jda.version>6.4.1</jda.version>
         <logback.version>1.5.32</logback.version>
         <jfreechart.version>1.5.6</jfreechart.version>
         <jakarta.annotation.version>2.1.1</jakarta.annotation.version>
