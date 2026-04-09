@@ -1,5 +1,6 @@
 package com.discord.challengebot.repository;
 
+import com.discord.challengebot.config.IgniteConnectionManager;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -23,6 +24,8 @@ import java.util.Optional;
 /**
  * Репозиторий испытаний для Apache Ignite 3.
  * Маппит Challenge (с Map и List полями) в/из строковых JSON-колонок таблицы challenges.
+ * Получает клиент через {@link IgniteConnectionManager} — view автоматически сбрасывается
+ * при смене клиента после переподключения.
  */
 @Repository
 public class ChallengeRepository {
@@ -31,23 +34,27 @@ public class ChallengeRepository {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final IgniteClient igniteClient;
+    private final IgniteConnectionManager connectionManager;
+    private volatile IgniteClient lastClient;
     private volatile KeyValueView<Tuple, Tuple> view;
 
     /**
      * Создаёт репозиторий испытаний.
      *
-     * @param igniteClient подключённый Ignite 3 thin client
+     * @param connectionManager менеджер подключения Ignite 3
      */
-    public ChallengeRepository(IgniteClient igniteClient) {
-        this.igniteClient = igniteClient;
+    public ChallengeRepository(IgniteConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
     }
 
     private KeyValueView<Tuple, Tuple> view() {
-        if (view == null) {
+        IgniteClient current = connectionManager.getClient();
+        if (view == null || current != lastClient) {
             synchronized (this) {
-                if (view == null) {
-                    view = igniteClient.tables().table("challenges").keyValueView();
+                current = connectionManager.getClient();
+                if (view == null || current != lastClient) {
+                    view = current.tables().table("challenges").keyValueView();
+                    lastClient = current;
                 }
             }
         }
@@ -90,7 +97,7 @@ public class ChallengeRepository {
      */
     public List<Challenge> findAll() {
         List<Challenge> result = new ArrayList<>();
-        try (ResultSet<SqlRow> rs = igniteClient.sql().execute(null,
+        try (ResultSet<SqlRow> rs = connectionManager.getClient().sql().execute(null,
                 "SELECT id, name, target_value, current_value, chal_type, " +
                 "start_date, end_date, active, description, unit, " +
                 "participant_progress, participants FROM challenges ORDER BY name")) {

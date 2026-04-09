@@ -17,21 +17,23 @@ import java.util.stream.Collectors;
 /**
  * Инициализатор схемы базы данных для Apache Ignite 3.
  * Читает DDL из schema.sql и выполняет через IgniteClient SQL API при старте приложения.
+ * Получает клиент через {@link IgniteConnectionManager}, чтобы при переподключении
+ * использовалось актуальное соединение.
  */
 @Component
 public class SchemaInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaInitializer.class);
 
-    private final IgniteClient igniteClient;
+    private final IgniteConnectionManager connectionManager;
 
     /**
      * Создаёт инициализатор схемы.
      *
-     * @param igniteClient подключённый Ignite 3 thin client
+     * @param connectionManager менеджер подключения Ignite 3
      */
-    public SchemaInitializer(IgniteClient igniteClient) {
-        this.igniteClient = igniteClient;
+    public SchemaInitializer(IgniteConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
     }
 
     /**
@@ -48,7 +50,7 @@ public class SchemaInitializer {
             return;
         }
 
-        // Разбиваем по ';', фильтруем комментарии и пустые строки
+        IgniteClient client = connectionManager.getClient();
         String[] statements = sql.split(";");
         int ok = 0;
         int failed = 0;
@@ -60,10 +62,9 @@ public class SchemaInitializer {
             if (stmt.isEmpty()) continue;
 
             try {
-                igniteClient.sql().execute(null, stmt);
+                client.sql().execute(null, stmt);
                 ok++;
             } catch (Exception e) {
-                // IF NOT EXISTS — всё равно может выбросить при наличии объекта в части реализаций
                 log.warn("DDL statement failed: {} | stmt: {}", e.getMessage(), stmt.replace("\n", " "));
                 failed++;
             }
