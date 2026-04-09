@@ -1,6 +1,7 @@
 package com.discord.challengebot.service;
 
 import com.discord.challengebot.config.IgniteConnectionManager;
+import jakarta.annotation.PostConstruct;
 import org.apache.ignite.client.IgniteClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,18 @@ public class IgniteHealthCheckService {
         t.setDaemon(true);
         return t;
     });
+
+    /**
+     * Немедленная проверка при старте Spring-контекста.
+     * Если Ignite недоступен при запуске, сразу инициирует цикл переподключения.
+     */
+    @PostConstruct
+    public void onStartup() {
+        if (connectionManager.getClient() == null) {
+            markUnhealthy("Ignite недоступен при старте приложения");
+            scheduleReconnect();
+        }
+    }
 
     /**
      * Периодически (каждые 5 минут) проверяет состояние подключения к Ignite 3.
