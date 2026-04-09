@@ -1,5 +1,6 @@
 package com.discord.challengebot.repository;
 
+import com.discord.challengebot.config.IgniteConnectionManager;
 import com.discord.challengebot.model.Participant;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,6 +22,8 @@ import java.util.Set;
 /**
  * Репозиторий участников для Apache Ignite 3.
  * Маппит Participant (с List и Set полями) в/из строковых JSON-колонок таблицы challenge_participants.
+ * Получает клиент через {@link IgniteConnectionManager} — view автоматически сбрасывается
+ * при смене клиента после переподключения.
  */
 @Repository
 public class ParticipantRepository {
@@ -29,23 +32,27 @@ public class ParticipantRepository {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final IgniteClient igniteClient;
+    private final IgniteConnectionManager connectionManager;
+    private volatile IgniteClient lastClient;
     private volatile KeyValueView<Tuple, Tuple> view;
 
     /**
      * Создаёт репозиторий участников.
      *
-     * @param igniteClient подключённый Ignite 3 thin client
+     * @param connectionManager менеджер подключения Ignite 3
      */
-    public ParticipantRepository(IgniteClient igniteClient) {
-        this.igniteClient = igniteClient;
+    public ParticipantRepository(IgniteConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
     }
 
     private KeyValueView<Tuple, Tuple> view() {
-        if (view == null) {
+        IgniteClient current = connectionManager.getClient();
+        if (view == null || current != lastClient) {
             synchronized (this) {
-                if (view == null) {
-                    view = igniteClient.tables().table("challenge_participants").keyValueView();
+                current = connectionManager.getClient();
+                if (view == null || current != lastClient) {
+                    view = current.tables().table("challenge_participants").keyValueView();
+                    lastClient = current;
                 }
             }
         }
