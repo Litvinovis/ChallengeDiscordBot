@@ -1,4 +1,6 @@
--- DDL для таблиц ChallengeDiscordBot в Apache Ignite 3.x (3.0.0)
+-- DDL для таблиц ChallengeDiscordBot в Apache Ignite 3.x (3.0.0 / 3.1.0)
+-- Все типы совместимы с 3.1.0: VARCHAR, BIGINT, BOOLEAN, INT
+-- Если CREATE ZONE упадёт с ошибкой на 3.1.0, SchemaInitializer пропустит и продолжит
 
 -- Зона хранения данных ChallengeBot
 CREATE ZONE IF NOT EXISTS challengebot WITH STORAGE_PROFILES='default', REPLICAS=1, PARTITIONS=25;
