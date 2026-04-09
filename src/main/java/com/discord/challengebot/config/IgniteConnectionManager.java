@@ -29,12 +29,18 @@ public class IgniteConnectionManager {
 
     /**
      * Устанавливает начальное соединение при старте Spring-контекста.
+     * При недоступности Ignite логирует предупреждение и продолжает запуск —
+     * переподключение будет выполнено автоматически через {@link com.discord.challengebot.service.IgniteHealthCheckService}.
      */
     @PostConstruct
     public void connect() {
         log.info("IgniteConnectionManager: подключение к Ignite 3 по адресу {}", address);
-        client = buildClient();
-        log.info("IgniteConnectionManager: подключение установлено");
+        try {
+            client = buildClient();
+            log.info("IgniteConnectionManager: подключение установлено");
+        } catch (Exception e) {
+            log.warn("IgniteConnectionManager: не удалось подключиться при старте ({}), переподключение будет выполнено автоматически", e.getMessage());
+        }
     }
 
     /**

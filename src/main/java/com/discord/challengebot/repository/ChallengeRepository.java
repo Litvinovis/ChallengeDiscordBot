@@ -49,9 +49,15 @@ public class ChallengeRepository {
 
     private KeyValueView<Tuple, Tuple> view() {
         IgniteClient current = connectionManager.getClient();
+        if (current == null) {
+            throw new IllegalStateException("Ignite 3 недоступен — соединение ещё не установлено");
+        }
         if (view == null || current != lastClient) {
             synchronized (this) {
                 current = connectionManager.getClient();
+                if (current == null) {
+                    throw new IllegalStateException("Ignite 3 недоступен — соединение ещё не установлено");
+                }
                 if (view == null || current != lastClient) {
                     view = current.tables().table("challenges").keyValueView();
                     lastClient = current;
@@ -97,7 +103,12 @@ public class ChallengeRepository {
      */
     public List<Challenge> findAll() {
         List<Challenge> result = new ArrayList<>();
-        try (ResultSet<SqlRow> rs = connectionManager.getClient().sql().execute(null,
+        IgniteClient client = connectionManager.getClient();
+        if (client == null) {
+            log.warn("findAll: Ignite 3 недоступен — возврат пустого списка");
+            return result;
+        }
+        try (ResultSet<SqlRow> rs = client.sql().execute(null,
                 "SELECT id, name, target_value, current_value, chal_type, " +
                 "start_date, end_date, active, description, unit, " +
                 "participant_progress, participants FROM challenges ORDER BY name")) {

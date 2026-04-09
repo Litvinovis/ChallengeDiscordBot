@@ -47,9 +47,15 @@ public class ParticipantRepository {
 
     private KeyValueView<Tuple, Tuple> view() {
         IgniteClient current = connectionManager.getClient();
+        if (current == null) {
+            throw new IllegalStateException("Ignite 3 недоступен — соединение ещё не установлено");
+        }
         if (view == null || current != lastClient) {
             synchronized (this) {
                 current = connectionManager.getClient();
+                if (current == null) {
+                    throw new IllegalStateException("Ignite 3 недоступен — соединение ещё не установлено");
+                }
                 if (view == null || current != lastClient) {
                     view = current.tables().table("challenge_participants").keyValueView();
                     lastClient = current;
