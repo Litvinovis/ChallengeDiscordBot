@@ -59,7 +59,23 @@
             <version>${ignite3.version}</version>
         </dependency>
 
-        <!-- Jackson — для JSON-сериализации коллекций в колонки Ignite 3 -->
+        <!-- Spring Boot Cache -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+            <version>${spring.boot.version}</version>
+        </dependency>
+
+        <!-- Caffeine — реализация кэша для Spring Cache -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
+        <!-- Jackson — для JSON-сериализации коллекций в колонки Ignite 3.
+             Используется напрямую в репозиториях, поэтому объявляем явно
+             (spring-boot-starter не включает jackson-databind без web-стартера). -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -137,10 +153,6 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
-                    <!-- DataMigration использует Ignite 2 embedded API, исключаем из основной сборки -->
-                    <excludes>
-                        <exclude>**/migration/DataMigration.java</exclude>
-                    </excludes>
                 </configuration>
             </plugin>
 
@@ -217,36 +229,4 @@
         </plugins>
     </build>
 
-    <profiles>
-        <profile>
-            <id>migration</id>
-            <dependencies>
-                <!-- Ignite 2 embedded API — только для DataMigration, не включать в основную сборку -->
-                <dependency>
-                    <groupId>org.apache.ignite</groupId>
-                    <artifactId>ignite-core</artifactId>
-                    <version>2.17.0</version>
-                </dependency>
-                <dependency>
-                    <groupId>org.apache.ignite</groupId>
-                    <artifactId>ignite-spring</artifactId>
-                    <version>2.17.0</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-compiler-plugin</artifactId>
-                        <version>3.15.0</version>
-                        <configuration combine.self="override">
-                            <source>21</source>
-                            <target>21</target>
-                            <!-- В migration профиле DataMigration включён — excludes сброшены -->
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

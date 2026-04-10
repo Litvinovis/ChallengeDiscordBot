@@ -20,12 +20,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Репозиторий испытаний для Apache Ignite 3.
  * Маппит Challenge (с Map и List полями) в/из строковых JSON-колонок таблицы challenges.
  * Получает клиент через {@link IgniteConnectionManager} — view автоматически сбрасывается
  * при смене клиента после переподключения.
+ * <p>
+ * Колонки participant_progress и participants оставлены в таблице для обратной совместимости
+ * данных, но НЕ читаются при маппинге (прогресс хранится в таблице challenge_progress).
  */
 @Repository
 public class ChallengeRepository {
@@ -93,7 +97,7 @@ public class ChallengeRepository {
         Tuple key = Tuple.create().set("id", id);
         Tuple row = view().get(null, key);
         if (row == null) return Optional.empty();
-        return Optional.of(rowToChallenge(id, row));
+        return Optional.of(mapChallenge(id, col -> row.value(col.toUpperCase())));
     }
 
     /**
@@ -114,47 +118,17 @@ public class ChallengeRepository {
                 "participant_progress, participants FROM challenges ORDER BY name")) {
             while (rs.hasNext()) {
                 SqlRow row = rs.next();
-                result.add(sqlRowToChallenge(row));
+                // Маппинг через унифицированный метод: SqlRow — регистронезависимый доступ по имени
+                result.add(mapChallenge(row.stringValue("id"), col -> {
+                    try { return row.value(col.toLowerCase()); } catch (Exception e) {
+                        try { return row.value(col.toUpperCase()); } catch (Exception e2) { return null; }
+                    }
+                }));
             }
         } catch (Exception e) {
             log.error("Ошибка при получении всех испытаний из Ignite 3: {}", e.getMessage());
         }
         return result;
-    }
-
-    private Challenge sqlRowToChallenge(SqlRow row) {
-        Challenge ch = new Challenge();
-        ch.setId(row.stringValue("id"));
-        ch.setName(row.stringValue("name"));
-        ch.setTargetValue(row.longValue("target_value"));
-        ch.setCurrentValue(row.longValue("current_value"));
-
-        String typeStr = row.stringValue("CHAL_TYPE");
-        if (typeStr != null && !typeStr.isBlank()) {
-            try {
-                ch.setType(ChallengeType.valueOf(typeStr));
-            } catch (IllegalArgumentException e) {
-                ch.setType(ChallengeType.INDIVIDUAL);
-            }
-        } else {
-            ch.setType(ChallengeType.INDIVIDUAL);
-        }
-
-        String startDateStr = row.stringValue("start_date");
-        if (startDateStr != null && !startDateStr.isBlank()) {
-            try { ch.setStartDate(LocalDateTime.parse(startDateStr)); } catch (Exception ignored) {}
-        }
-        String endDateStr = row.stringValue("end_date");
-        if (endDateStr != null && !endDateStr.isBlank()) {
-            try { ch.setEndDate(LocalDateTime.parse(endDateStr)); } catch (Exception ignored) {}
-        }
-
-        ch.setActive(Boolean.TRUE.equals(row.value("active")));
-        ch.setDescription(row.stringValue("description"));
-        ch.setUnit(row.stringValue("unit"));
-        ch.setParticipantProgress(fromJsonToMapStringLong(row.stringValue("participant_progress")));
-        ch.setParticipants(fromJsonToListString(row.stringValue("participants")));
-        return ch;
     }
 
     /**
@@ -180,16 +154,29 @@ public class ChallengeRepository {
         return view().contains(null, key);
     }
 
-    // ---- маппинг ----
+    // ---- унифицированный маппинг ----
 
-    private Challenge rowToChallenge(String id, Tuple row) {
+    /**
+     * Унифицированный метод маппинга Challenge из источника данных.
+     * Принимает функцию-геттер для извлечения значения по имени колонки,
+     * что позволяет использовать один код и для Tuple-based (KeyValueView), и для SqlRow.
+     *
+     * @param id     идентификатор испытания
+     * @param getter функция получения значения по имени колонки (регистр не важен)
+     * @return смаппированный объект Challenge
+     */
+    private Challenge mapChallenge(String id, Function<String, Object> getter) {
         Challenge ch = new Challenge();
         ch.setId(id);
-        ch.setName(row.stringValue("NAME"));
-        ch.setTargetValue(row.longValue("TARGET_VALUE"));
-        ch.setCurrentValue(row.longValue("CURRENT_VALUE"));
+        ch.setName(asString(getter.apply("NAME")));
 
-        String typeStr = row.stringValue("CHAL_TYPE");
+        Object tv = getter.apply("TARGET_VALUE");
+        if (tv instanceof Number n) ch.setTargetValue(n.longValue());
+
+        Object cv = getter.apply("CURRENT_VALUE");
+        if (cv instanceof Number n) ch.setCurrentValue(n.longValue());
+
+        String typeStr = asString(getter.apply("CHAL_TYPE"));
         if (typeStr != null && !typeStr.isBlank()) {
             try {
                 ch.setType(ChallengeType.valueOf(typeStr));
@@ -200,35 +187,37 @@ public class ChallengeRepository {
             ch.setType(ChallengeType.INDIVIDUAL);
         }
 
-        String startDateStr = row.stringValue("START_DATE");
+        String startDateStr = asString(getter.apply("START_DATE"));
         if (startDateStr != null && !startDateStr.isBlank()) {
-            try {
-                ch.setStartDate(LocalDateTime.parse(startDateStr));
-            } catch (Exception e) {
-                log.warn("Не удалось распарсить start_date для испытания {}: {}", id, startDateStr);
-            }
+            try { ch.setStartDate(LocalDateTime.parse(startDateStr)); }
+            catch (Exception e) { log.warn("Не удалось распарсить start_date для испытания {}: {}", id, startDateStr); }
         }
 
-        String endDateStr = row.stringValue("END_DATE");
+        String endDateStr = asString(getter.apply("END_DATE"));
         if (endDateStr != null && !endDateStr.isBlank()) {
-            try {
-                ch.setEndDate(LocalDateTime.parse(endDateStr));
-            } catch (Exception e) {
-                log.warn("Не удалось распарсить end_date для испытания {}: {}", id, endDateStr);
-            }
+            try { ch.setEndDate(LocalDateTime.parse(endDateStr)); }
+            catch (Exception e) { log.warn("Не удалось распарсить end_date для испытания {}: {}", id, endDateStr); }
         }
 
-        ch.setActive(Boolean.TRUE.equals(row.value("ACTIVE")));
-        ch.setDescription(row.stringValue("DESCRIPTION"));
-        ch.setUnit(row.stringValue("UNIT"));
+        Object active = getter.apply("ACTIVE");
+        ch.setActive(Boolean.TRUE.equals(active));
+        ch.setDescription(asString(getter.apply("DESCRIPTION")));
+        ch.setUnit(asString(getter.apply("UNIT")));
 
-        String progressJson = row.stringValue("PARTICIPANT_PROGRESS");
+        // participant_progress и participants оставлены в таблице для обратной совместимости,
+        // но маппируются во вспомогательные поля Challenge только для целей миграции.
+        // Основная работа с прогрессом ведётся через ChallengeProgressRepository.
+        String progressJson = asString(getter.apply("PARTICIPANT_PROGRESS"));
         ch.setParticipantProgress(fromJsonToMapStringLong(progressJson));
 
-        String participantsJson = row.stringValue("PARTICIPANTS");
+        String participantsJson = asString(getter.apply("PARTICIPANTS"));
         ch.setParticipants(fromJsonToListString(participantsJson));
 
         return ch;
+    }
+
+    private static String asString(Object v) {
+        return v instanceof String s ? s : (v != null ? v.toString() : null);
     }
 
     private Tuple challengeToRow(Challenge ch) {
@@ -242,6 +231,7 @@ public class ChallengeRepository {
                 .set("active", ch.isActive())
                 .set("description", ch.getDescription())
                 .set("unit", ch.getUnit())
+                // Сохраняем participant_progress/participants для обратной совместимости
                 .set("participant_progress", toJson(ch.getParticipantProgress() != null ? ch.getParticipantProgress() : new HashMap<>()))
                 .set("participants", toJson(ch.getParticipants() != null ? ch.getParticipants() : new ArrayList<>()));
     }

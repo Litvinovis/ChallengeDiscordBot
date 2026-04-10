@@ -21,7 +21,7 @@ import java.util.Map;
  */
 @Component
 @Order(1)
-public class TopCommand implements Command {
+public class TopCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(TopCommand.class);
 
     @Autowired

@@ -1,17 +1,21 @@
 package com.discord.challengebot.service;
 
-import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.event.StreakMilestoneEvent;
 import com.discord.challengebot.model.Participant;
+import com.discord.challengebot.repository.ParticipantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -19,38 +23,27 @@ import static org.mockito.Mockito.*;
 
 /**
  * Расширенные тесты для StreakService:
- * проверяет streak-уведомления при достижении 3, 7, 30 дней.
+ * проверяет обновление серий и публикацию событий при достижении 3, 7, 30 дней.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class StreakServiceExtendedTest {
 
     @Mock
-    private IUserService userService;
+    private ParticipantRepository participantRepository;
 
     @Mock
-    private IDataStorageService dataStorageService;
-
-    @Mock
-    private IDiscordService discordService;
-
-    @Mock
-    private DiscordConfig discordConfig;
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private StreakService streakService;
-
-    @BeforeEach
-    void setUp() {
-        when(discordConfig.getReportChannel()).thenReturn("качал-очка");
-    }
 
     // ---- Базовое поведение серии ----
 
     @Test
     void testFirstActivitySetsStreakTo1() {
         Participant participant = new Participant("user1", "TestUser");
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
@@ -62,7 +55,7 @@ class StreakServiceExtendedTest {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(2);
         participant.setLastActivityDate(LocalDate.now().minusDays(1));
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
@@ -74,7 +67,7 @@ class StreakServiceExtendedTest {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(5);
         participant.setLastActivityDate(LocalDate.now());
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
@@ -86,88 +79,83 @@ class StreakServiceExtendedTest {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(10);
         participant.setLastActivityDate(LocalDate.now().minusDays(3));
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
         assertEquals(1, participant.getCurrentStreak());
     }
 
-    // ---- Уведомления при достижении порогов ----
+    // ---- Публикация событий при достижении порогов ----
 
     @Test
-    void testNotificationAt3Days() {
+    void testEventPublishedAt3Days() {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(2);
         participant.setLastActivityDate(LocalDate.now().minusDays(1));
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
         assertEquals(3, participant.getCurrentStreak());
-        verify(discordService).sendMessageToChannel(anyString(), contains("3-дневная серия"));
+        ArgumentCaptor<StreakMilestoneEvent> captor = ArgumentCaptor.forClass(StreakMilestoneEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(3, captor.getValue().streak());
+        assertEquals("user1", captor.getValue().userId());
     }
 
     @Test
-    void testNotificationAt7Days() {
+    void testEventPublishedAt7Days() {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(6);
         participant.setLastActivityDate(LocalDate.now().minusDays(1));
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
         assertEquals(7, participant.getCurrentStreak());
-        verify(discordService).sendMessageToChannel(anyString(), contains("Неделя без пропуска"));
+        ArgumentCaptor<StreakMilestoneEvent> captor = ArgumentCaptor.forClass(StreakMilestoneEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(7, captor.getValue().streak());
     }
 
     @Test
-    void testNotificationAt30Days() {
+    void testEventPublishedAt30Days() {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(29);
         participant.setLastActivityDate(LocalDate.now().minusDays(1));
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
         assertEquals(30, participant.getCurrentStreak());
-        verify(discordService).sendMessageToChannel(anyString(), contains("Легенда"));
+        ArgumentCaptor<StreakMilestoneEvent> captor = ArgumentCaptor.forClass(StreakMilestoneEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(30, captor.getValue().streak());
     }
 
     @Test
-    void testNoNotificationAt5Days() {
+    void testNoEventAt5Days() {
         Participant participant = new Participant("user1", "TestUser");
         participant.setCurrentStreak(4);
         participant.setLastActivityDate(LocalDate.now().minusDays(1));
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
         assertEquals(5, participant.getCurrentStreak());
-        verify(discordService, never()).sendMessageToChannel(anyString(), anyString());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
-    void testNoNotificationOnFirstActivity() {
+    void testNoEventOnFirstActivity() {
         Participant participant = new Participant("user1", "TestUser");
-        when(userService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
         streakService.recordActivity("user1");
 
-        // Серия 1 — нет уведомления
-        verify(discordService, never()).sendMessageToChannel(anyString(), anyString());
-    }
-
-    @Test
-    void testNotificationUsesReportChannel() {
-        Participant participant = new Participant("user1", "TestUser");
-        participant.setCurrentStreak(2);
-        participant.setLastActivityDate(LocalDate.now().minusDays(1));
-        when(userService.getParticipant("user1")).thenReturn(participant);
-
-        streakService.recordActivity("user1");
-
-        verify(discordService).sendMessageToChannel(eq("качал-очка"), anyString());
+        // Серия 1 — нет уведомления (previousStreak=0, newStreak=1 — не пороговое значение)
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     // ---- Мультипликаторы ----
@@ -201,7 +189,7 @@ class StreakServiceExtendedTest {
 
     @Test
     void testGetCurrentStreakForUnknownUser() {
-        when(userService.getParticipant("unknown")).thenReturn(null);
+        when(participantRepository.findById("unknown")).thenReturn(Optional.empty());
         assertEquals(0, streakService.getCurrentStreak("unknown"));
     }
 }

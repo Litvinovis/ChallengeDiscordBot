@@ -7,7 +7,6 @@ import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -23,9 +22,9 @@ public class VisualizationService implements IVisualizationService {
     private static final Logger logger = LoggerFactory.getLogger(VisualizationService.class);
 
     /**
-     * Сгенерировать изображение прогресса испытания (async)
+     * Сгенерировать изображение прогресса испытания.
+     * Выполняется синхронно — нет смысла в отдельном пуле при 10 запросах в сутки.
      */
-    @Async("visualizationExecutor")
     @Override
     public CompletableFuture<byte[]> generateProgressChart(ChallengeStats stats) {
         try {
@@ -51,9 +50,9 @@ public class VisualizationService implements IVisualizationService {
     }
 
     /**
-     * Сгенерировать изображение процента выполнения (async)
+     * Сгенерировать изображение процента выполнения.
+     * Выполняется синхронно — нет смысла в отдельном пуле при 10 запросах в сутки.
      */
-    @Async("visualizationExecutor")
     @Override
     public CompletableFuture<byte[]> generatePercentageChart(ChallengeStats stats) {
         try {

@@ -17,7 +17,7 @@ import org.springframework.core.annotation.Order;
  */
 @Component
 @Order(1)
-public class ResumeChallengeCommand implements Command {
+public class ResumeChallengeCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(ResumeChallengeCommand.class);
 
     @Autowired

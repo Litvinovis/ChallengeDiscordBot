@@ -1,49 +1,53 @@
 package com.discord.challengebot.service;
 
-import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.event.StreakMilestoneEvent;
 import com.discord.challengebot.model.Participant;
+import com.discord.challengebot.repository.ParticipantRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Сервис для управления сериями (streak) активности пользователей.
- * При достижении порогов (3, 7, 30 дней) отправляет поздравительное уведомление.
+ * Сервис управления сериями (streak) активности пользователей.
+ * При достижении порогов (3, 7, 30 дней) публикует {@link StreakMilestoneEvent}
+ * для отправки поздравления через DiscordService.
+ * Работает напрямую с ParticipantRepository, без промежуточного DataStorageService.
  */
 @Service
 public class StreakService {
     private static final Logger logger = LoggerFactory.getLogger(StreakService.class);
 
-    @Autowired
-    private IUserService userService;
+    private final ParticipantRepository participantRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    @Autowired
-    private IDataStorageService dataStorageService;
-
-    @Autowired
-    private IDiscordService discordService;
-
-    @Autowired
-    private DiscordConfig discordConfig;
+    /**
+     * Создаёт сервис серий активности.
+     *
+     * @param participantRepository репозиторий участников
+     * @param eventPublisher        публикатор событий Spring
+     */
+    public StreakService(ParticipantRepository participantRepository,
+                         ApplicationEventPublisher eventPublisher) {
+        this.participantRepository = participantRepository;
+        this.eventPublisher = eventPublisher;
+    }
 
     /**
      * Фиксирует активность пользователя и обновляет серию.
      * Серия сбрасывается, если пропуск более 1 дня с момента последней активности.
-     * При достижении порогов (3, 7, 30 дней) отправляется уведомление в канал.
+     * При достижении порогов (3, 7, 30 дней) публикуется {@link StreakMilestoneEvent}.
      *
      * @param userId идентификатор пользователя
      */
     public void recordActivity(String userId) {
         try {
-            if (userId == null || userId.isEmpty()) {
-                return;
-            }
+            if (userId == null || userId.isBlank()) return;
 
-            Participant participant = userService.getParticipant(userId);
+            Participant participant = participantRepository.findById(userId).orElse(null);
             if (participant == null) {
                 logger.debug("Участник {} не найден для обновления серии", userId);
                 return;
@@ -54,15 +58,13 @@ public class StreakService {
             int previousStreak = participant.getCurrentStreak();
 
             if (lastActivity == null) {
-                // Первая активность
                 participant.setCurrentStreak(1);
                 participant.setLongestStreak(1);
             } else {
                 long dayGap = ChronoUnit.DAYS.between(lastActivity, today);
                 if (dayGap == 0) {
-                    // Тот же день, без изменений
+                    // Тот же день — без изменений
                 } else if (dayGap == 1) {
-                    // Следующий день подряд
                     int newStreak = participant.getCurrentStreak() + 1;
                     participant.setCurrentStreak(newStreak);
                     if (newStreak > participant.getLongestStreak()) {
@@ -75,14 +77,14 @@ public class StreakService {
             }
 
             participant.setLastActivityDate(today);
-            dataStorageService.saveParticipant(participant);
+            participantRepository.save(participant);
 
             int newStreak = participant.getCurrentStreak();
             logger.debug("Серия пользователя {} обновлена: текущая={}", userId, newStreak);
 
-            // Отправляем уведомления о достижении порогов серии
+            // Публикуем событие при достижении порогового значения серии
             if (newStreak != previousStreak) {
-                sendStreakNotificationIfMilestone(userId, newStreak);
+                sendStreakEventIfMilestone(userId, participant.getUsername(), newStreak);
             }
         } catch (Exception e) {
             logger.error("Ошибка при обновлении серии активности для пользователя {}", userId, e);
@@ -90,55 +92,23 @@ public class StreakService {
     }
 
     /**
-     * Отправляет поздравительное уведомление при достижении порогового значения серии (3, 7, 30 дней).
-     *
-     * @param userId идентификатор пользователя
-     * @param streak текущая длина серии в днях
+     * Публикует StreakMilestoneEvent при достижении порогового значения (3, 7, 30 дней).
      */
-    private void sendStreakNotificationIfMilestone(String userId, int streak) {
-        try {
-            String message = null;
-            if (streak == 30) {
-                message = String.format("🏆 <@%s> — Месяц без пропуска! Легенда!", userId);
-            } else if (streak == 7) {
-                message = String.format("🔥🔥 <@%s> — Неделя без пропуска!", userId);
-            } else if (streak == 3) {
-                message = String.format("🔥 <@%s> — 3-дневная серия!", userId);
+    private void sendStreakEventIfMilestone(String userId, String username, int streak) {
+        if (streak == 3 || streak == 7 || streak == 30) {
+            try {
+                eventPublisher.publishEvent(new StreakMilestoneEvent(userId,
+                        username != null ? username : userId, streak));
+                logger.info("Событие серии {} дней опубликовано для пользователя {}", streak, userId);
+            } catch (Exception e) {
+                logger.error("Ошибка публикации события серии для пользователя {}", userId, e);
             }
-
-            if (message != null) {
-                String channel = resolveNotificationChannel();
-                discordService.sendMessageToChannel(channel, message);
-                logger.info("Уведомление о серии {} дней отправлено для пользователя {}", streak, userId);
-            }
-        } catch (Exception e) {
-            logger.error("Ошибка отправки уведомления о серии для пользователя {}", userId, e);
         }
     }
 
     /**
-     * Определяет канал для отправки уведомлений о сериях.
-     * Приоритет: report-channel из конфига, затем основной канал, иначе "general".
-     *
-     * @return имя канала для уведомлений
-     */
-    private String resolveNotificationChannel() {
-        if (discordConfig != null) {
-            String reportChannel = discordConfig.getReportChannel();
-            if (reportChannel != null && !reportChannel.isBlank()) {
-                return reportChannel;
-            }
-            String channel = discordConfig.getChannel();
-            if (channel != null && !channel.isBlank()) {
-                return channel;
-            }
-        }
-        return "general";
-    }
-
-    /**
-     * Возвращает множитель активности в зависимости от длины серии:
-     * серия менее 7 дней — 1.0, от 7 дней — 1.1, от 30 дней — 1.2.
+     * Возвращает множитель активности в зависимости от длины серии.
+     * Серия менее 7 дней — 1.0, от 7 дней — 1.1, от 30 дней — 1.2.
      *
      * @param streak длина серии в днях
      * @return множитель (1.0, 1.1 или 1.2)
@@ -157,9 +127,9 @@ public class StreakService {
      */
     public int getCurrentStreak(String userId) {
         try {
-            Participant participant = userService.getParticipant(userId);
-            if (participant == null) return 0;
-            return participant.getCurrentStreak();
+            return participantRepository.findById(userId)
+                    .map(Participant::getCurrentStreak)
+                    .orElse(0);
         } catch (Exception e) {
             logger.error("Ошибка при получении серии для пользователя {}", userId, e);
             return 0;

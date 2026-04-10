@@ -16,7 +16,7 @@ import org.springframework.core.annotation.Order;
  */
 @Component
 @Order(1)
-public class RegistrationCommand implements Command {
+public class RegistrationCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(RegistrationCommand.class);
 
     @Autowired

@@ -1,20 +1,24 @@
 package com.discord.challengebot.service;
 
-import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.event.AchievementUnlockedEvent;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
+import com.discord.challengebot.repository.ParticipantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,23 +27,20 @@ import static org.mockito.Mockito.*;
 
 /**
  * Расширенные тесты для AchievementService:
- * проверяет бейджи, пороги 100/500/1000/5000, и разрешение канала.
+ * проверяет бейджи, пороги 100/500/1000/5000, и публикацию событий.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AchievementServiceExtendedTest {
 
     @Mock
-    private IDiscordService discordService;
+    private ParticipantRepository participantRepository;
 
     @Mock
     private IChallengeService challengeService;
 
     @Mock
-    private IDataStorageService dataStorageService;
-
-    @Mock
-    private DiscordConfig discordConfig;
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private AchievementService achievementService;
@@ -58,21 +59,32 @@ class AchievementServiceExtendedTest {
         challenge.setEndDate(LocalDateTime.now().plusDays(30));
         challenge.setUnit("раз");
 
-        when(discordConfig.getReportChannel()).thenReturn("качал-очка");
+        // По умолчанию участник не найден — нет персистентных достижений
+        when(participantRepository.findById(anyString())).thenReturn(Optional.empty());
     }
 
     @Test
     void testNoAchievementBelowThreshold() {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 50);
-        verify(discordService, never()).sendMessageToChannel(anyString(), anyString());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
     void testAchievementAt100() {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
-        verify(discordService, times(1)).sendMessageToChannel(anyString(), contains("100"));
+        verify(eventPublisher, times(1)).publishEvent(any(AchievementUnlockedEvent.class));
+    }
+
+    @Test
+    void testAchievementAt100_containsName() {
+        when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
+        achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
+
+        ArgumentCaptor<AchievementUnlockedEvent> captor = ArgumentCaptor.forClass(AchievementUnlockedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertTrue(captor.getValue().achievementName().contains("100"), "Achievement name must mention 100");
     }
 
     @Test
@@ -80,7 +92,7 @@ class AchievementServiceExtendedTest {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 500);
         // Должны выдаться бейджи 100 и 500
-        verify(discordService, times(2)).sendMessageToChannel(anyString(), anyString());
+        verify(eventPublisher, times(2)).publishEvent(any(AchievementUnlockedEvent.class));
     }
 
     @Test
@@ -88,7 +100,7 @@ class AchievementServiceExtendedTest {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 1000);
         // Должны выдаться бейджи 100, 500 и 1000
-        verify(discordService, times(3)).sendMessageToChannel(anyString(), anyString());
+        verify(eventPublisher, times(3)).publishEvent(any(AchievementUnlockedEvent.class));
     }
 
     @Test
@@ -96,24 +108,37 @@ class AchievementServiceExtendedTest {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 5000);
         // Должны выдаться бейджи 100, 500, 1000 и 5000
-        verify(discordService, times(4)).sendMessageToChannel(anyString(), anyString());
+        verify(eventPublisher, times(4)).publishEvent(any(AchievementUnlockedEvent.class));
     }
 
     @Test
     void testAchievementAt5000_containsMilestone() {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 5000);
-        // Проверяем что последнее сообщение содержит 5000
-        verify(discordService, atLeastOnce()).sendMessageToChannel(anyString(), contains("5000"));
+
+        ArgumentCaptor<AchievementUnlockedEvent> captor = ArgumentCaptor.forClass(AchievementUnlockedEvent.class);
+        verify(eventPublisher, times(4)).publishEvent(captor.capture());
+        // Последнее событие должно содержать "5000" в имени достижения
+        boolean hasMilestone = captor.getAllValues().stream()
+                .anyMatch(e -> e.achievementName().contains("5000"));
+        assertTrue(hasMilestone, "At least one event must mention 5000");
     }
 
     @Test
     void testAchievementNotAwardedTwice() {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
+
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
+
+        // Имитируем состояние после выдачи: участник с уже записанным достижением
+        Participant participant = new Participant("user1", "user1");
+        participant.getAwardedAchievements().add("user1:test_challenge:100_reps");
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
+
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 150);
-        // Только одно объявление для рубежа 100
-        verify(discordService, times(1)).sendMessageToChannel(anyString(), anyString());
+
+        // Только одно событие (из первого вызова)
+        verify(eventPublisher, times(1)).publishEvent(any(AchievementUnlockedEvent.class));
     }
 
     @Test
@@ -125,6 +150,12 @@ class AchievementServiceExtendedTest {
     void testHasAchievementReturnsTrueAfterAwarding() {
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
+
+        // Имитируем сохранённое достижение в репозитории
+        Participant participant = new Participant("user1", "user1");
+        participant.getAwardedAchievements().add("user1:test_challenge:100_reps");
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
+
         assertTrue(achievementService.hasAchievement("user1", "test_challenge", "100_reps"));
     }
 
@@ -146,13 +177,6 @@ class AchievementServiceExtendedTest {
     }
 
     @Test
-    void testAnnouncementSentToReportChannel() {
-        when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
-        achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
-        verify(discordService).sendMessageToChannel(eq("качал-очка"), anyString());
-    }
-
-    @Test
     void testFourDistinctAchievementsDefinedInService() {
         assertEquals(4, AchievementService.ACHIEVEMENTS.size());
     }
@@ -166,49 +190,47 @@ class AchievementServiceExtendedTest {
     }
 
     /**
-     * Регрессионный тест на повторную выдачу достижений после перезапуска бота.
-     *
-     * Сценарий: пользователь уже получил достижение "100_reps" (данные сохранены
-     * в Participant в Apache Ignite). После перезапуска бота in-memory кэш пуст,
-     * но dataStorageService возвращает Participant с уже выданным достижением.
-     * При повторном вызове checkAndAwardAchievements достижение НЕ должно
-     * выдаваться снова.
+     * Регрессионный тест: достижение уже персистировано в Ignite (после перезапуска бота).
+     * При повторном вызове checkAndAwardAchievements достижение НЕ должно выдаваться снова.
      */
     @Test
     void testAlreadyPersistedAchievementIsNotReawardedAfterRestart() {
-        // Имитируем состояние после перезапуска: in-memory кэш пуст,
-        // но в Participant уже записано достижение "100_reps".
+        // Имитируем состояние после перезапуска: у Participant уже записано достижение
         Participant participant = new Participant("user1", "TestUser");
         Set<String> alreadyAwarded = new HashSet<>();
         alreadyAwarded.add("user1:test_challenge:100_reps");
         participant.setAwardedAchievements(alreadyAwarded);
 
-        when(dataStorageService.getParticipant("user1")).thenReturn(participant);
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
 
-        // Пользователь добавляет упражнения — прогресс 150 (выше порога 100)
+        // Прогресс 150 (выше порога 100), но достижение уже выдано
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 150);
 
-        // Достижение "100_reps" уже было выдано — сообщение НЕ должно отправляться
-        verify(discordService, never()).sendMessageToChannel(anyString(), anyString());
+        // Никакого события — достижение уже было выдано
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     /**
-     * Проверяет, что при повторном вызове в той же сессии (in-memory кэш заполнен)
-     * достижение также не выдаётся дважды.
+     * Проверяет, что при повторном вызове в той же сессии достижение не выдаётся дважды.
      */
     @Test
     void testAlreadyAwardedInSessionNotReawarded() {
-        when(dataStorageService.getParticipant("user1")).thenReturn(null);
         when(challengeService.getChallenge("test_challenge")).thenReturn(challenge);
 
         // Первый вызов — достижение выдаётся
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
-        // Второй вызов с тем же или большим прогрессом — достижение НЕ должно выдаваться снова
+
+        // Имитируем персистированное достижение для последующих вызовов
+        Participant participant = new Participant("user1", "user1");
+        participant.getAwardedAchievements().add("user1:test_challenge:100_reps");
+        when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
+
+        // Повторные вызовы — достижение НЕ должно выдаваться снова
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
         achievementService.checkAndAwardAchievements("user1", "test_challenge", 120);
 
-        // Только одно сообщение за всё время
-        verify(discordService, times(1)).sendMessageToChannel(anyString(), contains("100"));
+        // Только одно событие за всё время
+        verify(eventPublisher, times(1)).publishEvent(any(AchievementUnlockedEvent.class));
     }
 }

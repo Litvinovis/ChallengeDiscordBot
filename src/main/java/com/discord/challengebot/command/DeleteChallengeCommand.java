@@ -16,7 +16,7 @@ import org.springframework.core.annotation.Order;
  */
 @Component
 @Order(1)
-public class DeleteChallengeCommand implements Command {
+public class DeleteChallengeCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(DeleteChallengeCommand.class);
 
     @Autowired

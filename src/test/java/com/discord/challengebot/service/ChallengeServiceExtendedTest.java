@@ -3,6 +3,8 @@ package com.discord.challengebot.service;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
+import com.discord.challengebot.repository.ChallengeProgressRepository;
+import com.discord.challengebot.repository.ChallengeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -12,23 +14,27 @@ import org.mockito.MockitoAnnotations;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Extended tests for ChallengeService covering validation edge cases,
- * filtering methods, and update operations not covered in ChallengeServiceTest.
+ * Расширенные тесты для ChallengeService: валидационные проверки, фильтрация, обновления.
  */
 class ChallengeServiceExtendedTest {
 
     @Mock
-    private DataStorageService dataStorageService;
+    private ChallengeRepository challengeRepository;
 
     @Mock
-    private UserService userService;
+    private ChallengeProgressRepository progressRepository;
+
+    @Mock
+    private ParticipantService participantService;
 
     @InjectMocks
     private ChallengeService challengeService;
@@ -36,16 +42,18 @@ class ChallengeServiceExtendedTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // По умолчанию progressRepository возвращает пустую карту
+        when(progressRepository.findByChallengeId(anyString())).thenReturn(new HashMap<>());
     }
 
-    // ---- createChallenge validation ----
+    // ---- createChallenge — валидация ----
 
     @Test
     void createChallenge_nullName_returnsNull() {
         Challenge result = challengeService.createChallenge(null, 100L,
                 LocalDateTime.now().plusDays(10), ChallengeType.GROUP, "desc", "reps");
         assertNull(result, "Must return null for null challenge name");
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     @Test
@@ -101,7 +109,7 @@ class ChallengeServiceExtendedTest {
         Challenge inactive = new Challenge();
         inactive.setActive(false);
 
-        when(dataStorageService.getAllChallenges()).thenReturn(Arrays.asList(active, inactive));
+        when(challengeRepository.findAll()).thenReturn(Arrays.asList(active, inactive));
 
         List<Challenge> result = challengeService.getActiveChallenges();
 
@@ -111,7 +119,7 @@ class ChallengeServiceExtendedTest {
 
     @Test
     void getActiveChallenges_emptyList_returnsEmpty() {
-        when(dataStorageService.getAllChallenges()).thenReturn(Collections.emptyList());
+        when(challengeRepository.findAll()).thenReturn(Collections.emptyList());
         List<Challenge> result = challengeService.getActiveChallenges();
         assertTrue(result.isEmpty());
     }
@@ -121,12 +129,17 @@ class ChallengeServiceExtendedTest {
     @Test
     void getUserChallenges_returnsOnlyChallengesWithParticipant() {
         Challenge c1 = new Challenge();
+        c1.setId("c1");
         c1.addParticipant("user1");
 
         Challenge c2 = new Challenge();
+        c2.setId("c2");
         c2.addParticipant("user2");
 
-        when(dataStorageService.getAllChallenges()).thenReturn(Arrays.asList(c1, c2));
+        when(challengeRepository.findAll()).thenReturn(Arrays.asList(c1, c2));
+        // progressRepository возвращает пустую карту — используется fallback на participants
+        when(progressRepository.findByChallengeId("c1")).thenReturn(new HashMap<>());
+        when(progressRepository.findByChallengeId("c2")).thenReturn(new HashMap<>());
 
         List<Challenge> result = challengeService.getUserChallenges("user1");
         assertEquals(1, result.size());
@@ -137,7 +150,7 @@ class ChallengeServiceExtendedTest {
     void getUserChallenges_emptyUserId_returnsEmpty() {
         List<Challenge> result = challengeService.getUserChallenges("");
         assertTrue(result.isEmpty());
-        verify(dataStorageService, never()).getAllChallenges();
+        verify(challengeRepository, never()).findAll();
     }
 
     @Test
@@ -158,14 +171,14 @@ class ChallengeServiceExtendedTest {
 
         assertNotNull(result);
         assertFalse(result.isActive());
-        verify(dataStorageService).saveChallenge(challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
     void updateChallengeStatus_nullChallenge_returnsNull() {
         Challenge result = challengeService.updateChallengeStatus(null, false);
         assertNull(result);
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     // ---- updateChallengeTarget ----
@@ -180,7 +193,7 @@ class ChallengeServiceExtendedTest {
 
         assertNotNull(result);
         assertEquals(2000L, result.getTargetValue());
-        verify(dataStorageService).saveChallenge(challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
@@ -197,7 +210,7 @@ class ChallengeServiceExtendedTest {
         Challenge result = challengeService.updateChallengeTarget(challenge, 0L);
 
         assertEquals(1000L, result.getTargetValue(), "Target must not change for invalid value");
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     @Test
@@ -209,7 +222,7 @@ class ChallengeServiceExtendedTest {
         Challenge result = challengeService.updateChallengeTarget(challenge, -500L);
 
         assertEquals(1000L, result.getTargetValue());
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     // ---- updateChallengeEndDate ----
@@ -224,7 +237,7 @@ class ChallengeServiceExtendedTest {
 
         assertNotNull(result);
         assertEquals(newDate, result.getEndDate());
-        verify(dataStorageService).saveChallenge(challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
@@ -242,7 +255,7 @@ class ChallengeServiceExtendedTest {
         Challenge result = challengeService.updateChallengeEndDate(challenge, null);
 
         assertEquals(original, result.getEndDate());
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     // ---- removeParticipant ----
@@ -250,6 +263,7 @@ class ChallengeServiceExtendedTest {
     @Test
     void removeParticipant_removesUserAndRecalculatesTotal() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
         challenge.addParticipant("user1");
         challenge.addParticipant("user2");
@@ -257,12 +271,15 @@ class ChallengeServiceExtendedTest {
         challenge.getParticipantProgress().put("user2", 200L);
         challenge.setCurrentValue(500L);
 
+        // После удаления user1, progressRepository возвращает только user2
+        when(progressRepository.findByChallengeId("pushups")).thenReturn(Map.of("user2", 200L));
+
         Challenge result = challengeService.removeParticipant(challenge, "user1");
 
         assertNotNull(result);
         assertFalse(result.hasParticipant("user1"));
         assertEquals(200L, result.getCurrentValue(), "Total must be recalculated without user1");
-        verify(dataStorageService).saveChallenge(challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
@@ -273,12 +290,13 @@ class ChallengeServiceExtendedTest {
     @Test
     void removeParticipant_emptyUserId_returnsChallengeUnchanged() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
         challenge.addParticipant("user1");
 
         Challenge result = challengeService.removeParticipant(challenge, "");
         assertTrue(result.hasParticipant("user1"), "User1 must still be present");
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     // ---- completeChallenge ----
@@ -292,13 +310,13 @@ class ChallengeServiceExtendedTest {
         challengeService.completeChallenge(challenge);
 
         assertFalse(challenge.isActive());
-        verify(dataStorageService).saveChallenge(challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
     void completeChallenge_nullChallenge_doesNotThrow() {
         assertDoesNotThrow(() -> challengeService.completeChallenge(null));
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     // ---- getTopParticipants ----
@@ -306,10 +324,11 @@ class ChallengeServiceExtendedTest {
     @Test
     void getTopParticipants_returnsParticipantsInDescOrder() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
-        challenge.getParticipantProgress().put("alice", 1000L);
-        challenge.getParticipantProgress().put("bob", 3000L);
-        challenge.getParticipantProgress().put("carol", 2000L);
+
+        when(progressRepository.findByChallengeId("pushups")).thenReturn(Map.of(
+                "alice", 1000L, "bob", 3000L, "carol", 2000L));
 
         List<Map.Entry<String, Long>> top = challengeService.getTopParticipants(challenge, 3);
 
@@ -322,10 +341,11 @@ class ChallengeServiceExtendedTest {
     @Test
     void getTopParticipants_limitReducesResults() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
-        challenge.getParticipantProgress().put("alice", 100L);
-        challenge.getParticipantProgress().put("bob", 200L);
-        challenge.getParticipantProgress().put("carol", 300L);
+
+        when(progressRepository.findByChallengeId("pushups")).thenReturn(Map.of(
+                "alice", 100L, "bob", 200L, "carol", 300L));
 
         List<Map.Entry<String, Long>> top = challengeService.getTopParticipants(challenge, 2);
         assertEquals(2, top.size());
@@ -339,6 +359,7 @@ class ChallengeServiceExtendedTest {
     @Test
     void getTopParticipants_invalidLimit_returnsEmpty() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
         assertTrue(challengeService.getTopParticipants(challenge, 0).isEmpty());
         assertTrue(challengeService.getTopParticipants(challenge, -1).isEmpty());
@@ -349,15 +370,16 @@ class ChallengeServiceExtendedTest {
     @Test
     void addParticipantWithUsername_addsParticipantAndSetsZeroProgress() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
-        when(userService.registerForChallenge("user1", "Alice", "Pushups")).thenReturn(true);
+        when(participantService.registerForChallenge("user1", "Alice", "Pushups")).thenReturn(true);
 
         Challenge result = challengeService.addParticipantWithUsername(challenge, "user1", "Alice");
 
         assertNotNull(result);
         assertTrue(result.hasParticipant("user1"));
         assertEquals(0L, result.getParticipantProgress().get("user1"));
-        verify(dataStorageService).saveChallenge(challenge);
+        verify(challengeRepository).save(challenge);
     }
 
     @Test
@@ -368,30 +390,22 @@ class ChallengeServiceExtendedTest {
     @Test
     void addParticipantWithUsername_emptyUserId_returnsChallengeUnchanged() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
 
         Challenge result = challengeService.addParticipantWithUsername(challenge, "", "Alice");
         assertEquals(0, result.getParticipants().size());
-        verify(dataStorageService, never()).saveChallenge(any());
-    }
-
-    @Test
-    void addParticipantWithUsername_emptyUsername_returnsChallengeUnchanged() {
-        Challenge challenge = new Challenge();
-        challenge.setName("Pushups");
-
-        Challenge result = challengeService.addParticipantWithUsername(challenge, "user1", "");
-        assertEquals(0, result.getParticipants().size());
-        verify(dataStorageService, never()).saveChallenge(any());
+        verify(challengeRepository, never()).save(any());
     }
 
     @Test
     void addParticipantWithUsername_doesNotOverrideExistingProgress() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
         challenge.addParticipant("user1");
         challenge.getParticipantProgress().put("user1", 500L);
-        when(userService.registerForChallenge(anyString(), anyString(), anyString())).thenReturn(true);
+        when(participantService.registerForChallenge(anyString(), anyString(), anyString())).thenReturn(true);
 
         Challenge result = challengeService.addParticipantWithUsername(challenge, "user1", "Alice");
 
@@ -399,7 +413,7 @@ class ChallengeServiceExtendedTest {
                 "Existing progress must not be overwritten");
     }
 
-    // ---- getChallengeStats edge cases ----
+    // ---- getChallengeStats — граничные случаи ----
 
     @Test
     void getChallengeStats_nullChallenge_returnsNull() {
@@ -409,10 +423,13 @@ class ChallengeServiceExtendedTest {
     @Test
     void getChallengeStats_goalExceeded_percentageAbove100() {
         Challenge challenge = new Challenge();
+        challenge.setId("pushups");
         challenge.setName("Pushups");
         challenge.setTargetValue(100L);
         challenge.setCurrentValue(120L);
         challenge.setEndDate(LocalDateTime.now().plusDays(5));
+
+        when(progressRepository.findByChallengeId("pushups")).thenReturn(Map.of("user1", 120L));
 
         ChallengeStats stats = challengeService.getChallengeStats(challenge);
 
