@@ -21,7 +21,7 @@ import java.util.List;
  */
 @Component
 @Order(1)
-public class StatsCommand implements Command {
+public class StatsCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(StatsCommand.class);
 
     @Autowired

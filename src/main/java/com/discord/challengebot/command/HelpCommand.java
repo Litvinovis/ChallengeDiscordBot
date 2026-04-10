@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Order(1)
-public class HelpCommand implements Command {
+public class HelpCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(HelpCommand.class);
 
     @Autowired

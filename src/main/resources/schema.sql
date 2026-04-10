@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS challenges (
     participants         VARCHAR NOT NULL DEFAULT '[]'
 ) ZONE challengebot;
 
+-- Нормализованная таблица прогресса участников (challenge_progress)
+-- Заменяет JSON-колонку participant_progress в таблице challenges
+CREATE TABLE IF NOT EXISTS challenge_progress (
+    challenge_id VARCHAR NOT NULL,
+    user_id      VARCHAR NOT NULL,
+    progress     BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (challenge_id, user_id)
+) ZONE challengebot;
+
 -- Таблица участников (participants)
 -- registered_challenges хранится как JSON: ["challengeName1", ...]
 -- awarded_achievements хранится как JSON: ["key1", ...]

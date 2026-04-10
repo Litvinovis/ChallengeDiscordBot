@@ -31,12 +31,12 @@ public class StatisticsService implements IStatisticsService {
     private static final int MAX_HISTORY_PER_KEY = 365;
     private final Map<String, List<Long>> progressHistoryCache = new ConcurrentHashMap<>();
 
-    // Добавляем зависимости
+    // Зависимости для получения имён пользователей при форматировании лидербордов
     private DiscordService discordService;
-    private UserService userService;
-    
+    private ParticipantService participantService;
+
     /**
-     * Устанавливает зависимость на {@link DiscordService} (вызывается вручную для обхода циклической зависимости).
+     * Устанавливает DiscordService (вызывается из DiscordService.init для обхода циклической зависимости).
      *
      * @param discordService сервис Discord
      */
@@ -45,12 +45,12 @@ public class StatisticsService implements IStatisticsService {
     }
 
     /**
-     * Устанавливает зависимость на {@link UserService} (вызывается вручную для обхода циклической зависимости).
+     * Устанавливает ParticipantService (вызывается из DiscordService.init для обхода циклической зависимости).
      *
-     * @param userService сервис пользователей
+     * @param participantService сервис участников
      */
-    public void setUserService(UserService userService) {
-        this.userService = userService;
+    public void setParticipantService(ParticipantService participantService) {
+        this.participantService = participantService;
     }
     
     /**
@@ -305,82 +305,25 @@ public class StatisticsService implements IStatisticsService {
                     logger.debug("Обработка пользователя с ID: {}", userId);
                     
                     // Пытаемся получить имя пользователя из кэша
-                    if (userService != null) {
-                        logger.debug("UserService доступен, попытка получить информацию об участнике: {}", userId);
+                    if (participantService != null) {
                         try {
-                            Participant participant = userService.getParticipant(userId);
-                            if (participant != null) {
-                                logger.debug("Участник найден в кэше: {}, имя пользователя: {}", userId, participant.getUsername());
-                                if (participant.getUsername() != null && !participant.getUsername().isEmpty()) {
-                                    username = participant.getUsername();
-                                    logger.debug("Используем имя пользователя из кэша: {}", username);
-                                } else {
-                                    logger.debug("Имя пользователя в кэше пустое для участника: {}", userId);
-                                }
-                            } else {
-                                logger.debug("Участник не найден в кэше: {}", userId);
-                                if (discordService != null) {
-                                    // Если в кэше нет имени, пытаемся получить его через Discord API
-                                    logger.debug("Попытка получить имя пользователя через Discord API: {}", userId);
-                                    User user = discordService.getJDA().getUserById(userId);
-                                    if (user != null) {
-                                        username = user.getName();
-                                        logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
-                                        // Обновляем кэш UserService с новым именем пользователя
-                                        try {
-                                            logger.debug("Обновление кэша UserService для пользователя: {}", userId);
-                                            // Пытаемся получить текущие испытания пользователя для сохранения их при обновлении
-                                            List<com.discord.challengebot.model.Challenge> userChallenges = userService.getRegisteredChallenges(userId);
-                                            logger.debug("Получено {} зарегистрированных испытаний для пользователя: {}", userChallenges.size(), userId);
-                                            if (!userChallenges.isEmpty()) {
-                                                // Если у пользователя есть зарегистрированные испытания, обновляем имя в кэше
-                                                for (com.discord.challengebot.model.Challenge userChallenge : userChallenges) {
-                                                    logger.debug("Регистрация пользователя {} с именем {} на испытание {}", userId, username, userChallenge.getName());
-                                                    userService.registerForChallenge(userId, username, userChallenge.getName());
-                                                }
-                                            } else {
-                                                // Если у пользователя нет зарегистрированных испытаний, 
-                                                // но он есть в таблице лидеров, регистрируем его на текущее испытание
-                                                logger.debug("У пользователя {} нет зарегистрированных испытаний, регистрируем на текущее испытание {}", userId, challenge.getName());
-                                                userService.registerForChallenge(userId, username, challenge.getName());
-                                                
-                                                // Проверяем, что участник был успешно зарегистрирован
-                                                Participant registeredParticipant = userService.getParticipant(userId);
-                                                if (registeredParticipant != null) {
-                                                    logger.debug("Участник {} успешно зарегистрирован на испытание {}, имя в кэше: {}", 
-                                                                userId, challenge.getName(), registeredParticipant.getUsername());
-                                                } else {
-                                                    logger.warn("Не удалось зарегистрировать участника {} на испытание {}", userId, challenge.getName());
-                                                }
-                                            }
-                                        } catch (Exception cacheUpdateException) {
-                                            logger.debug("Не удалось обновить имя пользователя {} в кэше: {}", userId, cacheUpdateException.getMessage());
-                                        }
-                                    } else {
-                                        logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
-                                    }
-                                }
+                            Participant participant = participantService.getParticipant(userId);
+                            if (participant != null && participant.getUsername() != null
+                                    && !participant.getUsername().isEmpty()) {
+                                username = participant.getUsername();
+                            } else if (discordService != null) {
+                                User user = discordService.getJDA().getUserById(userId);
+                                if (user != null) username = user.getName();
                             }
                         } catch (Exception e) {
                             logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
-                            // Используем ID как запасной вариант
                         }
-                    } else {
-                        logger.debug("UserService недоступен");
-                        if (discordService != null) {
-                            // Если нет UserService, пытаемся получить имя через Discord API
-                            logger.debug("Попытка получить имя пользователя через Discord API (UserService недоступен): {}", userId);
-                            try {
-                                User user = discordService.getJDA().getUserById(userId);
-                                if (user != null) {
-                                    username = user.getName();
-                                    logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
-                                } else {
-                                    logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
-                                }
-                            } catch (Exception e) {
-                                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
-                            }
+                    } else if (discordService != null) {
+                        try {
+                            User user = discordService.getJDA().getUserById(userId);
+                            if (user != null) username = user.getName();
+                        } catch (Exception e) {
+                            logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
                         }
                     }
                     
@@ -464,82 +407,25 @@ public class StatisticsService implements IStatisticsService {
                     logger.debug("Обработка пользователя с ID: {}", userId);
                     
                     // Пытаемся получить имя пользователя из кэша
-                    if (userService != null) {
-                        logger.debug("UserService доступен, попытка получить информацию об участнике: {}", userId);
+                    if (participantService != null) {
                         try {
-                            Participant participant = userService.getParticipant(userId);
-                            if (participant != null) {
-                                logger.debug("Участник найден в кэше: {}, имя пользователя: {}", userId, participant.getUsername());
-                                if (participant.getUsername() != null && !participant.getUsername().isEmpty()) {
-                                    username = participant.getUsername();
-                                    logger.debug("Используем имя пользователя из кэша: {}", username);
-                                } else {
-                                    logger.debug("Имя пользователя в кэше пустое для участника: {}", userId);
-                                }
-                            } else {
-                                logger.debug("Участник не найден в кэше: {}", userId);
-                                if (discordService != null) {
-                                    // Если в кэше нет имени, пытаемся получить его через Discord API
-                                    logger.debug("Попытка получить имя пользователя через Discord API: {}", userId);
-                                    User user = discordService.getJDA().getUserById(userId);
-                                    if (user != null) {
-                                        username = user.getName();
-                                        logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
-                                        // Обновляем кэш UserService с новым именем пользователя
-                                        try {
-                                            logger.debug("Обновление кэша UserService для пользователя: {}", userId);
-                                            // Пытаемся получить текущие испытания пользователя для сохранения их при обновлении
-                                            List<com.discord.challengebot.model.Challenge> userChallenges = userService.getRegisteredChallenges(userId);
-                                            logger.debug("Получено {} зарегистрированных испытаний для пользователя: {}", userChallenges.size(), userId);
-                                            if (!userChallenges.isEmpty()) {
-                                                // Если у пользователя есть зарегистрированные испытания, обновляем имя в кэше
-                                                for (com.discord.challengebot.model.Challenge userChallenge : userChallenges) {
-                                                    logger.debug("Регистрация пользователя {} с именем {} на испытание {}", userId, username, userChallenge.getName());
-                                                    userService.registerForChallenge(userId, username, userChallenge.getName());
-                                                }
-                                            } else {
-                                                // Если у пользователя нет зарегистрированных испытаний, 
-                                                // но он есть в таблице лидеров, регистрируем его на текущее испытание
-                                                logger.debug("У пользователя {} нет зарегистрированных испытаний, регистрируем на текущее испытание {}", userId, challenge.getName());
-                                                userService.registerForChallenge(userId, username, challenge.getName());
-                                                
-                                                // Проверяем, что участник был успешно зарегистрирован
-                                                Participant registeredParticipant = userService.getParticipant(userId);
-                                                if (registeredParticipant != null) {
-                                                    logger.debug("Участник {} успешно зарегистрирован на испытание {}, имя в кэше: {}", 
-                                                                userId, challenge.getName(), registeredParticipant.getUsername());
-                                                } else {
-                                                    logger.warn("Не удалось зарегистрировать участника {} на испытание {}", userId, challenge.getName());
-                                                }
-                                            }
-                                        } catch (Exception cacheUpdateException) {
-                                            logger.debug("Не удалось обновить имя пользователя {} в кэше: {}", userId, cacheUpdateException.getMessage());
-                                        }
-                                    } else {
-                                        logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
-                                    }
-                                }
+                            Participant participant = participantService.getParticipant(userId);
+                            if (participant != null && participant.getUsername() != null
+                                    && !participant.getUsername().isEmpty()) {
+                                username = participant.getUsername();
+                            } else if (discordService != null) {
+                                User user = discordService.getJDA().getUserById(userId);
+                                if (user != null) username = user.getName();
                             }
                         } catch (Exception e) {
                             logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
-                            // Используем ID как запасной вариант
                         }
-                    } else {
-                        logger.debug("UserService недоступен");
-                        if (discordService != null) {
-                            // Если нет UserService, пытаемся получить имя через Discord API
-                            logger.debug("Попытка получить имя пользователя через Discord API (UserService недоступен): {}", userId);
-                            try {
-                                User user = discordService.getJDA().getUserById(userId);
-                                if (user != null) {
-                                    username = user.getName();
-                                    logger.debug("Имя пользователя получено через Discord API: {} для ID: {}", username, userId);
-                                } else {
-                                    logger.debug("Не удалось получить пользователя через Discord API для ID: {}", userId);
-                                }
-                            } catch (Exception e) {
-                                logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
-                            }
+                    } else if (discordService != null) {
+                        try {
+                            User user = discordService.getJDA().getUserById(userId);
+                            if (user != null) username = user.getName();
+                        } catch (Exception e) {
+                            logger.debug("Не удалось получить имя пользователя для ID {}: {}", userId, e.getMessage());
                         }
                     }
                     

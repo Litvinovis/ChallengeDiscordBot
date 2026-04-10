@@ -126,12 +126,22 @@ public class DiscordMessageListener extends ListenerAdapter {
             // Find and execute the matching command via CommandRegistry
             Optional<Command> matchedCommand = commandRegistry.findCommand(commandName);
             if (matchedCommand.isPresent()) {
-                matchedCommand.get().execute(event, parts, userId, username);
+                try {
+                    matchedCommand.get().execute(event, parts, userId, username);
+                } catch (Exception ex) {
+                    logger.error("Ошибка выполнения команды '{}': {}", parts[0], ex.getMessage(), ex);
+                    event.getChannel().sendMessage("⚠️ Произошла внутренняя ошибка. Попробуйте позже.").queue();
+                }
             } else {
                 // Fallback: let DefaultProgressCommand handle it
-                commandRegistry.findCommand("__default__").ifPresent(
-                        cmd -> cmd.execute(event, parts, userId, username)
-                );
+                commandRegistry.findCommand("__default__").ifPresent(cmd -> {
+                    try {
+                        cmd.execute(event, parts, userId, username);
+                    } catch (Exception ex) {
+                        logger.error("Ошибка выполнения команды по умолчанию '{}': {}", parts[0], ex.getMessage(), ex);
+                        event.getChannel().sendMessage("⚠️ Произошла внутренняя ошибка. Попробуйте позже.").queue();
+                    }
+                });
             }
         } catch (Exception e) {
             logger.error("Ошибка обработки команды '{}' от пользователя {}", command, username, e);

@@ -19,7 +19,7 @@ import java.util.List;
  */
 @Component
 @Order(1)
-public class MyCommand implements Command {
+public class MyCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(MyCommand.class);
 
     @Autowired

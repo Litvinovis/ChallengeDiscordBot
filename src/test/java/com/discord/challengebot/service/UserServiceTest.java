@@ -2,27 +2,36 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.model.Participant;
+import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ParticipantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Collections;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * Тесты для ParticipantService (переименованные из UserServiceTest после рефакторинга).
+ * UserService удалён — его функциональность объединена в ParticipantService.
+ */
 class UserServiceTest {
 
     @Mock
     private DiscordConfig discordConfig;
 
     @Mock
-    private DataStorageService dataStorageService;
+    private ParticipantRepository participantRepository;
+
+    @Mock
+    private ChallengeRepository challengeRepository;
 
     @InjectMocks
-    private UserService userService;
+    private ParticipantService participantService;
 
     @BeforeEach
     void setUp() {
@@ -35,7 +44,7 @@ class UserServiceTest {
         when(discordConfig.getAdminUserIds()).thenReturn(null);
         when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
 
-        boolean isAdmin = userService.isAdminUser(adminUserId);
+        boolean isAdmin = participantService.isAdminUser(adminUserId);
 
         assertTrue(isAdmin);
         verify(discordConfig, atLeastOnce()).getAdminUserId();
@@ -48,7 +57,7 @@ class UserServiceTest {
         when(discordConfig.getAdminUserIds()).thenReturn(null);
         when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
 
-        boolean isAdmin = userService.isAdminUser(regularUserId);
+        boolean isAdmin = participantService.isAdminUser(regularUserId);
 
         assertFalse(isAdmin);
         verify(discordConfig, atLeastOnce()).getAdminUserId();
@@ -59,31 +68,29 @@ class UserServiceTest {
         String userId = "12345";
         String username = "testuser";
         String challengeName = "Отжимания";
-        
-        // Мокаем поведение dataStorageService
-        when(dataStorageService.getParticipant(userId)).thenReturn(null);
 
-        boolean result = userService.registerForChallenge(userId, username, challengeName);
+        when(participantRepository.findById(userId)).thenReturn(Optional.empty());
+
+        boolean result = participantService.registerForChallenge(userId, username, challengeName);
 
         assertTrue(result);
-        verify(dataStorageService).getParticipant(userId);
-        verify(dataStorageService).saveParticipant(any(Participant.class));
+        verify(participantRepository).findById(userId);
+        verify(participantRepository).save(any(Participant.class));
     }
 
     @Test
     void testUnregisterFromChallenge() {
         String userId = "12345";
         String challengeName = "Отжимания";
-        
-        // Мокаем поведение dataStorageService
+
         Participant participant = new Participant(userId, "testuser");
         participant.addChallenge(challengeName);
-        when(dataStorageService.getParticipant(userId)).thenReturn(participant);
+        when(participantRepository.findById(userId)).thenReturn(Optional.of(participant));
 
-        boolean result = userService.unregisterFromChallenge(userId, challengeName);
+        boolean result = participantService.unregisterFromChallenge(userId, challengeName);
 
         assertTrue(result);
-        verify(dataStorageService).getParticipant(userId);
-        verify(dataStorageService).saveParticipant(any(Participant.class));
+        verify(participantRepository).findById(userId);
+        verify(participantRepository).save(any(Participant.class));
     }
 }

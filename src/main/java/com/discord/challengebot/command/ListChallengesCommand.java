@@ -17,7 +17,7 @@ import java.util.List;
  */
 @Component
 @Order(1)
-public class ListChallengesCommand implements Command {
+public class ListChallengesCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(ListChallengesCommand.class);
 
     @Autowired

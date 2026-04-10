@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE)
-public class DefaultProgressCommand implements Command {
+public class DefaultProgressCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(DefaultProgressCommand.class);
 
     @Autowired

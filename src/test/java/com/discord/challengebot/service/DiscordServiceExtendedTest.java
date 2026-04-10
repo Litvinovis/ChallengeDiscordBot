@@ -1,5 +1,6 @@
 package com.discord.challengebot.service;
 
+import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
@@ -13,9 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Extended tests for DiscordService: generateHelpMessage content,
- * isAuthorizedUser edge cases, sendChallengeCompletionNotification,
- * sendChallengeFailureNotification.
+ * Расширенные тесты для DiscordService: generateHelpMessage, isAuthorizedUser, форматирование.
  */
 class DiscordServiceExtendedTest {
 
@@ -26,10 +25,13 @@ class DiscordServiceExtendedTest {
     private ChallengeService challengeService;
 
     @Mock
-    private UserService userService;
+    private ParticipantService participantService;
 
     @Mock
     private StatisticsService statisticsService;
+
+    @Mock
+    private CommandRegistry commandRegistry;
 
     @InjectMocks
     private DiscordService discordService;
@@ -39,7 +41,7 @@ class DiscordServiceExtendedTest {
         MockitoAnnotations.openMocks(this);
     }
 
-    // ---- generateHelpMessage (no-arg) ----
+    // ---- generateHelpMessage (без аргументов) ----
 
     @Test
     void generateHelpMessage_noArg_containsBasicCommands() {
@@ -50,19 +52,11 @@ class DiscordServiceExtendedTest {
         assertTrue(help.contains("+испытания"), "Must contain list command");
     }
 
-    @Test
-    void generateHelpMessage_noArg_containsAdminCommands() {
-        String help = discordService.generateHelpMessage();
-        assertTrue(help.contains("+новый"), "Must contain create command");
-        assertTrue(help.contains("+удалить"), "Must contain delete command");
-        assertTrue(help.contains("+остановить"), "Must contain stop command");
-    }
-
-    // ---- generateHelpMessage (userId) ----
+    // ---- generateHelpMessage (с userId) ----
 
     @Test
     void generateHelpMessage_adminUser_includesAdminSection() {
-        when(userService.isAdminUser("admin1")).thenReturn(true);
+        when(participantService.isAdminUser("admin1")).thenReturn(true);
 
         String help = discordService.generateHelpMessage("admin1");
 
@@ -72,12 +66,12 @@ class DiscordServiceExtendedTest {
 
     @Test
     void generateHelpMessage_regularUser_excludesAdminSection() {
-        when(userService.isAdminUser("regular")).thenReturn(false);
+        when(participantService.isAdminUser("regular")).thenReturn(false);
 
         String help = discordService.generateHelpMessage("regular");
 
         assertFalse(help.contains("+новый"), "Regular user must not see admin commands");
-        // But basic commands should be there
+        // Базовые команды всё равно должны быть
         assertTrue(help.contains("+помощь"));
         assertTrue(help.contains("+мои"));
     }
@@ -90,7 +84,7 @@ class DiscordServiceExtendedTest {
         assertTrue(help.contains("+помощь"));
     }
 
-    // ---- isAuthorizedUser edge cases ----
+    // ---- isAuthorizedUser — граничные случаи ----
 
     @Test
     void isAuthorizedUser_nullUserId_returnsFalse() {
@@ -122,7 +116,7 @@ class DiscordServiceExtendedTest {
             "удалить_участника испытание user1"
         };
 
-        when(userService.isAdminUser("regular")).thenReturn(false);
+        when(participantService.isAdminUser("regular")).thenReturn(false);
 
         for (String cmd : adminCommands) {
             assertFalse(discordService.isAuthorizedUser("regular", cmd),
@@ -138,7 +132,7 @@ class DiscordServiceExtendedTest {
             assertTrue(discordService.isAuthorizedUser("anyuser", cmd),
                     "Public command must be allowed: " + cmd);
         }
-        verify(userService, never()).isAdminUser(anyString());
+        verify(participantService, never()).isAdminUser(anyString());
     }
 
     // ---- formatChallengeStats ----

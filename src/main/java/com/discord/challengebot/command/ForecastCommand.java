@@ -22,7 +22,7 @@ import java.util.Arrays;
  */
 @Component
 @Order(1)
-public class ForecastCommand implements Command {
+public class ForecastCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(ForecastCommand.class);
 
     @Autowired

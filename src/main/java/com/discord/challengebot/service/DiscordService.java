@@ -3,6 +3,8 @@ package com.discord.challengebot.service;
 import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
+import com.discord.challengebot.event.AchievementUnlockedEvent;
+import com.discord.challengebot.event.StreakMilestoneEvent;
 import com.discord.challengebot.model.Challenge;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -12,8 +14,8 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.FileUpload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -22,46 +24,58 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Сервис для взаимодействия с Discord
+ * Сервис взаимодействия с Discord.
+ * Инициализирует JDA, отправляет сообщения, обрабатывает Spring-события достижений и серий.
+ * Циклические зависимости устранены через @EventListener вместо прямых вызовов.
  */
 @Service
 public class DiscordService implements IDiscordService {
     private static final Logger logger = LoggerFactory.getLogger(DiscordService.class);
-    
-    @Autowired
-    private DiscordConfig discordConfig;
 
-    @Autowired
-    private ChallengeService challengeService;
-
-    @Autowired
-    private UserService userService;
-
-    @Autowired
-    private StatisticsService statisticsService;
-
-    @Autowired
-    @Lazy
-    private CommandRegistry commandRegistry;
+    private final DiscordConfig discordConfig;
+    private final ChallengeService challengeService;
+    private final ParticipantService participantService;
+    private final StatisticsService statisticsService;
+    private final CommandRegistry commandRegistry;
 
     private JDA jda;
 
     /**
-     * Инициализирует Discord бота: создаёт экземпляр JDA, регистрирует слушатель событий
-     * и ожидает готовности к работе.
+     * Создаёт сервис Discord.
+     *
+     * @param discordConfig      конфигурация Discord бота
+     * @param challengeService   сервис управления испытаниями
+     * @param participantService сервис управления участниками
+     * @param statisticsService  сервис статистики
+     * @param commandRegistry    реестр команд
+     */
+    public DiscordService(DiscordConfig discordConfig,
+                          ChallengeService challengeService,
+                          ParticipantService participantService,
+                          StatisticsService statisticsService,
+                          @Lazy CommandRegistry commandRegistry) {
+        this.discordConfig = discordConfig;
+        this.challengeService = challengeService;
+        this.participantService = participantService;
+        this.statisticsService = statisticsService;
+        this.commandRegistry = commandRegistry;
+    }
+
+    /**
+     * Инициализирует Discord бота: создаёт JDA, регистрирует слушатель событий.
      */
     @PostConstruct
     public void init() {
         try {
             logger.info("Инициализация Discord бота");
-            
-            // Устанавливаем ссылку на DiscordService в StatisticsService ДО создания DiscordMessageListener
+            // Передаём ссылки на сервисы для форматирования лидербордов (обход цикл. зависимости)
             statisticsService.setDiscordService(this);
-            statisticsService.setUserService(userService);
-            
+            statisticsService.setParticipantService(participantService);
             jda = JDABuilder.createDefault(discordConfig.getToken())
                     .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
-                    .addEventListeners(new DiscordMessageListener(this, discordConfig, challengeService, userService, statisticsService, commandRegistry))
+                    .addEventListeners(new DiscordMessageListener(
+                            this, discordConfig, challengeService, participantService,
+                            statisticsService, commandRegistry))
                     .build();
             jda.awaitReady();
             logger.info("Discord бот успешно инициализирован");
@@ -79,7 +93,6 @@ public class DiscordService implements IDiscordService {
             if (jda != null) {
                 logger.info("Выключение Discord бота");
                 jda.shutdown();
-                logger.info("Discord бот успешно выключен");
             }
         } catch (Exception e) {
             logger.error("Ошибка при выключении Discord бота", e);
@@ -87,173 +100,138 @@ public class DiscordService implements IDiscordService {
     }
 
     /**
-     * Получить экземпляр JDA
+     * Возвращает экземпляр JDA.
      */
     public JDA getJDA() {
         return jda;
     }
 
+    // ---- Обработчики событий Spring ----
+
     /**
-     * Отправить сообщение в канал Discord
+     * Слушатель события разблокировки достижения.
+     * Отправляет поздравление в канал объявлений.
+     *
+     * @param event событие достижения
      */
-    public void sendMessage(String channelId, String message) {
+    @EventListener
+    public void onAchievementUnlocked(AchievementUnlockedEvent event) {
         try {
-            if (channelId == null || channelId.isEmpty()) {
-                logger.warn("Попытка отправить сообщение в канал с пустым ID");
-                return;
-            }
-            
-            if (message == null || message.isEmpty()) {
-                logger.warn("Попытка отправить пустое сообщение");
-                return;
-            }
-            
-            TextChannel channel = jda.getTextChannelById(channelId);
-            if (channel != null) {
-                channel.sendMessage(message).queue();
-                logger.info("Сообщение отправлено в канал: {}", message);
-            } else {
-                logger.warn("Канал с ID {} не найден", channelId);
-            }
+            String channel = resolveAnnouncementChannel();
+            String message = String.format(
+                    "🏆 <@%s> получил достижение **%s**! В испытании %s",
+                    event.userId(), event.achievementName(), event.challengeName());
+            sendMessageToChannel(channel, message);
         } catch (Exception e) {
-            logger.error("Ошибка отправки сообщения в Discord в канал {}", channelId, e);
+            logger.error("Ошибка отправки уведомления о достижении для пользователя {}", event.userId(), e);
         }
     }
 
     /**
-     * Отправить сообщение в канал по имени
+     * Слушатель события достижения порогового значения серии активности.
+     * Отправляет поздравление в канал уведомлений.
+     *
+     * @param event событие серии
      */
+    @EventListener
+    public void onStreakMilestone(StreakMilestoneEvent event) {
+        try {
+            String message = switch (event.streak()) {
+                case 30 -> String.format("🏆 <@%s> — Месяц без пропуска! Легенда!", event.userId());
+                case 7  -> String.format("🔥🔥 <@%s> — Неделя без пропуска!", event.userId());
+                case 3  -> String.format("🔥 <@%s> — 3-дневная серия!", event.userId());
+                default -> null;
+            };
+            if (message != null) {
+                sendMessageToChannel(resolveAnnouncementChannel(), message);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка отправки уведомления о серии для пользователя {}", event.userId(), e);
+        }
+    }
+
+    // ---- Методы отправки сообщений ----
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void sendMessage(String channelId, String message) {
+        try {
+            if (channelId == null || channelId.isBlank() || message == null || message.isBlank()) return;
+            TextChannel channel = jda.getTextChannelById(channelId);
+            if (channel != null) {
+                channel.sendMessage(message).queue();
+            } else {
+                logger.warn("Канал с ID {} не найден", channelId);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка отправки сообщения в канал {}", channelId, e);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void sendMessageToChannel(String channelName, String message) {
         try {
-            if (channelName == null || channelName.isEmpty()) {
-                logger.warn("Попытка отправить сообщение в канал с пустым именем");
-                return;
-            }
-            
-            if (message == null || message.isEmpty()) {
-                logger.warn("Попытка отправить пустое сообщение");
-                return;
-            }
-            
+            if (channelName == null || channelName.isBlank() || message == null || message.isBlank()) return;
             TextChannel channel = null;
-            
-            // Если указан конкретный сервер для отчетов, ищем канал на этом сервере
-            if (discordConfig.getReportGuildId() != null && !discordConfig.getReportGuildId().isEmpty()) {
+            if (discordConfig.getReportGuildId() != null && !discordConfig.getReportGuildId().isBlank()) {
                 Guild guild = jda.getGuildById(discordConfig.getReportGuildId());
                 if (guild != null) {
                     channel = guild.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
-                    if (channel != null) {
-                        logger.debug("Канал '{}' найден на сервере с ID {}", channelName, discordConfig.getReportGuildId());
-                    }
-                } else {
-                    logger.warn("Сервер с ID {} не найден", discordConfig.getReportGuildId());
                 }
             }
-            
-            // Если не нашли канал на указанном сервере или сервер не указан, ищем на всех серверах
             if (channel == null) {
                 channel = jda.getTextChannelsByName(channelName, true).stream().findFirst().orElse(null);
-                if (channel != null) {
-                    logger.debug("Канал '{}' найден на одном из серверов", channelName);
-                }
             }
-            
             if (channel != null) {
                 channel.sendMessage(message).queue();
-                logger.info("Сообщение отправлено в канал {}: {}", channelName, message);
             } else {
                 logger.warn("Канал с именем {} не найден", channelName);
             }
         } catch (Exception e) {
-            logger.error("Ошибка отправки сообщения в Discord в канал {}", channelName, e);
+            logger.error("Ошибка отправки сообщения в канал {}", channelName, e);
         }
     }
 
     /**
-     * Отправить сообщение с визуализацией
+     * {@inheritDoc}
      */
+    @Override
     public void sendMessageWithVisualization(String channelId, String message, byte[] image) {
         try {
-            if (channelId == null || channelId.isEmpty()) {
-                logger.warn("Попытка отправить сообщение с визуализацией в канал с пустым ID");
-                return;
-            }
-            
-            if (message == null || message.isEmpty()) {
-                logger.warn("Попытка отправить сообщение с визуализацией с пустым текстом");
-                return;
-            }
-            
+            if (channelId == null || channelId.isBlank()) return;
             TextChannel channel = jda.getTextChannelById(channelId);
             if (channel != null) {
                 if (image != null && image.length > 0) {
-                    // Отправка сообщения с изображением
                     channel.sendMessage(message).addFiles(FileUpload.fromData(image, "chart.png")).queue();
                 } else {
-                    // Отправка только текстового сообщения
                     channel.sendMessage(message).queue();
                 }
-                logger.info("Сообщение с визуализацией отправлено в канал");
-            } else {
-                logger.warn("Канал с ID {} не найден", channelId);
             }
         } catch (Exception e) {
-            logger.error("Ошибка отправки сообщения с визуализацией в Discord в канал {}", channelId, e);
+            logger.error("Ошибка отправки сообщения с визуализацией в канал {}", channelId, e);
         }
     }
 
     /**
-     * Сгенерировать сообщение справки
+     * {@inheritDoc}
      */
+    @Override
     public String generateHelpMessage() {
-        try {
-            logger.debug("Генерация сообщения справки");
-
-	        String sb = """
-					        **Справка по командам бота**
-
-					        **Основные команды:**
-					        `+<испытание> <количество>` - Добавить прогресс к испытанию (например: `+отжимания 10`)
-					        `+статистика` - Показать статистику по всем испытаниям
-					        `+статистика <испытание>` - Показать статистику по конкретному испытанию
-					        `+испытания` - Показать список всех активных испытаний
-					        `+помощь` - Показать эту справку
-
-					        **Команды управления испытаниями (только для администраторов):**
-					        `+новый <название> <цель> [дата окончания] [тип]` - Создать новое испытание
-					        `+удалить <название>` - Удалить испытание
-					        `+остановить <название>` - Остановить активное испытание
-					        `+продолжить <название>` - Продолжить остановленное испытание
-					        `+изменить <название> <новая цель>` - Изменить цель испытания
-					        `+изменить_дату <название> <новая дата>` - Изменить дату окончания испытания
-					        `+установить_прогресс <испытание> <пользователь> <количество>` - Установить прогресс участника
-					        `+добавить_участника <испытание> <пользователь>` - Добавить участника в испытание
-					        `+удалить_участника <испытание> <пользователь>` - Удалить участника из испытания
-
-					        **Команды пользователя:**
-					        `+мои` - Показать личные испытания
-					        `+топ <испытание> [количество]` - Показать таблицу лидеров по испытанию
-					        `+прогресс <испытание>` - Показать личный прогресс по испытанию
-					        `+прогноз <испытание>` - Прогноз даты завершения при текущем темпе
-					        `+регистрация <название>` - Зарегистрироваться на испытание
-					        `+обновить_имя [новое имя]` - Обновить ваше имя в системе
-					        """;
-            
-            logger.debug("Сообщение справки успешно сгенерировано");
-            return sb;
-        } catch (Exception e) {
-            logger.error("Ошибка при генерации сообщения справки", e);
-            return "**Ошибка при генерации справки. Пожалуйста, попробуйте позже.**";
-        }
+        return generateHelpMessage(null);
     }
-    
+
     /**
-     * Сгенерировать сообщение справки для конкретного пользователя
+     * {@inheritDoc}
      */
+    @Override
     public String generateHelpMessage(String userId) {
         try {
-            logger.debug("Генерация сообщения справки для пользователя: {}", userId);
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.append("""
                     **Справка по командам бота**
 
@@ -265,10 +243,7 @@ public class DiscordService implements IDiscordService {
                     `+помощь` - Показать эту справку
 
                     """);
-            
-            // Проверяем, является ли пользователь администратором
-            boolean isAdmin = (userId != null) && userService.isAdminUser(userId);
-            
+            boolean isAdmin = userId != null && participantService.isAdminUser(userId);
             if (isAdmin) {
                 sb.append("""
                         **Команды управления испытаниями (только для администраторов):**
@@ -284,7 +259,6 @@ public class DiscordService implements IDiscordService {
 
                         """);
             }
-            
             sb.append("""
                     **Команды пользователя:**
                     `+мои` - Показать личные испытания
@@ -294,8 +268,6 @@ public class DiscordService implements IDiscordService {
                     `+регистрация <название>` - Зарегистрироваться на испытание
                     `+обновить_имя [новое имя]` - Обновить ваше имя в системе
                     """);
-            
-            logger.debug("Сообщение справки успешно сгенерировано");
             return sb.toString();
         } catch (Exception e) {
             logger.error("Ошибка при генерации сообщения справки", e);
@@ -304,148 +276,119 @@ public class DiscordService implements IDiscordService {
     }
 
     /**
-     * Отправить ежедневный отчет
+     * {@inheritDoc}
      */
+    @Override
     public void sendDailyReport() {
         try {
-            logger.info("Отправка ежедневного отчета");
-            // Получаем все активные испытания
-            List<Challenge> challenges = challengeService.getAllChallenges();
-            challenges = challenges.stream().filter(Challenge::isActive).toList();
-            
+            logger.info("Отправка ежедневного отчёта");
+            List<Challenge> challenges = challengeService.getAllChallenges().stream()
+                    .filter(Challenge::isActive).toList();
             if (challenges.isEmpty()) {
                 sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
-                logger.info("Нет активных испытаний для отправки отчета");
                 return;
             }
-            
-            StringBuilder report = new StringBuilder();
-            report.append("**Ежедневный отчет по испытаниям**\n\n");
-            
-            for (Challenge challenge : challenges) {
+            var report = new StringBuilder("**Ежедневный отчёт по испытаниям**\n\n");
+            for (var challenge : challenges) {
                 ChallengeStats stats = challengeService.getChallengeStats(challenge);
                 if (stats != null) {
                     report.append(statisticsService.formatReportForDiscord(challenge, stats)).append("\n");
                 }
             }
-            
             sendMessageToChannel(discordConfig.getReportChannel(), report.toString());
-            logger.info("Ежедневный отчет успешно отправлен, обработано {} испытаний", challenges.size());
         } catch (Exception e) {
-            logger.error("Ошибка при отправке ежедневного отчета", e);
+            logger.error("Ошибка при отправке ежедневного отчёта", e);
         }
     }
 
     /**
-     * Отправить уведомление о завершении испытания
+     * {@inheritDoc}
      */
+    @Override
     public void sendChallengeCompletionNotification(Challenge challenge) {
         try {
-            logger.info("Отправка уведомления о завершении испытания: {}", challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка отправить уведомление о завершении null испытания");
-                return;
-            }
-            
-            String message = String.format("**Испытание завершено!**\nИспытание \"%s\" успешно завершено!\nПоздравляем всех участников!", 
-                                         challenge.getName());
-            
-            // Отправляем сообщение в канал отчетов
+            if (challenge == null) return;
+            String message = String.format(
+                    "**Испытание завершено!**\nИспытание \"%s\" успешно завершено!\nПоздравляем всех участников!",
+                    challenge.getName());
             sendMessageToChannel(discordConfig.getReportChannel(), message);
-            
-            // Также отправляем топ-5 участников
-            List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, 5);
+            var leaderboard = challengeService.getTopParticipants(challenge, 5);
             if (!leaderboard.isEmpty()) {
-                String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
-                sendMessageToChannel(discordConfig.getReportChannel(), leaderboardMessage);
+                sendMessageToChannel(discordConfig.getReportChannel(),
+                        statisticsService.formatLeaderboardForDiscord(challenge, leaderboard));
             }
-            
-            logger.info("Уведомление о завершении испытания '{}' успешно отправлено", challenge.getName());
         } catch (Exception e) {
-            logger.error("Ошибка при отправке уведомления о завершении испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка отправки уведомления о завершении испытания: {}",
+                    challenge != null ? challenge.getName() : "null", e);
         }
     }
-    
+
     /**
-     * Отправить уведомление о провале испытания
+     * {@inheritDoc}
      */
+    @Override
     public void sendChallengeFailureNotification(Challenge challenge) {
         try {
-            logger.info("Отправка уведомления о провале испытания: {}", challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка отправить уведомление о провале null испытания");
-                return;
-            }
-            
-            String message = String.format("**Испытание завершено!**\nИспытание \"%s\" завершено, но цель не достигнута.\nНе расстраивайтесь, в следующий раз обязательно получится!", 
-                                         challenge.getName());
-            
-            // Отправляем сообщение в канал отчетов
+            if (challenge == null) return;
+            String message = String.format(
+                    "**Испытание завершено!**\nИспытание \"%s\" завершено, но цель не достигнута.\nНе расстраивайтесь, в следующий раз обязательно получится!",
+                    challenge.getName());
             sendMessageToChannel(discordConfig.getReportChannel(), message);
-            
-            // Также отправляем топ-5 участников
-            List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, 5);
+            var leaderboard = challengeService.getTopParticipants(challenge, 5);
             if (!leaderboard.isEmpty()) {
-                String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
-                sendMessageToChannel(discordConfig.getReportChannel(), leaderboardMessage);
+                sendMessageToChannel(discordConfig.getReportChannel(),
+                        statisticsService.formatLeaderboardForDiscord(challenge, leaderboard));
             }
-            
-            logger.info("Уведомление о провале испытания '{}' успешно отправлено", challenge.getName());
         } catch (Exception e) {
-            logger.error("Ошибка при отправке уведомления о провале испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка отправки уведомления о провале испытания: {}",
+                    challenge != null ? challenge.getName() : "null", e);
         }
     }
 
     /**
-     * Форматировать статистику испытания для Discord
+     * {@inheritDoc}
      */
+    @Override
     public String formatChallengeStats(Challenge challenge, ChallengeStats stats) {
         try {
-            logger.debug("Форматирование статистики испытания для Discord");
             return statisticsService.formatReportForDiscord(challenge, stats);
         } catch (Exception e) {
-            logger.error("Ошибка при форматировании статистики испытания для Discord", e);
-            return "**Ошибка при форматировании статистики. Пожалуйста, попробуйте позже.**";
+            logger.error("Ошибка при форматировании статистики испытания", e);
+            return "**Ошибка при форматировании статистики.**";
         }
     }
 
     /**
-     * Проверить, авторизован ли пользователь для команды
+     * {@inheritDoc}
      */
+    @Override
     public boolean isAuthorizedUser(String userId, String command) {
         try {
-            logger.debug("Проверка авторизации пользователя {} для команды {}", userId, command);
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка проверить авторизацию для пользователя с пустым ID");
-                return false;
-            }
-            
-            if (command == null || command.isEmpty()) {
-                logger.warn("Попытка проверить авторизацию для пустой команды");
-                return true;
-            }
-            
-            // Некоторые команды доступны только администраторам
+            if (userId == null || userId.isBlank()) return false;
+            if (command == null || command.isBlank()) return true;
             if (command.startsWith("новый") || command.startsWith("удалить") ||
                 command.startsWith("остановить") || command.startsWith("продолжить") ||
                 command.startsWith("изменить") || command.startsWith("изменить_дату") ||
                 command.startsWith("установить_прогресс") ||
                 command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
-                boolean isAdmin = userService.isAdminUser(userId);
-                logger.debug("Пользователь {} {} администратором", userId, isAdmin ? "является" : "не является");
-                return isAdmin;
+                return participantService.isAdminUser(userId);
             }
-            
-            logger.debug("Команда '{}' доступна всем пользователям", command);
             return true;
         } catch (Exception e) {
-            logger.error("Ошибка при проверке авторизации пользователя {} для команды {}", userId, command, e);
+            logger.error("Ошибка при проверке авторизации {} для команды {}", userId, command, e);
             return false;
         }
+    }
+
+    // ---- вспомогательные методы ----
+
+    /**
+     * Определяет канал для публикации объявлений.
+     * Приоритет: report-channel из конфига, иначе "announcements".
+     */
+    private String resolveAnnouncementChannel() {
+        String reportChannel = discordConfig.getReportChannel();
+        if (reportChannel != null && !reportChannel.isBlank()) return reportChannel;
+        return "announcements";
     }
 }

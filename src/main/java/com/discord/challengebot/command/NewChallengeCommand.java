@@ -24,7 +24,7 @@ import java.time.format.DateTimeParseException;
  */
 @Component
 @Order(1)
-public class NewChallengeCommand implements Command {
+public class NewChallengeCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(NewChallengeCommand.class);
 
     @Autowired

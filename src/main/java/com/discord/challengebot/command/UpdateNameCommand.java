@@ -16,7 +16,7 @@ import org.springframework.core.annotation.Order;
  */
 @Component
 @Order(1)
-public class UpdateNameCommand implements Command {
+public class UpdateNameCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(UpdateNameCommand.class);
 
     @Autowired

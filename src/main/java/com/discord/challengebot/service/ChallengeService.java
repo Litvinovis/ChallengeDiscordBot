@@ -3,61 +3,105 @@ package com.discord.challengebot.service;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
+import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ChallengeProgressRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Сервис для управления испытаниями
+ * Сервис управления испытаниями.
+ * Работает напрямую с ChallengeRepository и ChallengeProgressRepository
+ * без промежуточного слоя DataStorageService.
  */
 @Service
 public class ChallengeService implements IChallengeService {
     private static final Logger logger = LoggerFactory.getLogger(ChallengeService.class);
-    
-    @Autowired
-    private DataStorageService dataStorageService;
-    
-    // Добавляем зависимость UserService
-    @Autowired
-    private UserService userService;
+
+    private final ChallengeRepository challengeRepository;
+    private final ChallengeProgressRepository progressRepository;
+    private final ParticipantService participantService;
 
     /**
-     * Создать новое испытание
+     * Создаёт сервис управления испытаниями.
+     *
+     * @param challengeRepository репозиторий испытаний
+     * @param progressRepository  репозиторий прогресса участников
+     * @param participantService  сервис управления участниками
      */
-    public Challenge createChallenge(String name, long targetValue, LocalDateTime endDate, 
-                                   ChallengeType type, String description, String unit) {
+    public ChallengeService(ChallengeRepository challengeRepository,
+                            ChallengeProgressRepository progressRepository,
+                            ParticipantService participantService) {
+        this.challengeRepository = challengeRepository;
+        this.progressRepository = progressRepository;
+        this.participantService = participantService;
+    }
+
+    // ---- вспомогательные методы работы с хранилищем ----
+
+    private void saveChallenge(Challenge challenge) {
+        if (challenge == null) return;
+        challengeRepository.save(challenge);
+    }
+
+    private Challenge findChallenge(String name) {
+        if (name == null || name.isBlank()) return null;
+        String id = name.toLowerCase().replace(" ", "_");
+        var opt = challengeRepository.findById(id);
+        if (opt.isPresent()) return opt.get();
+        // Fallback: полный перебор для legacy id
+        return challengeRepository.findAll().stream()
+                .filter(c -> name.equals(c.getName()))
+                .findFirst().orElse(null);
+    }
+
+    /**
+     * Загружает прогресс участников из нормализованной таблицы.
+     * Если таблица пустая (до миграции) — возвращает данные из JSON-колонки challenge.
+     */
+    private Map<String, Long> loadProgress(Challenge challenge) {
+        var progress = progressRepository.findByChallengeId(challenge.getId());
+        if (!progress.isEmpty()) return progress;
+        // Fallback на legacy JSON-данные (до завершения миграции)
+        return challenge.getParticipantProgress() != null
+                ? challenge.getParticipantProgress()
+                : new HashMap<>();
+    }
+
+    /**
+     * Загружает список участников из прогресса (ключи карты прогресса).
+     */
+    private List<String> loadParticipantIds(Challenge challenge) {
+        var progress = progressRepository.findByChallengeId(challenge.getId());
+        if (!progress.isEmpty()) return new ArrayList<>(progress.keySet());
+        // Fallback на legacy JSON-данные
+        return challenge.getParticipants() != null
+                ? challenge.getParticipants()
+                : new ArrayList<>();
+    }
+
+    // ---- IChallengeService implementation ----
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Challenge createChallenge(String name, long targetValue, LocalDateTime endDate,
+                                     ChallengeType type, String description, String unit) {
         try {
             logger.info("Создание нового испытания: {}", name);
-            
-            if (name == null || name.isEmpty()) {
-                logger.warn("Попытка создать испытание с пустым именем");
+            if (name == null || name.isBlank() || targetValue <= 0 || endDate == null || type == null) {
+                logger.warn("Некорректные параметры создания испытания");
                 return null;
             }
-            
-            if (targetValue <= 0) {
-                logger.warn("Попытка создать испытание с недопустимой целью: {}", targetValue);
-                return null;
-            }
-            
-            if (endDate == null) {
-                logger.warn("Попытка создать испытание с пустой датой окончания");
-                return null;
-            }
-            
-            if (type == null) {
-                logger.warn("Попытка создать испытание с пустым типом");
-                return null;
-            }
-            
-            Challenge challenge = new Challenge();
+            var challenge = new Challenge();
             challenge.setId(name.toLowerCase().replace(" ", "_"));
             challenge.setName(name);
             challenge.setTargetValue(targetValue);
@@ -68,10 +112,7 @@ public class ChallengeService implements IChallengeService {
             challenge.setActive(true);
             challenge.setDescription(description);
             challenge.setUnit(unit);
-            
-            // Сохраняем испытание
-            dataStorageService.saveChallenge(challenge);
-            
+            saveChallenge(challenge);
             logger.info("Испытание '{}' успешно создано", name);
             return challenge;
         } catch (Exception e) {
@@ -81,81 +122,53 @@ public class ChallengeService implements IChallengeService {
     }
 
     /**
-     * Добавить прогресс к испытанию
+     * {@inheritDoc}
      */
+    @Override
     public Challenge addProgress(Challenge challenge, String userId, String username, long amount) {
         try {
-            // Bug fix #2: null check BEFORE accessing participantProgress to avoid NPE
-            if (challenge == null) {
-                logger.warn("Попытка добавить прогресс к null испытанию");
-                return null;
-            }
-            // Инициализируем participantProgress если null (defensive)
-            if (challenge.getParticipantProgress() == null) {
-                challenge.setParticipantProgress(new java.util.concurrent.ConcurrentHashMap<>());
+            if (challenge == null || userId == null || userId.isBlank() || amount < 0) {
+                return challenge;
             }
 
-            // Получаем текущий прогресс пользователя до обновления
-            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-            logger.info("Добавление прогресса {} для пользователя {} в испытание {}. Текущий прогресс пользователя: {}",
-                       amount, username, challenge.getName(), currentUserProgress);
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка добавить прогресс с пустым ID пользователя");
-                return challenge;
-            }
-            
-            if (username == null || username.isEmpty()) {
-                logger.warn("Попытка добавить прогресс с пустым именем пользователя");
-                return challenge;
-            }
-            
-            if (amount < 0) {
-                logger.warn("Попытка добавить отрицательный прогресс: {}", amount);
-                return challenge;
-            }
-            
-            // Регистрируем пользователя в системе
-            boolean registered = userService.registerForChallenge(userId, username, challenge.getName());
-            if (!registered) {
-                logger.warn("Не удалось зарегистрировать пользователя {} ({}) в системе для испытания {}", username, userId, challenge.getName());
-                // We'll continue with adding progress, but this might cause issues with username display
-            } else {
-                logger.debug("Пользователь {} ({}) успешно зарегистрирован в системе для испытания {}", username, userId, challenge.getName());
-            }
-            
-            // Обновляем общий прогресс
-            challenge.setCurrentValue(challenge.getCurrentValue() + amount);
-            
-            // Обновляем прогресс участника
-            long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-            challenge.getParticipantProgress().put(userId, userProgress + amount);
-            
-            // Добавляем участника в список, если его там нет
+            // Регистрируем участника в системе
+            participantService.registerForChallenge(userId, username != null ? username : userId, challenge.getName());
+
+            // Обновляем прогресс через нормализованную таблицу
+            var progress = loadProgress(challenge);
+            long currentUserProgress = progress.getOrDefault(userId, 0L);
+            long newUserProgress = currentUserProgress + amount;
+            progressRepository.upsert(challenge.getId(), userId, newUserProgress);
+
+            // Добавляем участника в список (для обратной совместимости с Challenge.participants)
             challenge.addParticipant(userId);
-            
-            // Сохраняем обновленное испытание
-            dataStorageService.saveChallenge(challenge);
-            
-            // Получаем общий прогресс пользователя после обновления
-            long updatedUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-            logger.info("Прогресс успешно добавлен. Текущий общий прогресс: {}. Общий прогресс пользователя после обновления: {}", 
-                       challenge.getCurrentValue(), updatedUserProgress);
+
+            // Обновляем общий прогресс (сумма по всем участникам)
+            progress.put(userId, newUserProgress);
+            long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
+            challenge.setCurrentValue(totalProgress);
+
+            // Синхронизируем в-памяти карту для текущей сессии
+            challenge.getParticipantProgress().put(userId, newUserProgress);
+
+            saveChallenge(challenge);
+            logger.info("Прогресс добавлен: пользователь={}, испытание={}, добавлено={}, итого={}",
+                    userId, challenge.getName(), amount, newUserProgress);
             return challenge;
         } catch (Exception e) {
-            logger.error("Ошибка при добавлении прогресса к испытанию: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при добавлении прогресса к испытанию: {}",
+                    challenge != null ? challenge.getName() : "null", e);
             return challenge;
         }
     }
 
     /**
-     * Получить испытание по имени
+     * {@inheritDoc}
      */
+    @Override
     public Challenge getChallenge(String name) {
         try {
-            logger.debug("Получение испытания: {}", name);
-            return dataStorageService.getChallenge(name);
+            return findChallenge(name);
         } catch (Exception e) {
             logger.error("Ошибка при получении испытания: {}", name, e);
             return null;
@@ -163,12 +176,12 @@ public class ChallengeService implements IChallengeService {
     }
 
     /**
-     * Получить все испытания
+     * {@inheritDoc}
      */
+    @Override
     public List<Challenge> getAllChallenges() {
         try {
-            logger.debug("Получение всех испытаний");
-            return dataStorageService.getAllChallenges();
+            return challengeRepository.findAll();
         } catch (Exception e) {
             logger.error("Ошибка при получении всех испытаний", e);
             return new ArrayList<>();
@@ -176,17 +189,14 @@ public class ChallengeService implements IChallengeService {
     }
 
     /**
-     * Получить все активные испытания
+     * {@inheritDoc}
      */
+    @Override
     public List<Challenge> getActiveChallenges() {
         try {
-            logger.debug("Получение всех активных испытаний");
-            List<Challenge> allChallenges = getAllChallenges();
-            List<Challenge> activeChallenges = allChallenges.stream()
+            return getAllChallenges().stream()
                     .filter(Challenge::isActive)
                     .collect(Collectors.toList());
-            logger.debug("Получено {} активных испытаний", activeChallenges.size());
-            return activeChallenges;
         } catch (Exception e) {
             logger.error("Ошибка при получении активных испытаний", e);
             return new ArrayList<>();
@@ -194,102 +204,57 @@ public class ChallengeService implements IChallengeService {
     }
 
     /**
-     * Получить статистику по испытанию
+     * {@inheritDoc}
      */
+    @Override
     public ChallengeStats getChallengeStats(Challenge challenge) {
         try {
-            logger.debug("Расчет статистики для испытания: {}", challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка получить статистику для null испытания");
-                return null;
-            }
-            
+            if (challenge == null) return null;
             long remaining = challenge.getTargetValue() - challenge.getCurrentValue();
-            double percentage = challenge.getTargetValue() > 0 ? 
-                               (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
-            
-            // Расчет дней до окончания
+            double percentage = challenge.getTargetValue() > 0
+                    ? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
             LocalDateTime now = LocalDateTime.now();
             long daysRemaining = challenge.getEndDate() != null
-                ? java.time.Duration.between(now, challenge.getEndDate()).toDays()
-                : 0;
-            
-            // Расчет ежедневной цели с распределением между участниками
-            double dailyTarget = 0;
-            if (daysRemaining > 0) {
-                // Получаем количество участников
-                int participantCount = challenge.getParticipants().size();
-                
-                // Если нет участников, распределяем на одного участника
-                if (participantCount <= 0) {
-                    participantCount = 1;
-                }
-                
-                // Распределяем оставшуюся цель среди участников и делим на количество дней
-                dailyTarget = (double) remaining / participantCount / daysRemaining;
-            }
-            
-            ChallengeStats stats = new ChallengeStats(
-                challenge.getName(),
-                challenge.getTargetValue(),
-                challenge.getCurrentValue(),
-                remaining,
-                percentage,
-                dailyTarget,
-                (int) daysRemaining
-            );
-            
-            logger.debug("Статистика для испытания '{}' успешно рассчитана", challenge.getName());
-            return stats;
+                    ? java.time.Duration.between(now, challenge.getEndDate()).toDays() : 0;
+            int participantCount = Math.max(loadParticipantIds(challenge).size(), 1);
+            double dailyTarget = daysRemaining > 0
+                    ? (double) remaining / participantCount / daysRemaining : 0;
+            return new ChallengeStats(challenge.getName(), challenge.getTargetValue(),
+                    challenge.getCurrentValue(), remaining, percentage, dailyTarget, (int) daysRemaining);
         } catch (Exception e) {
-            logger.error("Ошибка при расчете статистики для испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при расчёте статистики для испытания: {}",
+                    challenge != null ? challenge.getName() : "null", e);
             return null;
         }
     }
 
     /**
-     * Получить статистику по всем испытаниям
+     * {@inheritDoc}
      */
+    @Override
     public Map<String, ChallengeStats> getAllChallengesStats() {
-        try {
-            logger.debug("Получение статистики по всем испытаниям");
-            List<Challenge> challenges = getAllChallenges();
-            Map<String, ChallengeStats> statsMap = new java.util.HashMap<>();
-            for (Challenge challenge : challenges) {
-                ChallengeStats stats = getChallengeStats(challenge);
-                if (stats != null) {
-                    statsMap.put(challenge.getName(), stats);
-                }
-            }
-            logger.debug("Получена статистика по {} испытаниям", statsMap.size());
-            return statsMap;
-        } catch (Exception e) {
-            logger.error("Ошибка при получении статистики по всем испытаниям", e);
-            return new java.util.HashMap<>();
+        var result = new java.util.HashMap<String, ChallengeStats>();
+        for (var challenge : getAllChallenges()) {
+            var stats = getChallengeStats(challenge);
+            if (stats != null) result.put(challenge.getName(), stats);
         }
+        return result;
     }
 
     /**
-     * Получить испытания пользователя
+     * {@inheritDoc}
      */
+    @Override
     public List<Challenge> getUserChallenges(String userId) {
         try {
-            logger.debug("Получение испытаний пользователя: {}", userId);
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка получить испытания для пользователя с пустым ID");
-                return new ArrayList<>();
-            }
-            
-            List<Challenge> allChallenges = getAllChallenges();
-            List<Challenge> userChallenges = allChallenges.stream()
-                    .filter(challenge -> challenge.hasParticipant(userId))
+            if (userId == null || userId.isBlank()) return new ArrayList<>();
+            return getAllChallenges().stream()
+                    .filter(ch -> {
+                        var progress = progressRepository.findByChallengeId(ch.getId());
+                        if (!progress.isEmpty()) return progress.containsKey(userId);
+                        return ch.hasParticipant(userId);
+                    })
                     .collect(Collectors.toList());
-            
-            logger.debug("Пользователь '{}' участвует в {} испытаниях", userId, userChallenges.size());
-            return userChallenges;
         } catch (Exception e) {
             logger.error("Ошибка при получении испытаний пользователя: {}", userId, e);
             return new ArrayList<>();
@@ -297,12 +262,27 @@ public class ChallengeService implements IChallengeService {
     }
 
     /**
-     * Удалить испытание
+     * {@inheritDoc}
      */
+    @Override
     public boolean deleteChallenge(String challengeName) {
         try {
             logger.info("Удаление испытания: {}", challengeName);
-            return dataStorageService.deleteChallenge(challengeName);
+            if (challengeName == null || challengeName.isBlank()) return false;
+            String id = challengeName.toLowerCase().replace(" ", "_");
+            if (challengeRepository.existsById(id)) {
+                progressRepository.deleteByChallengeId(id);
+                challengeRepository.deleteById(id);
+                return true;
+            }
+            for (var c : challengeRepository.findAll()) {
+                if (challengeName.equals(c.getName())) {
+                    progressRepository.deleteByChallengeId(c.getId());
+                    challengeRepository.deleteById(c.getId());
+                    return true;
+                }
+            }
+            return false;
         } catch (Exception e) {
             logger.error("Ошибка при удалении испытания: {}", challengeName, e);
             return false;
@@ -310,329 +290,140 @@ public class ChallengeService implements IChallengeService {
     }
 
     /**
-     * Обновить статус испытания
+     * {@inheritDoc}
      */
+    @Override
     public Challenge updateChallengeStatus(Challenge challenge, boolean active) {
-        try {
-            logger.info("Обновление статуса испытания {}: {}", 
-                       challenge != null ? challenge.getName() : "null", 
-                       active ? "активно" : "остановлено");
-            
-            if (challenge == null) {
-                logger.warn("Попытка обновить статус null испытания");
-                return null;
-            }
-            
-            challenge.setActive(active);
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Статус испытания '{}' успешно обновлен", challenge.getName());
-            return challenge;
-        } catch (Exception e) {
-            logger.error("Ошибка при обновлении статуса испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
-            return challenge;
-        }
+        if (challenge == null) return null;
+        challenge.setActive(active);
+        saveChallenge(challenge);
+        return challenge;
     }
 
     /**
-     * Обновить цель испытания
+     * {@inheritDoc}
      */
+    @Override
     public Challenge updateChallengeTarget(Challenge challenge, long newTarget) {
-        try {
-            logger.info("Обновление цели испытания {} с {} на {}", 
-                       challenge != null ? challenge.getName() : "null", 
-                       challenge != null ? challenge.getTargetValue() : 0, 
-                       newTarget);
-            
-            if (challenge == null) {
-                logger.warn("Попытка обновить цель null испытания");
-                return null;
-            }
-            
-            if (newTarget <= 0) {
-                logger.warn("Попытка установить недопустимую цель: {}", newTarget);
-                return challenge;
-            }
-            
-            challenge.setTargetValue(newTarget);
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Цель испытания '{}' успешно обновлена", challenge.getName());
-            return challenge;
-        } catch (Exception e) {
-            logger.error("Ошибка при обновлении цели испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
-            return challenge;
-        }
+        if (challenge == null || newTarget <= 0) return challenge;
+        challenge.setTargetValue(newTarget);
+        saveChallenge(challenge);
+        return challenge;
     }
 
     /**
-     * Обновить дату окончания испытания
+     * {@inheritDoc}
      */
+    @Override
     public Challenge updateChallengeEndDate(Challenge challenge, LocalDateTime newEndDate) {
-        try {
-            logger.info("Обновление даты окончания испытания {} с {} на {}", 
-                       challenge != null ? challenge.getName() : "null", 
-                       challenge != null ? challenge.getEndDate() : null, 
-                       newEndDate);
-            
-            if (challenge == null) {
-                logger.warn("Попытка обновить дату окончания null испытания");
-                return null;
-            }
-            
-            if (newEndDate == null) {
-                logger.warn("Попытка установить пустую дату окончания");
-                return challenge;
-            }
-            
-            challenge.setEndDate(newEndDate);
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Дата окончания испытания '{}' успешно обновлена", challenge.getName());
-            return challenge;
-        } catch (Exception e) {
-            logger.error("Ошибка при обновлении даты окончания испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
-            return challenge;
-        }
+        if (challenge == null || newEndDate == null) return challenge;
+        challenge.setEndDate(newEndDate);
+        saveChallenge(challenge);
+        return challenge;
     }
 
     /**
-     * Установить прогресс участника в испытании
+     * {@inheritDoc}
      */
+    @Override
     public Challenge setParticipantProgress(Challenge challenge, String userId, long progress) {
         try {
-            // Bug fix #2: null check BEFORE accessing participantProgress to avoid NPE
-            if (challenge == null) {
-                logger.warn("Попытка установить прогресс для null испытания");
-                return null;
-            }
-            // Инициализируем participantProgress если null (defensive)
-            if (challenge.getParticipantProgress() == null) {
-                challenge.setParticipantProgress(new java.util.concurrent.ConcurrentHashMap<>());
-            }
-
-            // Получаем текущий прогресс пользователя до обновления
-            long currentUserProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-            logger.info("Установка прогресса {} для пользователя {} в испытании {}. Текущий прогресс пользователя: {}",
-                       progress, userId, challenge.getName(), currentUserProgress);
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка установить прогресс для пользователя с пустым ID");
-                return challenge;
-            }
-            
-            if (progress < 0) {
-                logger.warn("Попытка установить отрицательный прогресс: {}", progress);
-                return challenge;
-            }
-            
-            // Устанавливаем прогресс участника
-            challenge.getParticipantProgress().put(userId, progress);
-            
-            // Добавляем участника в список, если его там нет
+            if (challenge == null || userId == null || userId.isBlank() || progress < 0) return challenge;
+            progressRepository.upsert(challenge.getId(), userId, progress);
             challenge.addParticipant(userId);
-            
+            // Синхронизируем в-памяти для текущей сессии
+            challenge.getParticipantProgress().put(userId, progress);
             // Пересчитываем общий прогресс
-            long totalProgress = challenge.getParticipantProgress().values().stream().mapToLong(Long::longValue).sum();
+            var allProgress = loadProgress(challenge);
+            long totalProgress = allProgress.values().stream().mapToLong(Long::longValue).sum();
             challenge.setCurrentValue(totalProgress);
-            
-            // Сохраняем обновленное испытание
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Прогресс участника '{}' в испытании '{}' успешно установлен. Общий прогресс после обновления: {}", 
-                       userId, challenge.getName(), totalProgress);
+            saveChallenge(challenge);
             return challenge;
         } catch (Exception e) {
-            logger.error("Ошибка при установке прогресса участника '{}' в испытании '{}'", 
-                        userId, challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при установке прогресса: userId={}, challenge={}", userId,
+                    challenge != null ? challenge.getName() : "null", e);
             return challenge;
         }
     }
 
     /**
-     * Удалить участника из испытания
+     * {@inheritDoc}
      */
+    @Override
     public Challenge removeParticipant(Challenge challenge, String userId) {
         try {
-            logger.info("Удаление участника {} из испытания {}", userId, challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка удалить участника из null испытания");
-                return null;
-            }
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка удалить участника с пустым ID");
-                return challenge;
-            }
-            
-            // Удаляем прогресс участника
-            challenge.getParticipantProgress().remove(userId);
-            
-            // Удаляем участника из списка
+            if (challenge == null || userId == null || userId.isBlank()) return challenge;
+            progressRepository.delete(challenge.getId(), userId);
             challenge.removeParticipant(userId);
-            
-            // Пересчитываем общий прогресс
-            long totalProgress = challenge.getParticipantProgress().values().stream().mapToLong(Long::longValue).sum();
+            challenge.getParticipantProgress().remove(userId);
+            long totalProgress = loadProgress(challenge).values().stream().mapToLong(Long::longValue).sum();
             challenge.setCurrentValue(totalProgress);
-            
-            // Сохраняем обновленное испытание
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Участник '{}' успешно удален из испытания '{}'", userId, challenge.getName());
+            saveChallenge(challenge);
             return challenge;
         } catch (Exception e) {
-            logger.error("Ошибка при удалении участника '{}' из испытания '{}'", 
-                        userId, challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при удалении участника: userId={}, challenge={}", userId,
+                    challenge != null ? challenge.getName() : "null", e);
             return challenge;
         }
     }
 
     /**
-     * Добавить участника в испытание с регистрацией имени пользователя
+     * {@inheritDoc}
      */
+    @Override
     public Challenge addParticipantWithUsername(Challenge challenge, String userId, String username) {
         try {
-            logger.info("Добавление участника {} ({}) в испытание {}", username, userId, challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка добавить участника в null испытание");
-                return null;
-            }
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка добавить участника с пустым ID");
-                return challenge;
-            }
-            
-            if (username == null || username.isEmpty()) {
-                logger.warn("Попытка добавить участника с пустым именем");
-                return challenge;
-            }
-            
-            logger.debug("Регистрация пользователя {} ({}) в системе для испытания {}", username, userId, challenge.getName());
-            // Регистрируем пользователя в системе
-            boolean registered = userService.registerForChallenge(userId, username, challenge.getName());
-            if (registered) {
-                logger.debug("Пользователь {} ({}) успешно зарегистрирован в системе для испытания {}", username, userId, challenge.getName());
-            } else {
-                logger.warn("Не удалось зарегистрировать пользователя {} ({}) в системе для испытания {}", username, userId, challenge.getName());
-                // Продолжаем выполнение, но это может вызвать проблемы с отображением имени пользователя
-            }
-            
-            // Добавляем участника в список
-            logger.debug("Добавление участника {} в список участников испытания {}", userId, challenge.getName());
+            if (challenge == null || userId == null || userId.isBlank()) return challenge;
+            participantService.registerForChallenge(userId,
+                    username != null ? username : userId, challenge.getName());
             challenge.addParticipant(userId);
-            
-            // Если у участника еще нет прогресса, устанавливаем 0
             if (!challenge.getParticipantProgress().containsKey(userId)) {
-                logger.debug("Установка начального прогресса 0 для участника {} в испытании {}", userId, challenge.getName());
+                progressRepository.upsert(challenge.getId(), userId, 0L);
                 challenge.getParticipantProgress().put(userId, 0L);
             }
-            
-            // Сохраняем обновленное испытание
-            logger.debug("Сохранение обновленного испытания {} после добавления участника {}", challenge.getName(), userId);
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Участник '{}' ({}) успешно добавлен в испытание '{}'", username, userId, challenge.getName());
+            saveChallenge(challenge);
             return challenge;
         } catch (Exception e) {
-            logger.error("Ошибка при добавлении участника '{}' ({}) в испытание '{}'", 
-                        username, userId, challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при добавлении участника: userId={}, challenge={}", userId,
+                    challenge != null ? challenge.getName() : "null", e);
             return challenge;
         }
     }
 
     /**
-     * Добавить участника в испытание
+     * {@inheritDoc}
      */
+    @Override
     public Challenge addParticipant(Challenge challenge, String userId) {
-        try {
-            logger.info("Добавление участника {} в испытание {}", userId, challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка добавить участника в null испытание");
-                return null;
-            }
-            
-            if (userId == null || userId.isEmpty()) {
-                logger.warn("Попытка добавить участника с пустым ID");
-                return challenge;
-            }
-            
-            // Добавляем участника в список
-            challenge.addParticipant(userId);
-            
-            // Если у участника еще нет прогресса, устанавливаем 0
-            if (!challenge.getParticipantProgress().containsKey(userId)) {
-                challenge.getParticipantProgress().put(userId, 0L);
-            }
-            
-            // Сохраняем обновленное испытание
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Участник '{}' успешно добавлен в испытание '{}'", userId, challenge.getName());
-            return challenge;
-        } catch (Exception e) {
-            logger.error("Ошибка при добавлении участника '{}' в испытание '{}'", 
-                        userId, challenge != null ? challenge.getName() : "null", e);
-            return challenge;
-        }
+        return addParticipantWithUsername(challenge, userId, userId);
     }
 
     /**
-     * Получить топ участников по прогрессу в испытании
+     * {@inheritDoc}
      */
+    @Override
     public List<Map.Entry<String, Long>> getTopParticipants(Challenge challenge, int limit) {
         try {
-            logger.debug("Получение топ-{} участников по испытанию {}", limit, challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка получить топ участников для null испытания");
-                return new ArrayList<>();
-            }
-            
-            if (limit <= 0) {
-                logger.warn("Попытка получить топ с недопустимым лимитом: {}", limit);
-                return new ArrayList<>();
-            }
-            
-            List<Map.Entry<String, Long>> topParticipants = challenge.getParticipantProgress().entrySet().stream()
+            if (challenge == null || limit <= 0) return new ArrayList<>();
+            var progress = loadProgress(challenge);
+            return progress.entrySet().stream()
                     .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                     .limit(limit)
                     .collect(Collectors.toList());
-            
-            logger.debug("Получено {} топ участников для испытания '{}'", topParticipants.size(), challenge.getName());
-            return topParticipants;
         } catch (Exception e) {
-            logger.error("Ошибка при получении топ участников по испытанию: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
+            logger.error("Ошибка при получении топ участников: {}", challenge != null ? challenge.getName() : "null", e);
             return new ArrayList<>();
         }
     }
 
     /**
-     * Завершить испытание и отправить уведомление
+     * {@inheritDoc}
      */
+    @Override
     public void completeChallenge(Challenge challenge) {
-        try {
-            logger.info("Завершение испытания: {}", challenge != null ? challenge.getName() : "null");
-            
-            if (challenge == null) {
-                logger.warn("Попытка завершить null испытание");
-                return;
-            }
-            
-            challenge.setActive(false);
-            dataStorageService.saveChallenge(challenge);
-            
-            logger.info("Испытание '{}' успешно завершено", challenge.getName());
-        } catch (Exception e) {
-            logger.error("Ошибка при завершении испытания: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
-        }
+        if (challenge == null) return;
+        challenge.setActive(false);
+        saveChallenge(challenge);
+        logger.info("Испытание '{}' завершено", challenge.getName());
     }
 }

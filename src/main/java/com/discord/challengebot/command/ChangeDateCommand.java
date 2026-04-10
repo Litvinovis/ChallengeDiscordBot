@@ -23,7 +23,7 @@ import java.time.format.DateTimeParseException;
  */
 @Component
 @Order(1)
-public class ChangeDateCommand implements Command {
+public class ChangeDateCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(ChangeDateCommand.class);
 
     @Autowired

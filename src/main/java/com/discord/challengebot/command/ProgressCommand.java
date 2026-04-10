@@ -21,7 +21,7 @@ import java.time.LocalDate;
  */
 @Component
 @Order(1)
-public class ProgressCommand implements Command {
+public class ProgressCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(ProgressCommand.class);
 
     @Autowired
