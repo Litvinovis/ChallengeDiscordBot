@@ -63,24 +63,44 @@ public class DiscordService implements IDiscordService {
 
     /**
      * Инициализирует Discord бота: создаёт JDA, регистрирует слушатель событий.
+     * При сетевых ошибках (DNS, отсутствие интернета) повторяет попытку с экспоненциальной
+     * задержкой (5→10→20→…→60 сек) до успешного подключения.
      */
     @PostConstruct
     public void init() {
-        try {
-            logger.info("Инициализация Discord бота");
-            // Передаём ссылки на сервисы для форматирования лидербордов (обход цикл. зависимости)
-            statisticsService.setDiscordService(this);
-            statisticsService.setParticipantService(participantService);
-            jda = JDABuilder.createDefault(discordConfig.getToken())
-                    .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
-                    .addEventListeners(new DiscordMessageListener(
-                            this, discordConfig, challengeService, participantService,
-                            statisticsService, commandRegistry))
-                    .build();
-            jda.awaitReady();
-            logger.info("Discord бот успешно инициализирован");
-        } catch (Exception e) {
-            logger.error("Ошибка инициализации Discord бота", e);
+        statisticsService.setDiscordService(this);
+        statisticsService.setParticipantService(participantService);
+        logger.info("Инициализация Discord бота");
+        int delaySec = 5;
+        while (true) {
+            JDA attempt = null;
+            try {
+                attempt = JDABuilder.createDefault(discordConfig.getToken())
+                        .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
+                        .addEventListeners(new DiscordMessageListener(
+                                this, discordConfig, challengeService, participantService,
+                                statisticsService, commandRegistry))
+                        .build();
+                attempt.awaitReady();
+                jda = attempt;
+                logger.info("Discord бот успешно инициализирован");
+                return;
+            } catch (InterruptedException e) {
+                if (attempt != null) attempt.shutdownNow();
+                Thread.currentThread().interrupt();
+                logger.warn("Инициализация Discord бота прервана");
+                return;
+            } catch (Exception e) {
+                if (attempt != null) attempt.shutdownNow();
+                logger.warn("Не удалось подключиться к Discord ({}), повтор через {} сек", e.getMessage(), delaySec);
+                try {
+                    Thread.sleep(delaySec * 1000L);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                delaySec = Math.min(delaySec * 2, 60);
+            }
         }
     }
 
