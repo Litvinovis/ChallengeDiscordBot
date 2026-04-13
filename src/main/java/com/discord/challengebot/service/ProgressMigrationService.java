@@ -1,85 +1,84 @@
-package com.discord.challengebot.service;
-
-import com.discord.challengebot.model.Challenge;
-import com.discord.challengebot.repository.ChallengeProgressRepository;
-import com.discord.challengebot.repository.ChallengeRepository;
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Map;
-
-/**
- * Сервис миграции прогресса участников из JSON-колонки challenges.participant_progress
- * в нормализованную таблицу challenge_progress.
- * <p>
- * Запускается автоматически при старте приложения (@PostConstruct).
- * Идемпотентен: пропускает испытания, для которых данные уже мигрированы.
- * Исходные данные в challenges.participant_progress НЕ удаляются (обратная совместимость).
- */
-@Service
-public class ProgressMigrationService {
-
-    private static final Logger log = LoggerFactory.getLogger(ProgressMigrationService.class);
-
-    private final ChallengeRepository challengeRepository;
-    private final ChallengeProgressRepository progressRepository;
-
     /**
-     * Создаёт сервис миграции прогресса.
-     *
-     * @param challengeRepository  репозиторий испытаний
-     * @param progressRepository   репозиторий прогресса участников
+     * Мигрирует прогресс участников из JSON-поля Challenge.progressParticipants
+     * в нормализованную таблицу challenge_progress, если данных там ещё нет (идемпотентно).
      */
-    public ProgressMigrationService(ChallengeRepository challengeRepository,
-                                    ChallengeProgressRepository progressRepository) {
-        this.challengeRepository = challengeRepository;
-        this.progressRepository = progressRepository;
-    }
-
-    /**
-     * Выполняет миграцию при старте: для каждого испытания переносит participant_progress
-     * из JSON в таблицу challenge_progress, если данных там ещё нет (идемпотентно).
-     */
-    @PostConstruct
+    @Transactional
     public void migrate() {
+        log.info("Запуск миграции прогресса участников из JSON в challenge_progress...");
+        
+        // Проверяем существование таблицы challenge_progress
         try {
-            log.info("Запуск миграции прогресса участников из JSON в challenge_progress...");
-            List<Challenge> challenges = challengeRepository.findAll();
-            int totalMigrated = 0;
-            int totalSkipped = 0;
+            client().sql().execute(null, "SELECT COUNT(*) FROM challenge_progress LIMIT 1");
+            log.info("Таблица challenge_progress существует");
+        } catch (Exception e) {
+            log.warn("Таблица challenge_progress не существует, создаём...");
+            createChallengeProgressTable();
+        }
+        
+        List<Challenge> challenges = challengeRepository.findAll();
+        int totalMigrated = 0;
+        int totalSkipped = 0;
 
-            for (Challenge challenge : challenges) {
-                Map<String, Long> progress = challenge.getParticipantProgress();
-                if (progress == null || progress.isEmpty()) {
-                    continue;
-                }
+        for (Challenge challenge : challenges) {
+            String challengeId = challenge.getId();
+            Map<String, Long> progress = challenge.getProgressParticipants();
 
-                String challengeId = challenge.getId();
-
-                // Идемпотентность: если данные уже мигрированы — пропускаем
-                if (progressRepository.existsByChallengeId(challengeId)) {
-                    log.debug("Прогресс для испытания '{}' уже существует в challenge_progress — пропуск", challengeId);
-                    totalSkipped++;
-                    continue;
-                }
-
-                // Переносим каждую запись прогресса
-                int count = 0;
-                for (Map.Entry<String, Long> entry : progress.entrySet()) {
-                    progressRepository.upsert(challengeId, entry.getKey(), entry.getValue());
-                    count++;
-                }
-                totalMigrated += count;
-                log.info("Испытание '{}': мигрировано {} записей прогресса", challenge.getName(), count);
+            if (progress == null || progress.isEmpty()) {
+                totalSkipped++;
+                continue;
             }
 
-            log.info("Миграция прогресса завершена. Перенесено записей: {}, пропущено испытаний: {}",
-                    totalMigrated, totalSkipped);
+            // Проверяем, есть ли уже записи для этого испытания
+            boolean hasExistingProgress = false;
+            try {
+                Long existingCount = client().sql().execute(null,
+                        "SELECT COUNT(*) FROM challenge_progress WHERE challenge_id = ?",
+                        challengeId).get(0).get(0, Long.class);
+                hasExistingProgress = existingCount > 0;
+            } catch (Exception e) {
+                log.debug("Ошибка при проверке существующих записей для challengeId={}", challengeId, e);
+            }
+
+            if (hasExistingProgress) {
+                log.debug("Прогресс для испытания '{}' уже существует в challenge_progress — пропуск", challengeId);
+                totalSkipped++;
+                continue;
+            }
+
+            // Переносим каждую запись прогресса
+            int count = 0;
+            for (Map.Entry<String, Long> entry : progress.entrySet()) {
+                try {
+                    progressRepository.upsert(challengeId, entry.getKey(), entry.getValue());
+                    count++;
+                } catch (Exception e) {
+                    log.error("Ошибка при миграции прогресса: challengeId={}, userId={}", 
+                            challengeId, entry.getKey(), e);
+                }
+            }
+            totalMigrated += count;
+            log.info("Испытание '{}': мигрировано {} записей прогресса", challenge.getName(), count);
+        }
+
+        log.info("Миграция прогресса завершена. Перенесено записей: {}, пропущено испытаний: {}",
+                totalMigrated, totalSkipped);
+    }
+    
+    /**
+     * Создаёт таблицу challenge_progress если она не существует.
+     */
+    private void createChallengeProgressTable() {
+        try {
+            client().sql().execute(null,
+                "CREATE TABLE IF NOT EXISTS challenge_progress (" +
+                "  challenge_id VARCHAR NOT NULL," +
+                "  user_id VARCHAR NOT NULL," +
+                "  progress BIGINT NOT NULL DEFAULT 0," +
+                "  PRIMARY KEY (challenge_id, user_id)" +
+                ")");
+            log.info("Таблица challenge_progress создана успешно");
         } catch (Exception e) {
-            log.error("Ошибка при миграции прогресса участников: {}", e.getMessage(), e);
+            log.error("Ошибка при создании таблицы challenge_progress", e);
+            throw new RuntimeException("Не удалось создать таблицу challenge_progress", e);
         }
     }
-}
