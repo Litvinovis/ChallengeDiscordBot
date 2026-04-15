@@ -71,7 +71,7 @@ public class AddParticipantCommand extends BaseCommand {
                         resolvedUsername = cached.getUsername();
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception _) {}
 
             Challenge challenge = challengeService.getChallenge(challengeName);
             if (challenge == null) {

@@ -95,7 +95,7 @@ public class ProgressCommand extends BaseCommand {
                         message.append(String.format("\n📅 При текущем темпе: завершишь к %s", forecast.toString()));
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception _) {}
 
             channel.sendMessage(message.toString()).queue();
         } catch (Exception e) {

@@ -22,6 +22,12 @@ scheduled:
   cron:
     daily-report: "0 0 7 * * ?"  # Каждый день в 7:00
 
+# Virtual threads (Java 25 / Spring Boot 4)
+spring:
+  threads:
+    virtual:
+      enabled: true
+
 # Настройки визуализации
 visualization:
   enabled: true
