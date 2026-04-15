@@ -63,7 +63,7 @@ public class TopCommand extends BaseCommand {
             if (args.length > 2) {
                 try {
                     limit = Math.min(Integer.parseInt(args[2]), 20);
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException _) {}
             }
             Challenge challenge = challengeService.getChallenge(challengeName);
             if (challenge == null) {

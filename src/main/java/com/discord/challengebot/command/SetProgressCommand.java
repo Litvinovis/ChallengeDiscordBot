@@ -74,7 +74,7 @@ public class SetProgressCommand extends BaseCommand {
             try {
                 net.dv8tion.jda.api.entities.User user = event.getJDA().getUserById(userId);
                 if (user != null) resolvedUsername = user.getName();
-            } catch (Exception ignored) {}
+            } catch (Exception _) {}
 
             Challenge challenge = challengeService.getChallenge(challengeName);
             if (challenge == null) {
