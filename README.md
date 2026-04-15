@@ -8,17 +8,17 @@ Sport Challenge Bot позволяет организовывать индиви
 
 ## Технологии
 
-- Java 17
-- Spring Boot
-- Apache Ignite 2.17 (для хранения данных)
-- JDA (Java Discord API)
+- Java 21
+- Spring Boot 4.0.5
+- Apache Ignite 3.1.0 (thin client, для хранения данных)
+- JDA 6.4.1 (Java Discord API)
 - Maven (система сборки)
 
 ## Установка и запуск
 
 ### Требования
 
-- Java 17 или выше
+- Java 21 или выше
 
 ### Сборка проекта
 
@@ -50,18 +50,8 @@ cp .env.example .env
 
 ### Запуск приложения
 
-Для корректной работы Apache Ignite с Java 17+ необходимо запускать приложение со специальными JVM аргументами:
-
 ```bash
-$JAVA_HOME/bin/java --add-opens java.base/java.nio=ALL-UNNAMED \
-     --add-opens java.base/sun.nio.ch=ALL-UNNAMED \
-     --add-opens java.management/sun.management=ALL-UNNAMED \
-     --add-opens jdk.management/com.sun.management.internal=ALL-UNNAMED \
-     --add-opens java.base/java.util=ALL-UNNAMED \
-     --add-opens java.base/java.lang=ALL-UNNAMED \
-     --add-opens java.base/java.time=ALL-UNNAMED \
-     --add-opens java.base/java.io=ALL-UNNAMED \
-     -jar target/challenge-bot-1.0.0.jar
+java -jar target/challenge-bot-1.0.0.jar
 ```
 
 #### Скрипт запуска
