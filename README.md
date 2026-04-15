@@ -8,7 +8,7 @@ Sport Challenge Bot позволяет организовывать индиви
 
 ## Технологии
 
-- Java 21
+- Java 25
 - Spring Boot 4.0.5
 - Apache Ignite 3.1.0 (thin client, для хранения данных)
 - JDA 6.4.1 (Java Discord API)
@@ -18,7 +18,7 @@ Sport Challenge Bot позволяет организовывать индиви
 
 ### Требования
 
-- Java 21 или выше
+- Java 25 или выше
 
 ### Сборка проекта
 
@@ -53,6 +53,8 @@ cp .env.example .env
 ```bash
 java -jar target/challenge-bot-1.0.0.jar
 ```
+
+JVM-аргументы для Apache Ignite (`--add-opens`) задаются автоматически через `spring-boot-maven-plugin` в `pom.xml`.
 
 #### Скрипт запуска
 
