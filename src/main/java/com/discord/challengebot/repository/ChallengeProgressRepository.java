@@ -4,6 +4,7 @@ import com.discord.challengebot.config.IgniteConnectionManager;
 import org.apache.ignite.client.IgniteClient;
 import org.apache.ignite.sql.ResultSet;
 import org.apache.ignite.sql.SqlRow;
+import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
@@ -50,9 +51,11 @@ public class ChallengeProgressRepository {
      */
     public void upsert(String challengeId, String userId, long progress) {
         try {
-            client().sql().execute(null,
-                    "MERGE INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, ?)",
-                    challengeId, userId, progress);
+            client().tables().table("challenge_progress").recordView().upsert(null,
+                    Tuple.create()
+                            .set("challenge_id", challengeId)
+                            .set("user_id", userId)
+                            .set("progress", progress));
         } catch (Exception e) {
             log.error("Ошибка при сохранении прогресса: challengeId={}, userId={}", challengeId, userId, e);
         }
