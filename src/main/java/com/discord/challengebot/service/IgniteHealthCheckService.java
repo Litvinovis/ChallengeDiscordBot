@@ -1,6 +1,7 @@
 package com.discord.challengebot.service;
 
 import com.discord.challengebot.config.IgniteConnectionManager;
+import com.discord.challengebot.config.SchemaInitializer;
 import jakarta.annotation.PostConstruct;
 import org.apache.ignite.client.IgniteClient;
 import org.slf4j.Logger;
@@ -30,6 +31,9 @@ public class IgniteHealthCheckService {
 
     @Autowired
     private IgniteConnectionManager connectionManager;
+
+    @Autowired
+    private SchemaInitializer schemaInitializer;
 
     private final AtomicBoolean healthy = new AtomicBoolean(true);
     private final AtomicBoolean reconnecting = new AtomicBoolean(false);
@@ -101,6 +105,7 @@ public class IgniteHealthCheckService {
                 checkTable(fresh, "challenges");
                 healthy.set(true);
                 reconnecting.set(false);
+                schemaInitializer.init();
                 logger.info("IgniteHealthCheckService: переподключение успешно, кластер доступен");
             } catch (Exception e) {
                 logger.warn("IgniteHealthCheckService: переподключение выполнено, но верификация не прошла: {} — повтор через {}с",
