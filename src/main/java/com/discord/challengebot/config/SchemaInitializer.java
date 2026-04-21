@@ -51,6 +51,10 @@ public class SchemaInitializer {
         }
 
         IgniteClient client = connectionManager.getClient();
+        if (client == null) {
+            log.warn("SchemaInitializer: Ignite недоступен, инициализация схемы отложена до переподключения");
+            return;
+        }
         String[] statements = sql.split(";");
         int ok = 0;
         int failed = 0;

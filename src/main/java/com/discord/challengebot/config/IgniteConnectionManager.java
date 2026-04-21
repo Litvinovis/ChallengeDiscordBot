@@ -51,7 +51,7 @@ public class IgniteConnectionManager {
         if (client != null) {
             try {
                 client.close();
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 log.warn("IgniteConnectionManager: ошибка при закрытии клиента: {}", e.getMessage());
             }
         }
