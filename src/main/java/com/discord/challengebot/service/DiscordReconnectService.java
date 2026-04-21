@@ -1,15 +1,15 @@
 package com.discord.challengebot.service;
 
-import lombok.extern.slf4j.Slf4j;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -19,9 +19,10 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Сервис автоматического переподключения Discord бота для Challenge Bot.
  */
-@Slf4j
 @Service
 public class DiscordReconnectService {
+
+    private static final Logger log = LoggerFactory.getLogger(DiscordReconnectService.class);
     
     @Value("${discord.token}")
     private String discordToken;
