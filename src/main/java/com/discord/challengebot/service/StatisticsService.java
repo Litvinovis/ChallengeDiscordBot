@@ -2,6 +2,7 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
 import net.dv8tion.jda.api.entities.User;
 import org.slf4j.Logger;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -531,6 +533,90 @@ public class StatisticsService implements IStatisticsService {
             logger.error("Ошибка при прогнозировании даты завершения", e);
             return null;
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String formatDailyReportForDiscord(Challenge challenge, ChallengeStats stats,
+                                               List<Map.Entry<String, Long>> topParticipants) {
+        try {
+            if (challenge == null || stats == null) return "";
+            String unit = challenge.getUnit() != null ? challenge.getUnit() : "";
+            String typeLabel = challenge.getType() == ChallengeType.GROUP ? "👥 Групповое" : "👤 Личное";
+            int participantCount = challenge.getParticipants().size();
+
+            int pct = (int) Math.min(100, Math.max(0, stats.percentage()));
+            int filled = pct * 15 / 100;
+            String bar = "█".repeat(filled) + "░".repeat(15 - filled);
+
+            String endDate = challenge.getEndDate() != null
+                    ? challenge.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "—";
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("**").append(challenge.getName()).append("**\n");
+            sb.append(typeLabel).append("  ·  ").append(participantCount).append(" уч.")
+              .append("  ·  до **").append(endDate).append("**  ·  **")
+              .append(stats.daysRemaining()).append(" дн.**\n\n");
+
+            sb.append("📊 **").append(stats.currentValue()).append("** / ")
+              .append(stats.targetValue()).append(" ").append(unit)
+              .append("  —  **").append(String.format("%.0f%%", stats.percentage())).append("**\n");
+            sb.append("`").append(bar).append("`\n");
+
+            if (stats.remaining() <= 0) {
+                sb.append("✅ **Цель достигнута!**\n");
+            } else if (stats.daysRemaining() > 0) {
+                sb.append("⏳ Осталось: **").append(stats.remaining()).append(" ").append(unit).append("**");
+                if (stats.dailyTarget() > 0) {
+                    sb.append("  ·  норма **~").append(Math.round(stats.dailyTarget()))
+                      .append(" ").append(unit).append("/чел/день**");
+                }
+                sb.append("\n");
+            } else {
+                sb.append("⌛ Срок истёк\n");
+            }
+
+            if (topParticipants != null && !topParticipants.isEmpty()) {
+                sb.append("\n🏆 **Топ-3:**\n");
+                String[] medals = {"🥇", "🥈", "🥉"};
+                for (int i = 0; i < topParticipants.size(); i++) {
+                    var entry = topParticipants.get(i);
+                    String medal = i < medals.length ? medals[i] : (i + 1) + ".";
+                    sb.append(medal).append(" ").append(resolveUsername(entry.getKey()))
+                      .append(" — ").append(entry.getValue()).append(" ").append(unit).append("\n");
+                }
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            logger.error("Ошибка при форматировании ежедневного отчёта для испытания: {}",
+                    challenge != null ? challenge.getName() : "null", e);
+            return "";
+        }
+    }
+
+    private String resolveUsername(String userId) {
+        if (participantService != null) {
+            try {
+                Participant participant = participantService.getParticipant(userId);
+                if (participant != null && participant.getUsername() != null
+                        && !participant.getUsername().isEmpty()) {
+                    return participant.getUsername();
+                }
+            } catch (Exception e) {
+                logger.debug("Не удалось получить имя участника для ID {}: {}", userId, e.getMessage());
+            }
+        }
+        if (discordService != null) {
+            try {
+                User user = discordService.getJDA().getUserById(userId);
+                if (user != null) return user.getName();
+            } catch (Exception e) {
+                logger.debug("Не удалось получить имя Discord для ID {}: {}", userId, e.getMessage());
+            }
+        }
+        return userId;
     }
 
     /**
