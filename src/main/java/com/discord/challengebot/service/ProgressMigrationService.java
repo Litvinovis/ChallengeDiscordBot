@@ -1,44 +1,38 @@
 package com.discord.challengebot.service;
 
-import com.discord.challengebot.config.IgniteConnectionManager;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
-import org.apache.ignite.client.IgniteClient;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
 
 @Service
+@DependsOn("schemaInitializer")
 public class ProgressMigrationService {
 
     private static final Logger log = LoggerFactory.getLogger(ProgressMigrationService.class);
 
-    private final IgniteConnectionManager connectionManager;
     private final ChallengeRepository challengeRepository;
     private final ChallengeProgressRepository progressRepository;
 
-    public ProgressMigrationService(IgniteConnectionManager connectionManager,
-                                    ChallengeRepository challengeRepository,
+    public ProgressMigrationService(ChallengeRepository challengeRepository,
                                     ChallengeProgressRepository progressRepository) {
-        this.connectionManager = connectionManager;
         this.challengeRepository = challengeRepository;
         this.progressRepository = progressRepository;
-    }
-
-    private IgniteClient client() {
-        IgniteClient c = connectionManager.getClient();
-        if (c == null) throw new IllegalStateException("Ignite 3 недоступен");
-        return c;
     }
 
     /**
      * Мигрирует прогресс участников из JSON-поля Challenge.participantProgress
      * в нормализованную таблицу challenge_progress, если данных там ещё нет (идемпотентно).
+     * Запускается автоматически при старте после инициализации схемы.
      */
+    @PostConstruct
     public void migrate() {
         log.info("Запуск миграции прогресса участников из JSON в challenge_progress...");
 
@@ -79,22 +73,4 @@ public class ProgressMigrationService {
                 totalMigrated, totalSkipped);
     }
 
-    /**
-     * Создаёт таблицу challenge_progress если она не существует.
-     */
-    private void createChallengeProgressTable() {
-        try {
-            client().sql().execute(null,
-                "CREATE TABLE IF NOT EXISTS challenge_progress (" +
-                "  challenge_id VARCHAR NOT NULL," +
-                "  user_id VARCHAR NOT NULL," +
-                "  progress BIGINT NOT NULL DEFAULT 0," +
-                "  PRIMARY KEY (challenge_id, user_id)" +
-                ") ZONE challengebot");
-            log.info("Таблица challenge_progress создана успешно");
-        } catch (Exception e) {
-            log.error("Ошибка при создании таблицы challenge_progress", e);
-            throw new RuntimeException("Не удалось создать таблицу challenge_progress", e);
-        }
-    }
 }

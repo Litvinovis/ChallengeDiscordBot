@@ -130,20 +130,17 @@ class ChallengeServiceExtendedTest {
     void getUserChallenges_returnsOnlyChallengesWithParticipant() {
         Challenge c1 = new Challenge();
         c1.setId("c1");
-        c1.addParticipant("user1");
 
         Challenge c2 = new Challenge();
         c2.setId("c2");
-        c2.addParticipant("user2");
 
         when(challengeRepository.findAll()).thenReturn(Arrays.asList(c1, c2));
-        // progressRepository возвращает пустую карту — используется fallback на participants
-        when(progressRepository.findByChallengeId("c1")).thenReturn(new HashMap<>());
-        when(progressRepository.findByChallengeId("c2")).thenReturn(new HashMap<>());
+        when(progressRepository.findByChallengeId("c1")).thenReturn(Map.of("user1", 100L));
+        // c2 returns empty (default from BeforeEach)
 
         List<Challenge> result = challengeService.getUserChallenges("user1");
         assertEquals(1, result.size());
-        assertTrue(result.get(0).hasParticipant("user1"));
+        assertEquals("c1", result.get(0).getId());
     }
 
     @Test

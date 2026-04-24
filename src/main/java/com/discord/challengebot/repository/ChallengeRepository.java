@@ -115,7 +115,7 @@ public class ChallengeRepository {
         try (ResultSet<SqlRow> rs = client.sql().execute(null,
                 "SELECT id, name, target_value, current_value, chal_type, " +
                 "start_date, end_date, active, description, unit, " +
-                "participant_progress, participants FROM challenges ORDER BY name")) {
+                "participants FROM challenges ORDER BY name")) {
             while (rs.hasNext()) {
                 SqlRow row = rs.next();
                 // Маппинг через унифицированный метод: SqlRow — регистронезависимый доступ по имени
@@ -204,12 +204,6 @@ public class ChallengeRepository {
         ch.setDescription(asString(getter.apply("DESCRIPTION")));
         ch.setUnit(asString(getter.apply("UNIT")));
 
-        // participant_progress и participants оставлены в таблице для обратной совместимости,
-        // но маппируются во вспомогательные поля Challenge только для целей миграции.
-        // Основная работа с прогрессом ведётся через ChallengeProgressRepository.
-        String progressJson = asString(getter.apply("PARTICIPANT_PROGRESS"));
-        ch.setParticipantProgress(fromJsonToMapStringLong(progressJson));
-
         String participantsJson = asString(getter.apply("PARTICIPANTS"));
         ch.setParticipants(fromJsonToListString(participantsJson));
 
@@ -231,8 +225,6 @@ public class ChallengeRepository {
                 .set("active", ch.isActive())
                 .set("description", ch.getDescription())
                 .set("unit", ch.getUnit())
-                // Сохраняем participant_progress/participants для обратной совместимости
-                .set("participant_progress", toJson(ch.getParticipantProgress() != null ? ch.getParticipantProgress() : new HashMap<>()))
                 .set("participants", toJson(ch.getParticipants() != null ? ch.getParticipants() : new ArrayList<>()));
     }
 

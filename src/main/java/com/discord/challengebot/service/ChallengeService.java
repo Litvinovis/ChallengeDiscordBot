@@ -62,29 +62,12 @@ public class ChallengeService implements IChallengeService {
                 .findFirst().orElse(null);
     }
 
-    /**
-     * Загружает прогресс участников из нормализованной таблицы.
-     * Если таблица пустая (до миграции) — возвращает данные из JSON-колонки challenge.
-     */
     private Map<String, Long> loadProgress(Challenge challenge) {
-        var progress = progressRepository.findByChallengeId(challenge.getId());
-        if (!progress.isEmpty()) return progress;
-        // Fallback на legacy JSON-данные (до завершения миграции)
-        return challenge.getParticipantProgress() != null
-                ? challenge.getParticipantProgress()
-                : new HashMap<>();
+        return progressRepository.findByChallengeId(challenge.getId());
     }
 
-    /**
-     * Загружает список участников из прогресса (ключи карты прогресса).
-     */
     private List<String> loadParticipantIds(Challenge challenge) {
-        var progress = progressRepository.findByChallengeId(challenge.getId());
-        if (!progress.isEmpty()) return new ArrayList<>(progress.keySet());
-        // Fallback на legacy JSON-данные
-        return challenge.getParticipants() != null
-                ? challenge.getParticipants()
-                : new ArrayList<>();
+        return new ArrayList<>(progressRepository.findByChallengeId(challenge.getId()).keySet());
     }
 
     // ---- IChallengeService implementation ----
@@ -249,11 +232,7 @@ public class ChallengeService implements IChallengeService {
         try {
             if (userId == null || userId.isBlank()) return new ArrayList<>();
             return getAllChallenges().stream()
-                    .filter(ch -> {
-                        var progress = progressRepository.findByChallengeId(ch.getId());
-                        if (!progress.isEmpty()) return progress.containsKey(userId);
-                        return ch.hasParticipant(userId);
-                    })
+                    .filter(ch -> progressRepository.findByChallengeId(ch.getId()).containsKey(userId))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("Ошибка при получении испытаний пользователя: {}", userId, e);
