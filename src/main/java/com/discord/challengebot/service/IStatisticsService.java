@@ -89,6 +89,19 @@ public interface IStatisticsService {
     String formatChallengeStats(Challenge challenge, ChallengeStats stats);
 
     /**
+     * Форматирует красивый отчёт для ежедневной рассылки в Discord.
+     * Отличается от {@link #formatReportForDiscord} наличием прогресс-бара, медалей и
+     * принимает заранее загруженный список топ-участников (из нормализованной таблицы).
+     *
+     * @param challenge      испытание
+     * @param stats          объект статистики
+     * @param topParticipants топ участников (userId → прогресс), уже отсортированный по убыванию
+     * @return отформатированная строка
+     */
+    String formatDailyReportForDiscord(Challenge challenge, ChallengeStats stats,
+                                       List<Map.Entry<String, Long>> topParticipants);
+
+    /**
      * Прогнозирует дату завершения испытания для пользователя на основе истории прогресса.
      *
      * @param challengeId идентификатор испытания

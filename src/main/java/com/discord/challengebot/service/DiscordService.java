@@ -305,17 +305,20 @@ public class DiscordService implements IDiscordService {
             List<Challenge> challenges = challengeService.getAllChallenges().stream()
                     .filter(Challenge::isActive).toList();
             if (challenges.isEmpty()) {
-                sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
+                sendMessageToChannel(discordConfig.getReportChannel(), "📋 Активных испытаний нет.");
                 return;
             }
-            var report = new StringBuilder("**Ежедневный отчёт по испытаниям**\n\n");
+            sendMessageToChannel(discordConfig.getReportChannel(),
+                    "📋 **Ежедневный отчёт** · " + challenges.size() + " активных испытаний");
             for (var challenge : challenges) {
                 ChallengeStats stats = challengeService.getChallengeStats(challenge);
-                if (stats != null) {
-                    report.append(statisticsService.formatReportForDiscord(challenge, stats)).append("\n");
+                if (stats == null) continue;
+                var top3 = challengeService.getTopParticipants(challenge, 3);
+                String message = statisticsService.formatDailyReportForDiscord(challenge, stats, top3);
+                if (!message.isBlank()) {
+                    sendMessageToChannel(discordConfig.getReportChannel(), message);
                 }
             }
-            sendMessageToChannel(discordConfig.getReportChannel(), report.toString());
         } catch (Exception e) {
             logger.error("Ошибка при отправке ежедневного отчёта", e);
         }
