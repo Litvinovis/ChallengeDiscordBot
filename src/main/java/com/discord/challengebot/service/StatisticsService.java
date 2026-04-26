@@ -555,6 +555,7 @@ public class StatisticsService implements IStatisticsService {
                     ? challenge.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "—";
 
             StringBuilder sb = new StringBuilder();
+            sb.append("──────────────────────────────\n");
             sb.append("**").append(challenge.getName()).append("**\n");
             sb.append(typeLabel).append("  ·  ").append(participantCount).append(" уч.")
               .append("  ·  до **").append(endDate).append("**  ·  **")
@@ -608,9 +609,13 @@ public class StatisticsService implements IStatisticsService {
                 logger.debug("Не удалось получить имя участника для ID {}: {}", userId, e.getMessage());
             }
         }
-        if (discordService != null) {
+        if (discordService != null && discordService.getJDA() != null) {
             try {
                 User user = discordService.getJDA().getUserById(userId);
+                if (user == null) {
+                    // getUserById ищет только в кэше; retrieveUserById делает REST-запрос
+                    user = discordService.getJDA().retrieveUserById(userId).complete();
+                }
                 if (user != null) return user.getName();
             } catch (Exception e) {
                 logger.debug("Не удалось получить имя Discord для ID {}: {}", userId, e.getMessage());
