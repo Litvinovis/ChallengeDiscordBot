@@ -132,6 +132,33 @@ public class ChallengeRepository {
     }
 
     /**
+     * Возвращает legacy-прогресс участников для всех испытаний из колонки participant_progress.
+     * Используется только миграционным сервисом.
+     *
+     * @return карта challengeId -> (userId -> progress)
+     */
+    public Map<String, Map<String, Long>> findAllLegacyParticipantProgress() {
+        Map<String, Map<String, Long>> result = new HashMap<>();
+        IgniteClient client = connectionManager.getClient();
+        if (client == null) return result;
+        try (ResultSet<SqlRow> rs = client.sql().execute(null,
+                "SELECT id, participant_progress FROM challenges")) {
+            while (rs.hasNext()) {
+                SqlRow row = rs.next();
+                String id = row.stringValue("id");
+                String json = row.stringValue("participant_progress");
+                if (json != null && !json.isBlank() && !json.equals("{}")) {
+                    Map<String, Long> progress = fromJsonToMapStringLong(json);
+                    if (!progress.isEmpty()) result.put(id, progress);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Ошибка при чтении legacy participant_progress: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
      * Удаляет испытание по ID.
      *
      * @param id идентификатор испытания
