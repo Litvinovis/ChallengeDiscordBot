@@ -1,6 +1,5 @@
 package com.discord.challengebot.service;
 
-import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
 import jakarta.annotation.PostConstruct;
@@ -9,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -28,26 +26,23 @@ public class ProgressMigrationService {
     }
 
     /**
-     * Мигрирует прогресс участников из JSON-поля Challenge.participantProgress
+     * Мигрирует прогресс участников из JSON-колонки participant_progress
      * в нормализованную таблицу challenge_progress, если данных там ещё нет (идемпотентно).
+     * Читает JSON напрямую из БД, так как ChallengeRepository.mapChallenge намеренно
+     * не загружает participant_progress в объект Challenge.
      * Запускается автоматически при старте после инициализации схемы.
      */
     @PostConstruct
     public void migrate() {
         log.info("Запуск миграции прогресса участников из JSON в challenge_progress...");
 
-        List<Challenge> challenges = challengeRepository.findAll();
+        Map<String, Map<String, Long>> legacyData = challengeRepository.findAllLegacyParticipantProgress();
         int totalMigrated = 0;
         int totalSkipped = 0;
 
-        for (Challenge challenge : challenges) {
-            String challengeId = challenge.getId();
-            Map<String, Long> progress = challenge.getParticipantProgress();
-
-            if (progress == null || progress.isEmpty()) {
-                totalSkipped++;
-                continue;
-            }
+        for (Map.Entry<String, Map<String, Long>> challengeEntry : legacyData.entrySet()) {
+            String challengeId = challengeEntry.getKey();
+            Map<String, Long> progress = challengeEntry.getValue();
 
             if (progressRepository.existsByChallengeId(challengeId)) {
                 log.debug("Прогресс для испытания '{}' уже существует в challenge_progress — пропуск", challengeId);
@@ -66,7 +61,7 @@ public class ProgressMigrationService {
                 }
             }
             totalMigrated += count;
-            log.info("Испытание '{}': мигрировано {} записей прогресса", challenge.getName(), count);
+            log.info("Испытание '{}': мигрировано {} записей прогресса", challengeId, count);
         }
 
         log.info("Миграция прогресса завершена. Перенесено записей: {}, пропущено испытаний: {}",
