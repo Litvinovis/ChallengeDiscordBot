@@ -1,159 +1,61 @@
 package com.discord.challengebot.repository;
 
-import com.discord.challengebot.config.IgniteConnectionManager;
-import org.apache.ignite.client.IgniteClient;
-import org.apache.ignite.sql.ResultSet;
-import org.apache.ignite.sql.SqlRow;
-import org.apache.ignite.table.KeyValueView;
-import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Репозиторий для нормализованного хранения прогресса участников.
- * Работает с таблицей challenge_progress через KeyValueView (составной ключ).
- * Заменяет JSON-сериализацию participant_progress в таблице challenges.
- */
 @Repository
 public class ChallengeProgressRepository {
 
     private static final Logger log = LoggerFactory.getLogger(ChallengeProgressRepository.class);
 
-    private final IgniteConnectionManager connectionManager;
+    private final JdbcTemplate jdbc;
 
-    /**
-     * Создаёт репозиторий прогресса участников.
-     *
-     * @param connectionManager менеджер подключения к Ignite 3
-     */
-    public ChallengeProgressRepository(IgniteConnectionManager connectionManager) {
-        this.connectionManager = connectionManager;
+    public ChallengeProgressRepository(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
     }
 
-    private IgniteClient client() {
-        IgniteClient c = connectionManager.getClient();
-        if (c == null) {
-            throw new IllegalStateException("Ignite 3 недоступен");
-        }
-        return c;
-    }
-
-    /**
-     * Сохраняет или обновляет прогресс участника в испытании.
-     * Операция идемпотентна: при повторном вызове с теми же ключами значение перезаписывается.
-     * KeyValueView с явным разделением ключ/значение корректно обрабатывает составной PK
-     * (RecordView.upsert давал SqlException на составных ключах в Ignite 3.0.0).
-     *
-     * @param challengeId идентификатор испытания
-     * @param userId      идентификатор пользователя
-     * @param progress    новое значение прогресса
-     */
     public void upsert(String challengeId, String userId, long progress) {
-        try {
-            KeyValueView<Tuple, Tuple> kv = client().tables().table("challenge_progress").keyValueView();
-            kv.put(null,
-                    Tuple.create().set("challenge_id", challengeId).set("user_id", userId),
-                    Tuple.create().set("progress", progress));
-        } catch (Exception e) {
-            log.error("Ошибка при сохранении прогресса: challengeId={}, userId={}", challengeId, userId, e);
-        }
+        jdbc.update(
+            "INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, ?) " +
+            "ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = EXCLUDED.progress",
+            challengeId, userId, progress);
     }
 
-    /**
-     * Возвращает карту прогресса всех участников указанного испытания.
-     *
-     * @param challengeId идентификатор испытания
-     * @return карта userId -> progress
-     */
     public Map<String, Long> findByChallengeId(String challengeId) {
         Map<String, Long> result = new HashMap<>();
-        try (ResultSet<SqlRow> rs = client().sql().execute(null,
-                "SELECT user_id, progress FROM challenge_progress WHERE challenge_id = ?",
-                challengeId)) {
-            while (rs.hasNext()) {
-                SqlRow row = rs.next();
-                result.put(row.stringValue("user_id"), row.longValue("progress"));
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении прогресса для испытания {}", challengeId, e);
-        }
+        jdbc.query(
+            "SELECT user_id, progress FROM challenge_progress WHERE challenge_id = ?",
+            (RowCallbackHandler) rs -> result.put(rs.getString("user_id"), rs.getLong("progress")),
+            challengeId);
         return result;
     }
 
-    /**
-     * Возвращает карту прогресса пользователя по всем испытаниям.
-     *
-     * @param userId идентификатор пользователя
-     * @return карта challengeId -> progress
-     */
     public Map<String, Long> findByUserId(String userId) {
         Map<String, Long> result = new HashMap<>();
-        try (ResultSet<SqlRow> rs = client().sql().execute(null,
-                "SELECT challenge_id, progress FROM challenge_progress WHERE user_id = ?",
-                userId)) {
-            while (rs.hasNext()) {
-                SqlRow row = rs.next();
-                result.put(row.stringValue("challenge_id"), row.longValue("progress"));
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении прогресса пользователя {}", userId, e);
-        }
+        jdbc.query(
+            "SELECT challenge_id, progress FROM challenge_progress WHERE user_id = ?",
+            (RowCallbackHandler) rs -> result.put(rs.getString("challenge_id"), rs.getLong("progress")),
+            userId);
         return result;
     }
 
-    /**
-     * Удаляет запись о прогрессе конкретного участника в конкретном испытании.
-     *
-     * @param challengeId идентификатор испытания
-     * @param userId      идентификатор пользователя
-     */
     public void delete(String challengeId, String userId) {
-        try {
-            client().sql().execute(null,
-                    "DELETE FROM challenge_progress WHERE challenge_id = ? AND user_id = ?",
-                    challengeId, userId);
-        } catch (Exception e) {
-            log.error("Ошибка при удалении прогресса: challengeId={}, userId={}", challengeId, userId, e);
-        }
+        jdbc.update("DELETE FROM challenge_progress WHERE challenge_id = ? AND user_id = ?", challengeId, userId);
     }
 
-    /**
-     * Удаляет все записи о прогрессе для указанного испытания.
-     * Вызывается при удалении испытания.
-     *
-     * @param challengeId идентификатор испытания
-     */
     public void deleteByChallengeId(String challengeId) {
-        try {
-            client().sql().execute(null,
-                    "DELETE FROM challenge_progress WHERE challenge_id = ?",
-                    challengeId);
-        } catch (Exception e) {
-            log.error("Ошибка при удалении прогресса для испытания {}", challengeId, e);
-        }
+        jdbc.update("DELETE FROM challenge_progress WHERE challenge_id = ?", challengeId);
     }
 
-    /**
-     * Проверяет, есть ли хоть одна запись прогресса для данного испытания.
-     * Используется миграционным сервисом для идемпотентности.
-     *
-     * @param challengeId идентификатор испытания
-     * @return true если записи существуют
-     */
     public boolean existsByChallengeId(String challengeId) {
-        try (ResultSet<SqlRow> rs = client().sql().execute(null,
-                "SELECT COUNT(*) AS cnt FROM challenge_progress WHERE challenge_id = ?",
-                challengeId)) {
-            if (rs.hasNext()) {
-                return rs.next().longValue("cnt") > 0;
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при проверке наличия прогресса для испытания {}", challengeId, e);
-        }
-        return false;
+        Integer count = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM challenge_progress WHERE challenge_id = ?", Integer.class, challengeId);
+        return count != null && count > 0;
     }
 }
