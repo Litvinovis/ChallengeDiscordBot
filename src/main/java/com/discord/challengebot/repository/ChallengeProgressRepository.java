@@ -4,6 +4,7 @@ import com.discord.challengebot.config.IgniteConnectionManager;
 import org.apache.ignite.client.IgniteClient;
 import org.apache.ignite.sql.ResultSet;
 import org.apache.ignite.sql.SqlRow;
+import org.apache.ignite.table.KeyValueView;
 import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +15,7 @@ import java.util.Map;
 
 /**
  * Репозиторий для нормализованного хранения прогресса участников.
- * Работает с таблицей challenge_progress через SQL API (составной ключ).
+ * Работает с таблицей challenge_progress через KeyValueView (составной ключ).
  * Заменяет JSON-сериализацию participant_progress в таблице challenges.
  */
 @Repository
@@ -44,6 +45,8 @@ public class ChallengeProgressRepository {
     /**
      * Сохраняет или обновляет прогресс участника в испытании.
      * Операция идемпотентна: при повторном вызове с теми же ключами значение перезаписывается.
+     * KeyValueView с явным разделением ключ/значение корректно обрабатывает составной PK
+     * (RecordView.upsert давал SqlException на составных ключах в Ignite 3.0.0).
      *
      * @param challengeId идентификатор испытания
      * @param userId      идентификатор пользователя
@@ -51,11 +54,10 @@ public class ChallengeProgressRepository {
      */
     public void upsert(String challengeId, String userId, long progress) {
         try {
-            client().tables().table("challenge_progress").recordView().upsert(null,
-                    Tuple.create()
-                            .set("challenge_id", challengeId)
-                            .set("user_id", userId)
-                            .set("progress", progress));
+            KeyValueView<Tuple, Tuple> kv = client().tables().table("challenge_progress").keyValueView();
+            kv.put(null,
+                    Tuple.create().set("challenge_id", challengeId).set("user_id", userId),
+                    Tuple.create().set("progress", progress));
         } catch (Exception e) {
             log.error("Ошибка при сохранении прогресса: challengeId={}, userId={}", challengeId, userId, e);
         }
