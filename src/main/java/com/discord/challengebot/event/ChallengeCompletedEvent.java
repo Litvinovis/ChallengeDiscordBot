@@ -8,8 +8,4 @@ package com.discord.challengebot.event;
  * @param challengeName название испытания
  * @param finalValue    итоговое значение прогресса на момент завершения
  */
-public record ChallengeCompletedEvent(
-        String challengeId,
-        String challengeName,
-        long finalValue
-) {}
+public record ChallengeCompletedEvent(String challengeId, String challengeName, long finalValue) { }

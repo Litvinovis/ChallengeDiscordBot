@@ -19,114 +19,114 @@ import java.util.List;
  */
 @Component
 public class DailyReportScheduler {
-    private static final Logger logger = LoggerFactory.getLogger(DailyReportScheduler.class);
-    
-    @Autowired
-    private DiscordService discordService;
-    
-    @Autowired
-    private ChallengeService challengeService;
+	private static final Logger logger = LoggerFactory.getLogger(DailyReportScheduler.class);
 
-    /**
-     * Отправка ежедневных отчетов о прогрессе в 7:00 утра
-     */
-    @Scheduled(cron = "${scheduled.cron.daily-report}")
-    public void sendDailyProgressReports() {
-        logger.info("Запуск отправки ежедневных отчетов о прогрессе");
-        try {
-            discordService.sendDailyReport();
-            logger.info("Ежедневные отчеты успешно отправлены");
-        } catch (Exception e) {
-            logger.error("Ошибка при отправке ежедневных отчетов", e);
-        }
-    }
+	@Autowired
+	private DiscordService discordService;
 
-    /**
-     * Проверка завершения испытаний каждый час
-     */
-    @Scheduled(cron = "0 0 * * * ?") // Каждый час
-    public void checkChallengeCompletions() {
-        logger.info("Проверка завершения испытаний");
-        
-        try {
-            // Получаем все активные испытания
-            List<Challenge> challenges = challengeService.getAllChallenges();
-            LocalDateTime now = LocalDateTime.now();
-            
-            logger.debug("Получено {} активных испытаний для проверки завершения", challenges.size());
-            
-            int completedChallenges = 0;
-            for (Challenge challenge : challenges) {
-                // Проверяем, активно ли испытание и достигнута ли цель
-                if (challenge.isActive() && isChallengeCompleted(challenge)) {
-                    logger.info("Испытание '{}' завершено по достижению цели", challenge.getName());
-                    // Испытание завершено успешно по достижению цели
-                    challengeService.completeChallenge(challenge);
-                    discordService.sendChallengeCompletionNotification(challenge);
-                    completedChallenges++;
-                } else if (challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(now)) {
-                    logger.info("Испытание '{}' завершено по истечению срока", challenge.getName());
-                    // Испытание завершено по истечению срока без достижения цели
-                    challengeService.completeChallenge(challenge);
-                    discordService.sendChallengeFailureNotification(challenge);
-                    completedChallenges++;
-                }
-            }
-            
-            logger.info("Проверка завершения испытаний завершена. Завершено {} испытаний", completedChallenges);
-        } catch (Exception e) {
-            logger.error("Ошибка при проверке завершения испытаний", e);
-        }
-    }
-    
-    /**
-     * Проверяет, достигнуто ли целевое значение испытания.
-     *
-     * @param challenge испытание для проверки
-     * @return {@code true}, если текущее значение >= целевого
-     */
-    private boolean isChallengeCompleted(Challenge challenge) {
-        try {
-            logger.debug("Проверка завершения испытания по цели: {} (текущее значение: {}, целевое значение: {})", 
-                        challenge.getName(), challenge.getCurrentValue(), challenge.getTargetValue());
-            
-            // Испытание считается завершенным, если текущее значение больше или равно целевому
-            boolean isCompleted = challenge.getCurrentValue() >= challenge.getTargetValue();
-            
-            logger.debug("Статус завершения по цели для испытания '{}': {}", challenge.getName(), isCompleted);
-            return isCompleted;
-        } catch (Exception e) {
-            logger.error("Ошибка при проверке завершения испытания по цели: {}", 
-                        challenge != null ? challenge.getName() : "null", e);
-            return false;
-        }
-    }
+	@Autowired
+	private ChallengeService challengeService;
 
-    /**
-     * Очистка старых данных каждый день в 2:00 ночи
-     */
-    @Scheduled(cron = "0 0 2 * * ?") // Каждый день в 2:00
-    public void cleanupOldData() {
-        logger.info("Очистка старых данных");
-        try {
-            // Получаем все испытания
-            List<Challenge> allChallenges = challengeService.getAllChallenges();
-            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-            int deletedCount = 0;
-            
-            // Удаляем завершенные испытания старше 30 дней
-            for (Challenge challenge : allChallenges) {
-                if (!challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
-                    if (challengeService.deleteChallenge(challenge.getName())) {
-                        deletedCount++;
-                        logger.info("Удалено старое завершенное испытание: {}", challenge.getName());
-                    }
-                }
-            }
-            
-            logger.info("Очистка старых данных завершена. Удалено {} испытаний", deletedCount);
-        } catch (Exception e) {
-            logger.error("Ошибка при очистке старых данных", e);
-        }
-    }
+	/**
+	 * Отправка ежедневных отчетов о прогрессе в 7:00 утра
+	 */
+	@Scheduled(cron = "${scheduled.cron.daily-report}")
+	public void sendDailyProgressReports() {
+		logger.info("Запуск отправки ежедневных отчетов о прогрессе");
+		try {
+			discordService.sendDailyReport();
+			logger.info("Ежедневные отчеты успешно отправлены");
+		} catch (Exception e) {
+			logger.error("Ошибка при отправке ежедневных отчетов", e);
+		}
+	}
+
+	/**
+	 * Проверка завершения испытаний каждый час
+	 */
+	@Scheduled(cron = "0 0 * * * ?") // Каждый час
+	public void checkChallengeCompletions() {
+		logger.info("Проверка завершения испытаний");
+
+		try {
+			// Получаем все активные испытания
+			List<Challenge> challenges = challengeService.getAllChallenges();
+			LocalDateTime now = LocalDateTime.now();
+
+			logger.debug("Получено {} активных испытаний для проверки завершения", challenges.size());
+
+			int completedChallenges = 0;
+			for (Challenge challenge : challenges) {
+				// Проверяем, активно ли испытание и достигнута ли цель
+				if (challenge.isActive() && isChallengeCompleted(challenge)) {
+					logger.info("Испытание '{}' завершено по достижению цели", challenge.getName());
+					// Испытание завершено успешно по достижению цели
+					challengeService.completeChallenge(challenge);
+					discordService.sendChallengeCompletionNotification(challenge);
+					completedChallenges++;
+				} else if (challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(now)) {
+					logger.info("Испытание '{}' завершено по истечению срока", challenge.getName());
+					// Испытание завершено по истечению срока без достижения цели
+					challengeService.completeChallenge(challenge);
+					discordService.sendChallengeFailureNotification(challenge);
+					completedChallenges++;
+				}
+			}
+
+			logger.info("Проверка завершения испытаний завершена. Завершено {} испытаний", completedChallenges);
+		} catch (Exception e) {
+			logger.error("Ошибка при проверке завершения испытаний", e);
+		}
+	}
+
+	/**
+	 * Проверяет, достигнуто ли целевое значение испытания.
+	 *
+	 * @param challenge испытание для проверки
+	 * @return {@code true}, если текущее значение >= целевого
+	 */
+	private boolean isChallengeCompleted(Challenge challenge) {
+		try {
+			logger.debug("Проверка завершения испытания по цели: {} (текущее значение: {}, целевое значение: {})",
+							challenge.getName(), challenge.getCurrentValue(), challenge.getTargetValue());
+
+			// Испытание считается завершенным, если текущее значение больше или равно целевому
+			boolean isCompleted = challenge.getCurrentValue() >= challenge.getTargetValue();
+
+			logger.debug("Статус завершения по цели для испытания '{}': {}", challenge.getName(), isCompleted);
+			return isCompleted;
+		} catch (Exception e) {
+			logger.error("Ошибка при проверке завершения испытания по цели: {}",
+							challenge != null ? challenge.getName() : "null", e);
+			return false;
+		}
+	}
+
+	/**
+	 * Очистка старых данных каждый день в 2:00 ночи
+	 */
+	@Scheduled(cron = "0 0 2 * * ?") // Каждый день в 2:00
+	public void cleanupOldData() {
+		logger.info("Очистка старых данных");
+		try {
+			// Получаем все испытания
+			List<Challenge> allChallenges = challengeService.getAllChallenges();
+			LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+			int deletedCount = 0;
+
+			// Удаляем завершенные испытания старше 30 дней
+			for (Challenge challenge : allChallenges) {
+				if (!challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
+					if (challengeService.deleteChallenge(challenge.getName())) {
+						deletedCount++;
+						logger.info("Удалено старое завершенное испытание: {}", challenge.getName());
+					}
+				}
+			}
+
+			logger.info("Очистка старых данных завершена. Удалено {} испытаний", deletedCount);
+		} catch (Exception e) {
+			logger.error("Ошибка при очистке старых данных", e);
+		}
+	}
 }

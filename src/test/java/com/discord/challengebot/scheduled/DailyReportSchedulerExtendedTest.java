@@ -22,173 +22,173 @@ import static org.mockito.Mockito.*;
  */
 class DailyReportSchedulerExtendedTest {
 
-    @Mock
-    private DiscordService discordService;
+	@Mock
+	private DiscordService discordService;
 
-    @Mock
-    private ChallengeService challengeService;
+	@Mock
+	private ChallengeService challengeService;
 
-    @InjectMocks
-    private DailyReportScheduler dailyReportScheduler;
+	@InjectMocks
+	private DailyReportScheduler dailyReportScheduler;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
+	@BeforeEach
+	void setUp() {
+		MockitoAnnotations.openMocks(this);
+	}
 
-    // ---- cleanupOldData ----
+	// ---- cleanupOldData ----
 
-    @Test
-    void cleanupOldData_deletesInactiveChallengesOlderThan30Days() {
-        Challenge old = new Challenge();
-        old.setName("OldChallenge");
-        old.setActive(false);
-        old.setEndDate(LocalDateTime.now().minusDays(31));
+	@Test
+	void cleanupOldData_deletesInactiveChallengesOlderThan30Days() {
+		Challenge old = new Challenge();
+		old.setName("OldChallenge");
+		old.setActive(false);
+		old.setEndDate(LocalDateTime.now().minusDays(31));
 
-        when(challengeService.getAllChallenges()).thenReturn(List.of(old));
-        when(challengeService.deleteChallenge("OldChallenge")).thenReturn(true);
+		when(challengeService.getAllChallenges()).thenReturn(List.of(old));
+		when(challengeService.deleteChallenge("OldChallenge")).thenReturn(true);
 
-        dailyReportScheduler.cleanupOldData();
+		dailyReportScheduler.cleanupOldData();
 
-        verify(challengeService).deleteChallenge("OldChallenge");
-    }
+		verify(challengeService).deleteChallenge("OldChallenge");
+	}
 
-    @Test
-    void cleanupOldData_doesNotDeleteActiveChallenges() {
-        Challenge active = new Challenge();
-        active.setName("ActiveChallenge");
-        active.setActive(true);
-        active.setEndDate(LocalDateTime.now().minusDays(31));
+	@Test
+	void cleanupOldData_doesNotDeleteActiveChallenges() {
+		Challenge active = new Challenge();
+		active.setName("ActiveChallenge");
+		active.setActive(true);
+		active.setEndDate(LocalDateTime.now().minusDays(31));
 
-        when(challengeService.getAllChallenges()).thenReturn(List.of(active));
+		when(challengeService.getAllChallenges()).thenReturn(List.of(active));
 
-        dailyReportScheduler.cleanupOldData();
+		dailyReportScheduler.cleanupOldData();
 
-        verify(challengeService, never()).deleteChallenge(anyString());
-    }
+		verify(challengeService, never()).deleteChallenge(anyString());
+	}
 
-    @Test
-    void cleanupOldData_doesNotDeleteRecentInactiveChallenges() {
-        Challenge recent = new Challenge();
-        recent.setName("RecentCompleted");
-        recent.setActive(false);
-        recent.setEndDate(LocalDateTime.now().minusDays(5)); // within 30 days
+	@Test
+	void cleanupOldData_doesNotDeleteRecentInactiveChallenges() {
+		Challenge recent = new Challenge();
+		recent.setName("RecentCompleted");
+		recent.setActive(false);
+		recent.setEndDate(LocalDateTime.now().minusDays(5)); // within 30 days
 
-        when(challengeService.getAllChallenges()).thenReturn(List.of(recent));
+		when(challengeService.getAllChallenges()).thenReturn(List.of(recent));
 
-        dailyReportScheduler.cleanupOldData();
+		dailyReportScheduler.cleanupOldData();
 
-        verify(challengeService, never()).deleteChallenge(anyString());
-    }
+		verify(challengeService, never()).deleteChallenge(anyString());
+	}
 
-    @Test
-    void cleanupOldData_emptyList_doesNothing() {
-        when(challengeService.getAllChallenges()).thenReturn(Collections.emptyList());
+	@Test
+	void cleanupOldData_emptyList_doesNothing() {
+		when(challengeService.getAllChallenges()).thenReturn(Collections.emptyList());
 
-        dailyReportScheduler.cleanupOldData();
+		dailyReportScheduler.cleanupOldData();
 
-        verify(challengeService, never()).deleteChallenge(anyString());
-    }
+		verify(challengeService, never()).deleteChallenge(anyString());
+	}
 
-    @Test
-    void cleanupOldData_mixedChallenges_deletesOnlyEligible() {
-        Challenge oldCompleted = new Challenge();
-        oldCompleted.setName("OldDone");
-        oldCompleted.setActive(false);
-        oldCompleted.setEndDate(LocalDateTime.now().minusDays(40));
+	@Test
+	void cleanupOldData_mixedChallenges_deletesOnlyEligible() {
+		Challenge oldCompleted = new Challenge();
+		oldCompleted.setName("OldDone");
+		oldCompleted.setActive(false);
+		oldCompleted.setEndDate(LocalDateTime.now().minusDays(40));
 
-        Challenge recentCompleted = new Challenge();
-        recentCompleted.setName("RecentDone");
-        recentCompleted.setActive(false);
-        recentCompleted.setEndDate(LocalDateTime.now().minusDays(10));
+		Challenge recentCompleted = new Challenge();
+		recentCompleted.setName("RecentDone");
+		recentCompleted.setActive(false);
+		recentCompleted.setEndDate(LocalDateTime.now().minusDays(10));
 
-        Challenge stillActive = new Challenge();
-        stillActive.setName("Active");
-        stillActive.setActive(true);
-        stillActive.setEndDate(LocalDateTime.now().plusDays(10));
+		Challenge stillActive = new Challenge();
+		stillActive.setName("Active");
+		stillActive.setActive(true);
+		stillActive.setEndDate(LocalDateTime.now().plusDays(10));
 
-        when(challengeService.getAllChallenges())
-                .thenReturn(Arrays.asList(oldCompleted, recentCompleted, stillActive));
-        when(challengeService.deleteChallenge("OldDone")).thenReturn(true);
+		when(challengeService.getAllChallenges())
+						.thenReturn(Arrays.asList(oldCompleted, recentCompleted, stillActive));
+		when(challengeService.deleteChallenge("OldDone")).thenReturn(true);
 
-        dailyReportScheduler.cleanupOldData();
+		dailyReportScheduler.cleanupOldData();
 
-        verify(challengeService, times(1)).deleteChallenge("OldDone");
-        verify(challengeService, never()).deleteChallenge("RecentDone");
-        verify(challengeService, never()).deleteChallenge("Active");
-    }
+		verify(challengeService, times(1)).deleteChallenge("OldDone");
+		verify(challengeService, never()).deleteChallenge("RecentDone");
+		verify(challengeService, never()).deleteChallenge("Active");
+	}
 
-    // ---- checkChallengeCompletions — multiple challenges ----
+	// ---- checkChallengeCompletions — multiple challenges ----
 
-    @Test
-    void checkChallengeCompletions_multipleCompleted_allProcessed() {
-        Challenge c1 = new Challenge();
-        c1.setName("C1");
-        c1.setTargetValue(100L);
-        c1.setCurrentValue(100L);
-        c1.setActive(true);
-        c1.setEndDate(LocalDateTime.now().plusDays(1));
+	@Test
+	void checkChallengeCompletions_multipleCompleted_allProcessed() {
+		Challenge c1 = new Challenge();
+		c1.setName("C1");
+		c1.setTargetValue(100L);
+		c1.setCurrentValue(100L);
+		c1.setActive(true);
+		c1.setEndDate(LocalDateTime.now().plusDays(1));
 
-        Challenge c2 = new Challenge();
-        c2.setName("C2");
-        c2.setTargetValue(100L);
-        c2.setCurrentValue(100L);
-        c2.setActive(true);
-        c2.setEndDate(LocalDateTime.now().plusDays(1));
+		Challenge c2 = new Challenge();
+		c2.setName("C2");
+		c2.setTargetValue(100L);
+		c2.setCurrentValue(100L);
+		c2.setActive(true);
+		c2.setEndDate(LocalDateTime.now().plusDays(1));
 
-        when(challengeService.getAllChallenges()).thenReturn(Arrays.asList(c1, c2));
+		when(challengeService.getAllChallenges()).thenReturn(Arrays.asList(c1, c2));
 
-        dailyReportScheduler.checkChallengeCompletions();
+		dailyReportScheduler.checkChallengeCompletions();
 
-        verify(challengeService).completeChallenge(c1);
-        verify(challengeService).completeChallenge(c2);
-        verify(discordService).sendChallengeCompletionNotification(c1);
-        verify(discordService).sendChallengeCompletionNotification(c2);
-    }
+		verify(challengeService).completeChallenge(c1);
+		verify(challengeService).completeChallenge(c2);
+		verify(discordService).sendChallengeCompletionNotification(c1);
+		verify(discordService).sendChallengeCompletionNotification(c2);
+	}
 
-    @Test
-    void checkChallengeCompletions_inactiveChallenge_isSkipped() {
-        Challenge inactive = new Challenge();
-        inactive.setName("InactiveChallenge");
-        inactive.setTargetValue(100L);
-        inactive.setCurrentValue(100L);
-        inactive.setActive(false); // already inactive
-        inactive.setEndDate(LocalDateTime.now().plusDays(1));
+	@Test
+	void checkChallengeCompletions_inactiveChallenge_isSkipped() {
+		Challenge inactive = new Challenge();
+		inactive.setName("InactiveChallenge");
+		inactive.setTargetValue(100L);
+		inactive.setCurrentValue(100L);
+		inactive.setActive(false); // already inactive
+		inactive.setEndDate(LocalDateTime.now().plusDays(1));
 
-        when(challengeService.getAllChallenges()).thenReturn(List.of(inactive));
+		when(challengeService.getAllChallenges()).thenReturn(List.of(inactive));
 
-        dailyReportScheduler.checkChallengeCompletions();
+		dailyReportScheduler.checkChallengeCompletions();
 
-        verify(challengeService, never()).completeChallenge(any());
-        verify(discordService, never()).sendChallengeCompletionNotification(any());
-        verify(discordService, never()).sendChallengeFailureNotification(any());
-    }
+		verify(challengeService, never()).completeChallenge(any());
+		verify(discordService, never()).sendChallengeCompletionNotification(any());
+		verify(discordService, never()).sendChallengeFailureNotification(any());
+	}
 
-    @Test
-    void checkChallengeCompletions_emptyList_doesNothing() {
-        when(challengeService.getAllChallenges()).thenReturn(Collections.emptyList());
+	@Test
+	void checkChallengeCompletions_emptyList_doesNothing() {
+		when(challengeService.getAllChallenges()).thenReturn(Collections.emptyList());
 
-        dailyReportScheduler.checkChallengeCompletions();
+		dailyReportScheduler.checkChallengeCompletions();
 
-        verify(challengeService, never()).completeChallenge(any());
-        verify(discordService, never()).sendChallengeCompletionNotification(any());
-        verify(discordService, never()).sendChallengeFailureNotification(any());
-    }
+		verify(challengeService, never()).completeChallenge(any());
+		verify(discordService, never()).sendChallengeCompletionNotification(any());
+		verify(discordService, never()).sendChallengeFailureNotification(any());
+	}
 
-    @Test
-    void checkChallengeCompletions_goalExceeded_treatedAsCompleted() {
-        Challenge overachieved = new Challenge();
-        overachieved.setName("Overachiever");
-        overachieved.setTargetValue(100L);
-        overachieved.setCurrentValue(150L); // exceeded target
-        overachieved.setActive(true);
-        overachieved.setEndDate(LocalDateTime.now().plusDays(5));
+	@Test
+	void checkChallengeCompletions_goalExceeded_treatedAsCompleted() {
+		Challenge overachieved = new Challenge();
+		overachieved.setName("Overachiever");
+		overachieved.setTargetValue(100L);
+		overachieved.setCurrentValue(150L); // exceeded target
+		overachieved.setActive(true);
+		overachieved.setEndDate(LocalDateTime.now().plusDays(5));
 
-        when(challengeService.getAllChallenges()).thenReturn(List.of(overachieved));
+		when(challengeService.getAllChallenges()).thenReturn(List.of(overachieved));
 
-        dailyReportScheduler.checkChallengeCompletions();
+		dailyReportScheduler.checkChallengeCompletions();
 
-        verify(challengeService).completeChallenge(overachieved);
-        verify(discordService).sendChallengeCompletionNotification(overachieved);
-    }
+		verify(challengeService).completeChallenge(overachieved);
+		verify(discordService).sendChallengeCompletionNotification(overachieved);
+	}
 }

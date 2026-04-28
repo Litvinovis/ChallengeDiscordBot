@@ -17,54 +17,54 @@ import org.springframework.core.annotation.Order;
 @Component
 @Order(1)
 public class RegistrationCommand extends BaseCommand {
-    private static final Logger logger = LoggerFactory.getLogger(RegistrationCommand.class);
+	private static final Logger logger = LoggerFactory.getLogger(RegistrationCommand.class);
 
-    @Autowired
-    private IChallengeService challengeService;
+	@Autowired
+	private IChallengeService challengeService;
 
-    /**
-     * {@inheritDoc}
-     * Обрабатывает команду {@code регистрация}.
-     *
-     * @param cmd строка команды
-     * @return {@code true}, если команда равна "регистрация"
-     */
-    @Override
-    public boolean canHandle(String cmd) {
-        return "регистрация".equals(cmd);
-    }
+	/**
+	 * {@inheritDoc}
+	 * Обрабатывает команду {@code регистрация}.
+	 *
+	 * @param cmd строка команды
+	 * @return {@code true}, если команда равна "регистрация"
+	 */
+	@Override
+	public boolean canHandle(String cmd) {
+		return "регистрация".equals(cmd);
+	}
 
-    /**
-     * {@inheritDoc}
-     * Регистрирует автора сообщения в качестве участника испытания.
-     *
-     * @param event    событие получения сообщения Discord
-     * @param args     аргументы: args[1..] — название испытания
-     * @param authorId идентификатор автора команды
-     * @param username имя автора команды
-     */
-    @Override
-    public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
-        try {
-            TextChannel channel = event.getChannel().asTextChannel();
-            if (args.length < 2) {
-                channel.sendMessage("Укажите название испытания. Используйте: +регистрация <название>").queue();
-                return;
-            }
-            String challengeName = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
-            Challenge challenge = challengeService.getChallenge(challengeName);
-            if (challenge == null) {
-                channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
-                return;
-            }
-            Challenge updated = challengeService.addParticipantWithUsername(challenge, authorId, username);
-            if (updated != null) {
-                channel.sendMessage("Вы успешно зарегистрированы на испытание \"" + challengeName + "\".").queue();
-            } else {
-                channel.sendMessage("Ошибка при регистрации на испытание \"" + challengeName + "\".").queue();
-            }
-        } catch (Exception e) {
-            logger.error("Ошибка обработки команды регистрации", e);
-        }
-    }
+	/**
+	 * {@inheritDoc}
+	 * Регистрирует автора сообщения в качестве участника испытания.
+	 *
+	 * @param event    событие получения сообщения Discord
+	 * @param args     аргументы: args[1..] — название испытания
+	 * @param authorId идентификатор автора команды
+	 * @param username имя автора команды
+	 */
+	@Override
+	public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
+		try {
+			TextChannel channel = event.getChannel().asTextChannel();
+			if (args.length < 2) {
+				channel.sendMessage("Укажите название испытания. Используйте: +регистрация <название>").queue();
+				return;
+			}
+			String challengeName = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+			Challenge challenge = challengeService.getChallenge(challengeName);
+			if (challenge == null) {
+				channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+				return;
+			}
+			Challenge updated = challengeService.addParticipantWithUsername(challenge, authorId, username);
+			if (updated != null) {
+				channel.sendMessage("Вы успешно зарегистрированы на испытание \"" + challengeName + "\".").queue();
+			} else {
+				channel.sendMessage("Ошибка при регистрации на испытание \"" + challengeName + "\".").queue();
+			}
+		} catch (Exception e) {
+			logger.error("Ошибка обработки команды регистрации", e);
+		}
+	}
 }

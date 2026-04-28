@@ -6,12 +6,12 @@ package com.discord.challengebot.dto;
  * ежедневная цель и количество оставшихся дней.
  */
 public record ChallengeStats(
-        String challengeName,
-        long targetValue,
-        long currentValue,
-        long remaining,
-        double percentage,
-        double dailyTarget,
-        int daysRemaining
+				String challengeName,
+				long targetValue,
+				long currentValue,
+				long remaining,
+				double percentage,
+				double dailyTarget,
+				int daysRemaining
 ) {
 }

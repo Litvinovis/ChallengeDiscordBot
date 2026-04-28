@@ -21,76 +21,76 @@ import static org.mockito.Mockito.*;
  */
 class UserServiceTest {
 
-    @Mock
-    private DiscordConfig discordConfig;
+	@Mock
+	private DiscordConfig discordConfig;
 
-    @Mock
-    private ParticipantRepository participantRepository;
+	@Mock
+	private ParticipantRepository participantRepository;
 
-    @Mock
-    private ChallengeRepository challengeRepository;
+	@Mock
+	private ChallengeRepository challengeRepository;
 
-    @InjectMocks
-    private ParticipantService participantService;
+	@InjectMocks
+	private ParticipantService participantService;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
+	@BeforeEach
+	void setUp() {
+		MockitoAnnotations.openMocks(this);
+	}
 
-    @Test
-    void testIsAdminUserWhenAdmin() {
-        String adminUserId = "12345";
-        when(discordConfig.getAdminUserIds()).thenReturn(null);
-        when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
+	@Test
+	void testIsAdminUserWhenAdmin() {
+		String adminUserId = "12345";
+		when(discordConfig.getAdminUserIds()).thenReturn(null);
+		when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
 
-        boolean isAdmin = participantService.isAdminUser(adminUserId);
+		boolean isAdmin = participantService.isAdminUser(adminUserId);
 
-        assertTrue(isAdmin);
-        verify(discordConfig, atLeastOnce()).getAdminUserId();
-    }
+		assertTrue(isAdmin);
+		verify(discordConfig, atLeastOnce()).getAdminUserId();
+	}
 
-    @Test
-    void testIsAdminUserWhenNotAdmin() {
-        String adminUserId = "12345";
-        String regularUserId = "67890";
-        when(discordConfig.getAdminUserIds()).thenReturn(null);
-        when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
+	@Test
+	void testIsAdminUserWhenNotAdmin() {
+		String adminUserId = "12345";
+		String regularUserId = "67890";
+		when(discordConfig.getAdminUserIds()).thenReturn(null);
+		when(discordConfig.getAdminUserId()).thenReturn(adminUserId);
 
-        boolean isAdmin = participantService.isAdminUser(regularUserId);
+		boolean isAdmin = participantService.isAdminUser(regularUserId);
 
-        assertFalse(isAdmin);
-        verify(discordConfig, atLeastOnce()).getAdminUserId();
-    }
+		assertFalse(isAdmin);
+		verify(discordConfig, atLeastOnce()).getAdminUserId();
+	}
 
-    @Test
-    void testRegisterForChallenge() {
-        String userId = "12345";
-        String username = "testuser";
-        String challengeName = "Отжимания";
+	@Test
+	void testRegisterForChallenge() {
+		String userId = "12345";
+		String username = "testuser";
+		String challengeName = "Отжимания";
 
-        when(participantRepository.findById(userId)).thenReturn(Optional.empty());
+		when(participantRepository.findById(userId)).thenReturn(Optional.empty());
 
-        boolean result = participantService.registerForChallenge(userId, username, challengeName);
+		boolean result = participantService.registerForChallenge(userId, username, challengeName);
 
-        assertTrue(result);
-        verify(participantRepository).findById(userId);
-        verify(participantRepository).save(any(Participant.class));
-    }
+		assertTrue(result);
+		verify(participantRepository).findById(userId);
+		verify(participantRepository).save(any(Participant.class));
+	}
 
-    @Test
-    void testUnregisterFromChallenge() {
-        String userId = "12345";
-        String challengeName = "Отжимания";
+	@Test
+	void testUnregisterFromChallenge() {
+		String userId = "12345";
+		String challengeName = "Отжимания";
 
-        Participant participant = new Participant(userId, "testuser");
-        participant.addChallenge(challengeName);
-        when(participantRepository.findById(userId)).thenReturn(Optional.of(participant));
+		Participant participant = new Participant(userId, "testuser");
+		participant.addChallenge(challengeName);
+		when(participantRepository.findById(userId)).thenReturn(Optional.of(participant));
 
-        boolean result = participantService.unregisterFromChallenge(userId, challengeName);
+		boolean result = participantService.unregisterFromChallenge(userId, challengeName);
 
-        assertTrue(result);
-        verify(participantRepository).findById(userId);
-        verify(participantRepository).save(any(Participant.class));
-    }
+		assertTrue(result);
+		verify(participantRepository).findById(userId);
+		verify(participantRepository).save(any(Participant.class));
+	}
 }
