@@ -18,7 +18,6 @@
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.version>4.0.5</spring.boot.version>
-        <ignite3.version>3.1.0</ignite3.version>
         <jackson.version>2.21.2</jackson.version>
         <jda.version>6.4.1</jda.version>
         <logback.version>1.5.32</logback.version>
@@ -52,11 +51,18 @@
         </dependency>
 
         
-        <!-- Apache Ignite 3 thin client -->
+        <!-- PostgreSQL JDBC driver -->
         <dependency>
-            <groupId>org.apache.ignite</groupId>
-            <artifactId>ignite-client</artifactId>
-            <version>${ignite3.version}</version>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.5</version>
+        </dependency>
+
+        <!-- Spring Boot JDBC -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+            <version>${spring.boot.version}</version>
         </dependency>
 
         <!-- Spring Boot Cache -->
@@ -73,9 +79,8 @@
             <version>3.2.3</version>
         </dependency>
 
-        <!-- Jackson — для JSON-сериализации коллекций в колонки Ignite 3.
-             Используется напрямую в репозиториях, поэтому объявляем явно
-             (spring-boot-starter не включает jackson-databind без web-стартера). -->
+        <!-- Jackson — для JSON-сериализации коллекций в TEXT-колонки PostgreSQL.
+             Объявляем явно: spring-boot-starter без web не включает jackson-databind. -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -167,17 +172,7 @@
                         </goals>
                     </execution>
                 </executions>
-                <configuration>
-                    <jvmArguments>
-                        --add-opens java.base/java.nio=ALL-UNNAMED
-                        --add-opens java.base/sun.nio.ch=ALL-UNNAMED
-                        --add-opens java.management/sun.management=ALL-UNNAMED
-                        --add-opens jdk.management/com.sun.management.internal=ALL-UNNAMED
-                        --add-opens java.base/java.util=ALL-UNNAMED
-                        --add-opens java.base/java.lang=ALL-UNNAMED
-                        --add-opens java.base/java.time=ALL-UNNAMED
-                    </jvmArguments>
-                </configuration>
+                <configuration/>
             </plugin>
             
             <plugin>

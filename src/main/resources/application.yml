@@ -13,9 +13,6 @@ discord:
     - ${DISCORD_ADMIN_USER_ID:} # ID пользователя с правами администратора
   report-channel: ${DISCORD_REPORT_CHANNEL:качал-очка}    # Название канала для отчетов и уведомлений о завершении испытаний
 
-ignite3:
-  address: ${IGNITE3_ADDRESS:127.0.0.1:10300}
-
 # Конфигурация запланированных задач
 scheduled:
   enabled: true
@@ -24,6 +21,15 @@ scheduled:
 
 # Virtual threads (Java 25 / Spring Boot 4)
 spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/challengebot}
+    username: ${DB_USER:challengebot}
+    password: ${DB_PASSWORD:cbot_pg_2026}
+    driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
   threads:
     virtual:
       enabled: true

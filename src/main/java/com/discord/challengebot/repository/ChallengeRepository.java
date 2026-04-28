@@ -1,285 +1,126 @@
 package com.discord.challengebot.repository;
 
-import com.discord.challengebot.config.IgniteConnectionManager;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.ignite.client.IgniteClient;
-import org.apache.ignite.sql.ResultSet;
-import org.apache.ignite.sql.SqlRow;
-import org.apache.ignite.table.KeyValueView;
-import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 
-/**
- * Репозиторий испытаний для Apache Ignite 3.
- * Маппит Challenge (с Map и List полями) в/из строковых JSON-колонок таблицы challenges.
- * Получает клиент через {@link IgniteConnectionManager} — view автоматически сбрасывается
- * при смене клиента после переподключения.
- * <p>
- * Колонки participant_progress и participants оставлены в таблице для обратной совместимости
- * данных, но НЕ читаются при маппинге (прогресс хранится в таблице challenge_progress).
- */
 @Repository
 public class ChallengeRepository {
 
     private static final Logger log = LoggerFactory.getLogger(ChallengeRepository.class);
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final IgniteConnectionManager connectionManager;
-    private volatile IgniteClient lastClient;
-    private volatile KeyValueView<Tuple, Tuple> view;
+    private final JdbcTemplate jdbc;
 
-    /**
-     * Создаёт репозиторий испытаний.
-     *
-     * @param connectionManager менеджер подключения Ignite 3
-     */
-    public ChallengeRepository(IgniteConnectionManager connectionManager) {
-        this.connectionManager = connectionManager;
+    public ChallengeRepository(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
     }
 
-    private KeyValueView<Tuple, Tuple> view() {
-        IgniteClient current = connectionManager.getClient();
-        if (current == null) {
-            throw new IllegalStateException("Ignite 3 недоступен — соединение ещё не установлено");
-        }
-        if (view == null || current != lastClient) {
-            synchronized (this) {
-                current = connectionManager.getClient();
-                if (current == null) {
-                    throw new IllegalStateException("Ignite 3 недоступен — соединение ещё не установлено");
-                }
-                if (view == null || current != lastClient) {
-                    view = current.tables().table("challenges").keyValueView();
-                    lastClient = current;
-                }
-            }
-        }
-        return view;
-    }
-
-    /**
-     * Сохраняет или обновляет испытание в таблице.
-     *
-     * @param challenge объект Challenge
-     */
     public void save(Challenge challenge) {
         if (challenge == null || challenge.getId() == null) {
             log.warn("ChallengeRepository.save: challenge или id равен null — пропуск");
             return;
         }
-        Tuple key = Tuple.create().set("id", challenge.getId());
-        Tuple val = challengeToRow(challenge);
-        view().put(null, key, val);
+        jdbc.update(
+            "INSERT INTO challenges (id, name, target_value, current_value, chal_type, start_date, end_date, active, description, unit, participants) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+            "ON CONFLICT (id) DO UPDATE SET " +
+            "name = EXCLUDED.name, target_value = EXCLUDED.target_value, current_value = EXCLUDED.current_value, " +
+            "chal_type = EXCLUDED.chal_type, start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date, " +
+            "active = EXCLUDED.active, description = EXCLUDED.description, unit = EXCLUDED.unit, participants = EXCLUDED.participants",
+            challenge.getId(),
+            challenge.getName(),
+            challenge.getTargetValue(),
+            challenge.getCurrentValue(),
+            challenge.getType() != null ? challenge.getType().name() : ChallengeType.INDIVIDUAL.name(),
+            challenge.getStartDate() != null ? challenge.getStartDate().toString() : null,
+            challenge.getEndDate() != null ? challenge.getEndDate().toString() : null,
+            challenge.isActive(),
+            challenge.getDescription(),
+            challenge.getUnit(),
+            toJson(challenge.getParticipants() != null ? challenge.getParticipants() : new ArrayList<>())
+        );
     }
 
-    /**
-     * Возвращает испытание по ID.
-     *
-     * @param id идентификатор испытания
-     * @return Optional с объектом Challenge или пустой Optional
-     */
     public Optional<Challenge> findById(String id) {
         if (id == null) return Optional.empty();
-        Tuple key = Tuple.create().set("id", id);
-        Tuple row = view().get(null, key);
-        if (row == null) return Optional.empty();
-        return Optional.of(mapChallenge(id, col -> row.value(col.toUpperCase())));
+        List<Challenge> results = jdbc.query(
+            "SELECT id, name, target_value, current_value, chal_type, start_date, end_date, active, description, unit, participants FROM challenges WHERE id = ?",
+            this::mapRow, id);
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
 
-    /**
-     * Возвращает все испытания из таблицы.
-     *
-     * @return список всех испытаний
-     */
     public List<Challenge> findAll() {
-        List<Challenge> result = new ArrayList<>();
-        IgniteClient client = connectionManager.getClient();
-        if (client == null) {
-            log.warn("findAll: Ignite 3 недоступен — возврат пустого списка");
-            return result;
-        }
-        try (ResultSet<SqlRow> rs = client.sql().execute(null,
-                "SELECT id, name, target_value, current_value, chal_type, " +
-                "start_date, end_date, active, description, unit, " +
-                "participants FROM challenges ORDER BY name")) {
-            while (rs.hasNext()) {
-                SqlRow row = rs.next();
-                // Маппинг через унифицированный метод: SqlRow — регистронезависимый доступ по имени
-                result.add(mapChallenge(row.stringValue("id"), col -> {
-                    try { return row.value(col.toLowerCase()); } catch (Exception e) {
-                        try { return row.value(col.toUpperCase()); } catch (Exception e2) { return null; }
-                    }
-                }));
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении всех испытаний из Ignite 3: {}", e.getMessage());
-        }
-        return result;
+        return jdbc.query(
+            "SELECT id, name, target_value, current_value, chal_type, start_date, end_date, active, description, unit, participants FROM challenges ORDER BY name",
+            this::mapRow);
     }
 
-    /**
-     * Возвращает legacy-прогресс участников для всех испытаний из колонки participant_progress.
-     * Используется только миграционным сервисом.
-     *
-     * @return карта challengeId -> (userId -> progress)
-     */
-    public Map<String, Map<String, Long>> findAllLegacyParticipantProgress() {
-        Map<String, Map<String, Long>> result = new HashMap<>();
-        IgniteClient client = connectionManager.getClient();
-        if (client == null) return result;
-        try (ResultSet<SqlRow> rs = client.sql().execute(null,
-                "SELECT id, participant_progress FROM challenges")) {
-            while (rs.hasNext()) {
-                SqlRow row = rs.next();
-                String id = row.stringValue("id");
-                String json = row.stringValue("participant_progress");
-                if (json != null && !json.isBlank() && !json.equals("{}")) {
-                    Map<String, Long> progress = fromJsonToMapStringLong(json);
-                    if (!progress.isEmpty()) result.put(id, progress);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при чтении legacy participant_progress: {}", e.getMessage());
-        }
-        return result;
-    }
-
-    /**
-     * Удаляет испытание по ID.
-     *
-     * @param id идентификатор испытания
-     */
     public void deleteById(String id) {
         if (id == null) return;
-        Tuple key = Tuple.create().set("id", id);
-        view().remove(null, key);
+        jdbc.update("DELETE FROM challenges WHERE id = ?", id);
     }
 
-    /**
-     * Проверяет наличие испытания по ID.
-     *
-     * @param id идентификатор испытания
-     * @return true если испытание существует
-     */
     public boolean existsById(String id) {
         if (id == null) return false;
-        Tuple key = Tuple.create().set("id", id);
-        return view().contains(null, key);
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM challenges WHERE id = ?", Integer.class, id);
+        return count != null && count > 0;
     }
 
-    // ---- унифицированный маппинг ----
-
-    /**
-     * Унифицированный метод маппинга Challenge из источника данных.
-     * Принимает функцию-геттер для извлечения значения по имени колонки,
-     * что позволяет использовать один код и для Tuple-based (KeyValueView), и для SqlRow.
-     *
-     * @param id     идентификатор испытания
-     * @param getter функция получения значения по имени колонки (регистр не важен)
-     * @return смаппированный объект Challenge
-     */
-    private Challenge mapChallenge(String id, Function<String, Object> getter) {
+    private Challenge mapRow(ResultSet rs, int rowNum) throws SQLException {
         Challenge ch = new Challenge();
-        ch.setId(id);
-        ch.setName(asString(getter.apply("NAME")));
+        ch.setId(rs.getString("id"));
+        ch.setName(rs.getString("name"));
+        ch.setTargetValue(rs.getLong("target_value"));
+        ch.setCurrentValue(rs.getLong("current_value"));
 
-        Object tv = getter.apply("TARGET_VALUE");
-        if (tv instanceof Number n) ch.setTargetValue(n.longValue());
-
-        Object cv = getter.apply("CURRENT_VALUE");
-        if (cv instanceof Number n) ch.setCurrentValue(n.longValue());
-
-        String typeStr = asString(getter.apply("CHAL_TYPE"));
+        String typeStr = rs.getString("chal_type");
         if (typeStr != null && !typeStr.isBlank()) {
-            try {
-                ch.setType(ChallengeType.valueOf(typeStr));
-            } catch (IllegalArgumentException e) {
-                ch.setType(ChallengeType.INDIVIDUAL);
-            }
+            try { ch.setType(ChallengeType.valueOf(typeStr)); }
+            catch (IllegalArgumentException e) { ch.setType(ChallengeType.INDIVIDUAL); }
         } else {
             ch.setType(ChallengeType.INDIVIDUAL);
         }
 
-        String startDateStr = asString(getter.apply("START_DATE"));
-        if (startDateStr != null && !startDateStr.isBlank()) {
-            try { ch.setStartDate(LocalDateTime.parse(startDateStr)); }
-            catch (Exception e) { log.warn("Не удалось распарсить start_date для испытания {}: {}", id, startDateStr); }
+        String startDate = rs.getString("start_date");
+        if (startDate != null && !startDate.isBlank()) {
+            try { ch.setStartDate(LocalDateTime.parse(startDate)); }
+            catch (Exception e) { log.warn("Не удалось распарсить start_date для испытания {}: {}", ch.getId(), startDate); }
         }
 
-        String endDateStr = asString(getter.apply("END_DATE"));
-        if (endDateStr != null && !endDateStr.isBlank()) {
-            try { ch.setEndDate(LocalDateTime.parse(endDateStr)); }
-            catch (Exception e) { log.warn("Не удалось распарсить end_date для испытания {}: {}", id, endDateStr); }
+        String endDate = rs.getString("end_date");
+        if (endDate != null && !endDate.isBlank()) {
+            try { ch.setEndDate(LocalDateTime.parse(endDate)); }
+            catch (Exception e) { log.warn("Не удалось распарсить end_date для испытания {}: {}", ch.getId(), endDate); }
         }
 
-        Object active = getter.apply("ACTIVE");
-        ch.setActive(Boolean.TRUE.equals(active));
-        ch.setDescription(asString(getter.apply("DESCRIPTION")));
-        ch.setUnit(asString(getter.apply("UNIT")));
-
-        String participantsJson = asString(getter.apply("PARTICIPANTS"));
-        ch.setParticipants(fromJsonToListString(participantsJson));
-
+        ch.setActive(rs.getBoolean("active"));
+        ch.setDescription(rs.getString("description"));
+        ch.setUnit(rs.getString("unit"));
+        ch.setParticipants(fromJsonToListString(rs.getString("participants")));
         return ch;
     }
 
-    private static String asString(Object v) {
-        return v instanceof String s ? s : (v != null ? v.toString() : null);
-    }
-
-    private Tuple challengeToRow(Challenge ch) {
-        return Tuple.create()
-                .set("name", ch.getName())
-                .set("target_value", ch.getTargetValue())
-                .set("current_value", ch.getCurrentValue())
-                .set("chal_type", ch.getType() != null ? ch.getType().name() : ChallengeType.INDIVIDUAL.name())
-                .set("start_date", ch.getStartDate() != null ? ch.getStartDate().toString() : null)
-                .set("end_date", ch.getEndDate() != null ? ch.getEndDate().toString() : null)
-                .set("active", ch.isActive())
-                .set("description", ch.getDescription())
-                .set("unit", ch.getUnit())
-                .set("participants", toJson(ch.getParticipants() != null ? ch.getParticipants() : new ArrayList<>()));
-    }
-
-    // ---- JSON helpers ----
-
     private static String toJson(Object value) {
-        try {
-            return MAPPER.writeValueAsString(value);
-        } catch (Exception e) {
-            return "{}";
-        }
-    }
-
-    private static Map<String, Long> fromJsonToMapStringLong(String json) {
-        if (json == null || json.isBlank()) return new HashMap<>();
-        try {
-            return MAPPER.readValue(json, new TypeReference<Map<String, Long>>() {});
-        } catch (Exception e) {
-            return new HashMap<>();
-        }
+        try { return MAPPER.writeValueAsString(value); }
+        catch (Exception e) { return "[]"; }
     }
 
     private static List<String> fromJsonToListString(String json) {
         if (json == null || json.isBlank()) return new ArrayList<>();
-        try {
-            return MAPPER.readValue(json, new TypeReference<List<String>>() {});
-        } catch (Exception e) {
-            return new ArrayList<>();
-        }
+        try { return MAPPER.readValue(json, new TypeReference<List<String>>() {}); }
+        catch (Exception e) { return new ArrayList<>(); }
     }
 }
