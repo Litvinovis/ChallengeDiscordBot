@@ -10,8 +10,9 @@ Sport Challenge Bot позволяет организовывать индиви
 
 - Java 25
 - Spring Boot 4.0.5
-- Apache Ignite 3.1.0 (thin client, для хранения данных)
+- PostgreSQL 16 (хранение данных через Spring JDBC / JdbcTemplate)
 - JDA 6.4.1 (Java Discord API)
+- Caffeine (in-memory кэш достижений)
 - Maven (система сборки)
 
 ## Установка и запуск
@@ -19,6 +20,7 @@ Sport Challenge Bot позволяет организовывать индиви
 ### Требования
 
 - Java 25 или выше
+- PostgreSQL 16+
 
 ### Сборка проекта
 
@@ -28,11 +30,7 @@ mvn clean package
 
 ### Настройка конфигурации
 
-Бот читает чувствительные параметры из переменных окружения. Скопируйте `.env.example` в `.env` и заполните реальными значениями:
-
-```bash
-cp .env.example .env
-```
+Бот читает чувствительные параметры из переменных окружения. На сервере конфигурация хранится в `/opt/challengeBot/config/application.yml` (этот файл не коммитится в репозиторий).
 
 Основные переменные:
 
@@ -43,10 +41,9 @@ cp .env.example .env
 | `DISCORD_CHANNEL_ID_2` | ID дополнительного канала (опционально) |
 | `DISCORD_REPORT_GUILD_ID` | ID сервера Discord для ежедневных отчётов |
 | `DISCORD_ADMIN_USER_ID` | ID пользователя-администратора |
-| `IGNITE_LOCAL_ADDRESS` | Локальный адрес узла Apache Ignite |
-| `IGNITE_DISCOVERY_ADDRESSES` | Адреса для обнаружения кластера Ignite |
-
-На сервере конфигурация хранится в `/opt/challengeBot/config/application.yml` (этот файл не коммитится в репозиторий).
+| `DB_URL` | JDBC URL базы данных (например: `jdbc:postgresql://127.0.0.1:5432/challengebot`) |
+| `DB_USER` | Имя пользователя PostgreSQL |
+| `DB_PASSWORD` | Пароль пользователя PostgreSQL |
 
 ### Запуск приложения
 
@@ -54,7 +51,7 @@ cp .env.example .env
 java -jar target/challenge-bot-1.0.0.jar
 ```
 
-JVM-аргументы для Apache Ignite (`--add-opens`) задаются автоматически через `spring-boot-maven-plugin` в `pom.xml`.
+Схема БД создаётся автоматически при первом запуске (`schema.sql`).
 
 #### Скрипт запуска
 
@@ -125,7 +122,7 @@ chmod +x challengeBot.sh
 4. **Command Processor** - Анализирует и направляет команды соответствующим сервисам
 5. **Challenge Service** - Управляет созданием, изменением и отслеживанием испытаний
 6. **Statistics Service** - Генерирует статистику и отчеты о прогрессе
-7. **Ignite Data Store** - Встроенный экземпляр Apache Ignite для хранения данных
+7. **PostgreSQL Data Store** - База данных для хранения испытаний, участников и прогресса
 8. **Scheduled Tasks** - Запланированные задачи для ежедневных отчетов
 
 ### Модели данных
@@ -156,7 +153,7 @@ chmod +x challengeBot.sh
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота для уведомлений |
 | `TELEGRAM_CHAT_ID` | ID чата для отправки уведомлений |
 
-> Токен Discord бота и ID каналов хранятся в `config/application.yml` на сервере (`/opt/challengeBot/config/application.yml`) — они не передаются через GitHub Secrets.
+> Токен Discord бота, ID каналов и параметры БД хранятся в `config/application.yml` на сервере (`/opt/challengeBot/config/application.yml`) — они не передаются через GitHub Secrets.
 
 ### Ручной запуск деплоя
 
@@ -208,14 +205,19 @@ src/
 ├── main/
 │   ├── java/
 │   │   └── com/discord/challengebot/
-│   │       ├── config/          # Конфигурационные классы
+│   │       ├── command/         # Команды бота и CommandRegistry
+│   │       ├── config/          # Конфигурационные классы (Discord, Cache)
 │   │       ├── dto/             # DTO классы
+│   │       ├── event/           # Spring Events (достижения, стрики)
 │   │       ├── model/           # Модели данных
+│   │       ├── repository/      # JdbcTemplate-репозитории (PostgreSQL)
 │   │       ├── scheduled/       # Планировщики задач
 │   │       ├── service/         # Сервисные классы
-│   │       └── ChallengeBotApplication.java # Основной класс приложения
+│   │       └── ChallengeBotApplication.java
 │   └── resources/
-│       └── application.yml      # Файл конфигурации
+│       ├── application.yml      # Конфигурация приложения
+│       ├── schema.sql           # DDL схема PostgreSQL
+│       └── logback.xml          # Конфигурация логирования
 └── test/
     └── java/
         └── com/discord/challengebot/

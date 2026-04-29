@@ -21,7 +21,7 @@ import java.util.Set;
  * и публикуется событие {@link AchievementUnlockedEvent} для отправки уведомления в Discord.
  * <p>
  * Кэш "achievements" (Caffeine) хранит ключи выданных достижений пользователя в памяти,
- * снижая нагрузку на Ignite при частых проверках.
+ * снижая нагрузку на БД при частых проверках.
  */
 @Service
 public class AchievementService {
@@ -67,7 +67,7 @@ public class AchievementService {
 		try {
 			if (userId == null || challengeId == null) return;
 
-			// Загружаем персистентный список достижений из Ignite
+			// Загружаем персистентный список достижений из БД
 			Set<String> userAwards = loadAwardedAchievements(userId);
 
 			var challenge = challengeService.getChallenge(challengeId);
@@ -130,7 +130,7 @@ public class AchievementService {
 	// ---- вспомогательные методы ----
 
 	/**
-	 * Загружает персистентный список достижений пользователя из Ignite.
+	 * Загружает персистентный список достижений пользователя из БД.
 	 */
 	private Set<String> loadAwardedAchievements(String userId) {
 		try {
@@ -145,7 +145,7 @@ public class AchievementService {
 	}
 
 	/**
-	 * Сохраняет ключ выданного достижения в записи участника в Apache Ignite.
+	 * Сохраняет ключ выданного достижения в записи участника в БД.
 	 */
 	private void persistAwardedAchievement(String userId, String key) {
 		try {
