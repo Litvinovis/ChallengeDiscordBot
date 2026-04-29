@@ -9,6 +9,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -20,6 +21,8 @@ import java.time.temporal.ChronoUnit;
 @Service
 public class StreakService {
 	private static final Logger logger = LoggerFactory.getLogger(StreakService.class);
+	// Фиксированный часовой пояс для корректного расчёта границ суток независимо от timezone сервера
+	private static final ZoneId ZONE = ZoneId.of("Europe/Moscow");
 
 	private final ParticipantRepository participantRepository;
 	private final ApplicationEventPublisher eventPublisher;
@@ -53,7 +56,7 @@ public class StreakService {
 				return;
 			}
 
-			LocalDate today = LocalDate.now();
+			LocalDate today = LocalDate.now(ZONE);
 			LocalDate lastActivity = participant.getLastActivityDate();
 			int previousStreak = participant.getCurrentStreak();
 
