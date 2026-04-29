@@ -13,82 +13,82 @@ import static org.mockito.Mockito.*;
 
 class DiscordServiceTest {
 
-    @Mock
-    private DiscordConfig discordConfig;
+	@Mock
+	private DiscordConfig discordConfig;
 
-    @Mock
-    private ChallengeService challengeService;
+	@Mock
+	private ChallengeService challengeService;
 
-    @Mock
-    private ParticipantService participantService;
+	@Mock
+	private ParticipantService participantService;
 
-    @Mock
-    private StatisticsService statisticsService;
+	@Mock
+	private StatisticsService statisticsService;
 
-    @Mock
-    private CommandRegistry commandRegistry;
+	@Mock
+	private CommandRegistry commandRegistry;
 
-    @InjectMocks
-    private DiscordService discordService;
+	@InjectMocks
+	private DiscordService discordService;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
+	@BeforeEach
+	void setUp() {
+		MockitoAnnotations.openMocks(this);
+	}
 
-    @Test
-    void testIsAuthorizedUser_AdminCommand() {
-        String userId = "12345";
-        String command = "новый";
+	@Test
+	void testIsAuthorizedUser_AdminCommand() {
+		String userId = "12345";
+		String command = "новый";
 
-        when(participantService.isAdminUser(userId)).thenReturn(true);
+		when(participantService.isAdminUser(userId)).thenReturn(true);
 
-        boolean result = discordService.isAuthorizedUser(userId, command);
+		boolean result = discordService.isAuthorizedUser(userId, command);
 
-        assertTrue(result);
-        verify(participantService).isAdminUser(userId);
-    }
+		assertTrue(result);
+		verify(participantService).isAdminUser(userId);
+	}
 
-    @Test
-    void testIsAuthorizedUser_NonAdminCommand() {
-        String userId = "12345";
-        String command = "помощь";
+	@Test
+	void testIsAuthorizedUser_NonAdminCommand() {
+		String userId = "12345";
+		String command = "помощь";
 
-        boolean result = discordService.isAuthorizedUser(userId, command);
+		boolean result = discordService.isAuthorizedUser(userId, command);
 
-        assertTrue(result);
-        verify(participantService, never()).isAdminUser(userId);
-    }
+		assertTrue(result);
+		verify(participantService, never()).isAdminUser(userId);
+	}
 
-    @Test
-    void testIsAuthorizedUser_AdminCommandNonAdminUser() {
-        String userId = "12345";
-        String command = "удалить";
+	@Test
+	void testIsAuthorizedUser_AdminCommandNonAdminUser() {
+		String userId = "12345";
+		String command = "удалить";
 
-        when(participantService.isAdminUser(userId)).thenReturn(false);
+		when(participantService.isAdminUser(userId)).thenReturn(false);
 
-        boolean result = discordService.isAuthorizedUser(userId, command);
+		boolean result = discordService.isAuthorizedUser(userId, command);
 
-        assertFalse(result);
-        verify(participantService).isAdminUser(userId);
-    }
+		assertFalse(result);
+		verify(participantService).isAdminUser(userId);
+	}
 
-    @Test
-    void testFormatChallengeStats() {
-        // Проверяем что метод делегирует в statisticsService
-        when(statisticsService.formatReportForDiscord(any(), any())).thenReturn("formatted stats");
+	@Test
+	void testFormatChallengeStats() {
+		// Проверяем что метод делегирует в statisticsService
+		when(statisticsService.formatReportForDiscord(any(), any())).thenReturn("formatted stats");
 
-        String result = discordService.formatChallengeStats(null, null);
+		String result = discordService.formatChallengeStats(null, null);
 
-        assertEquals("formatted stats", result);
-        verify(statisticsService).formatReportForDiscord(null, null);
-    }
+		assertEquals("formatted stats", result);
+		verify(statisticsService).formatReportForDiscord(null, null);
+	}
 
-    @Test
-    void testGetReportGuildId() {
-        String guildId = "987654321";
-        when(discordConfig.getReportGuildId()).thenReturn(guildId);
+	@Test
+	void testGetReportGuildId() {
+		String guildId = "987654321";
+		when(discordConfig.getReportGuildId()).thenReturn(guildId);
 
-        assertEquals(guildId, discordConfig.getReportGuildId());
-    }
+		assertEquals(guildId, discordConfig.getReportGuildId());
+	}
 }

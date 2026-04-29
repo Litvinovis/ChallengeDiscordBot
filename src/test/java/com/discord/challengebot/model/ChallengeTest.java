@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,158 +14,155 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ChallengeTest {
 
-    private Challenge challenge;
+	private Challenge challenge;
 
-    @BeforeEach
-    void setUp() {
-        challenge = new Challenge("pushups", "Pushups", 10000L,
-                ChallengeType.GROUP,
-                LocalDateTime.now(),
-                LocalDateTime.now().plusDays(30),
-                "Do 10k pushups", "reps");
-    }
+	@BeforeEach
+	void setUp() {
+		challenge = new Challenge("pushups", "Pushups", 10000L,
+						ChallengeType.GROUP,
+						LocalDateTime.now(),
+						LocalDateTime.now().plusDays(30),
+						"Do 10k pushups", "reps");
+	}
 
-    // ---------- constructor ----------
+	@Test
+	void defaultConstructor_initializesCollections() {
+		Challenge c = new Challenge();
+		assertNotNull(c.getParticipants(), "participants list must not be null");
+		assertNotNull(c.getParticipantProgress(), "participantProgress map must not be null");
+		assertInstanceOf(Map.class, c.getParticipantProgress(), "participantProgress must be a Map (thread safety via ReentrantLock in service layer)");
+	}
 
-    @Test
-    void defaultConstructor_initializesCollections() {
-        Challenge c = new Challenge();
-        assertNotNull(c.getParticipants(), "participants list must not be null");
-        assertNotNull(c.getParticipantProgress(), "participantProgress map must not be null");
-        assertTrue(c.getParticipantProgress() instanceof java.util.Map,
-                "participantProgress must be a Map (thread safety via ReentrantLock in service layer)");
-    }
+	@Test
+	void parameterizedConstructor_setsFields() {
+		assertEquals("pushups", challenge.getId());
+		assertEquals("Pushups", challenge.getName());
+		assertEquals(10000L, challenge.getTargetValue());
+		assertEquals(0L, challenge.getCurrentValue());
+		assertEquals(ChallengeType.GROUP, challenge.getType());
+		assertTrue(challenge.isActive());
+		assertEquals("Do 10k pushups", challenge.getDescription());
+		assertEquals("reps", challenge.getUnit());
+	}
 
-    @Test
-    void parameterizedConstructor_setsFields() {
-        assertEquals("pushups", challenge.getId());
-        assertEquals("Pushups", challenge.getName());
-        assertEquals(10000L, challenge.getTargetValue());
-        assertEquals(0L, challenge.getCurrentValue());
-        assertEquals(ChallengeType.GROUP, challenge.getType());
-        assertTrue(challenge.isActive());
-        assertEquals("Do 10k pushups", challenge.getDescription());
-        assertEquals("reps", challenge.getUnit());
-    }
+	// ---------- addParticipant ----------
 
-    // ---------- addParticipant ----------
+	@Test
+	void addParticipant_addsUserSuccessfully() {
+		challenge.addParticipant("user1");
+		assertTrue(challenge.hasParticipant("user1"));
+		assertEquals(1, challenge.getParticipants().size());
+	}
 
-    @Test
-    void addParticipant_addsUserSuccessfully() {
-        challenge.addParticipant("user1");
-        assertTrue(challenge.hasParticipant("user1"));
-        assertEquals(1, challenge.getParticipants().size());
-    }
+	@Test
+	void addParticipant_noDuplicates_whenAddedTwice() {
+		challenge.addParticipant("user1");
+		challenge.addParticipant("user1");
+		assertEquals(1, challenge.getParticipants().size());
+	}
 
-    @Test
-    void addParticipant_noDuplicates_whenAddedTwice() {
-        challenge.addParticipant("user1");
-        challenge.addParticipant("user1");
-        assertEquals(1, challenge.getParticipants().size());
-    }
+	@Test
+	void addParticipant_nullId_doesNothing() {
+		challenge.addParticipant(null);
+		assertEquals(0, challenge.getParticipants().size());
+	}
 
-    @Test
-    void addParticipant_nullId_doesNothing() {
-        challenge.addParticipant(null);
-        assertEquals(0, challenge.getParticipants().size());
-    }
+	@Test
+	void addParticipant_emptyId_doesNothing() {
+		challenge.addParticipant("");
+		assertEquals(0, challenge.getParticipants().size());
+	}
 
-    @Test
-    void addParticipant_emptyId_doesNothing() {
-        challenge.addParticipant("");
-        assertEquals(0, challenge.getParticipants().size());
-    }
+	@Test
+	void addParticipant_multipleUsers_allPresent() {
+		challenge.addParticipant("alice");
+		challenge.addParticipant("bob");
+		challenge.addParticipant("carol");
+		assertEquals(3, challenge.getParticipants().size());
+		assertTrue(challenge.hasParticipant("alice"));
+		assertTrue(challenge.hasParticipant("bob"));
+		assertTrue(challenge.hasParticipant("carol"));
+	}
 
-    @Test
-    void addParticipant_multipleUsers_allPresent() {
-        challenge.addParticipant("alice");
-        challenge.addParticipant("bob");
-        challenge.addParticipant("carol");
-        assertEquals(3, challenge.getParticipants().size());
-        assertTrue(challenge.hasParticipant("alice"));
-        assertTrue(challenge.hasParticipant("bob"));
-        assertTrue(challenge.hasParticipant("carol"));
-    }
+	// ---------- removeParticipant ----------
 
-    // ---------- removeParticipant ----------
+	@Test
+	void removeParticipant_existingUser_removesSuccessfully() {
+		challenge.addParticipant("user1");
+		challenge.removeParticipant("user1");
+		assertFalse(challenge.hasParticipant("user1"));
+		assertEquals(0, challenge.getParticipants().size());
+	}
 
-    @Test
-    void removeParticipant_existingUser_removesSuccessfully() {
-        challenge.addParticipant("user1");
-        challenge.removeParticipant("user1");
-        assertFalse(challenge.hasParticipant("user1"));
-        assertEquals(0, challenge.getParticipants().size());
-    }
+	@Test
+	void removeParticipant_nonExistingUser_doesNotThrow() {
+		assertDoesNotThrow(() -> challenge.removeParticipant("ghost"));
+	}
 
-    @Test
-    void removeParticipant_nonExistingUser_doesNotThrow() {
-        assertDoesNotThrow(() -> challenge.removeParticipant("ghost"));
-    }
+	@Test
+	void removeParticipant_nullId_doesNothing() {
+		challenge.addParticipant("user1");
+		challenge.removeParticipant(null);
+		assertTrue(challenge.hasParticipant("user1"), "Existing user must still be present");
+	}
 
-    @Test
-    void removeParticipant_nullId_doesNothing() {
-        challenge.addParticipant("user1");
-        challenge.removeParticipant(null);
-        assertTrue(challenge.hasParticipant("user1"), "Existing user must still be present");
-    }
+	@Test
+	void removeParticipant_emptyId_doesNothing() {
+		challenge.addParticipant("user1");
+		challenge.removeParticipant("");
+		assertTrue(challenge.hasParticipant("user1"), "Existing user must still be present");
+	}
 
-    @Test
-    void removeParticipant_emptyId_doesNothing() {
-        challenge.addParticipant("user1");
-        challenge.removeParticipant("");
-        assertTrue(challenge.hasParticipant("user1"), "Existing user must still be present");
-    }
+	// ---------- hasParticipant ----------
 
-    // ---------- hasParticipant ----------
+	@Test
+	void hasParticipant_absentUser_returnsFalse() {
+		assertFalse(challenge.hasParticipant("nobody"));
+	}
 
-    @Test
-    void hasParticipant_absentUser_returnsFalse() {
-        assertFalse(challenge.hasParticipant("nobody"));
-    }
+	@Test
+	void hasParticipant_nullId_returnsFalse() {
+		assertFalse(challenge.hasParticipant(null));
+	}
 
-    @Test
-    void hasParticipant_nullId_returnsFalse() {
-        assertFalse(challenge.hasParticipant(null));
-    }
+	@Test
+	void hasParticipant_emptyId_returnsFalse() {
+		assertFalse(challenge.hasParticipant(""));
+	}
 
-    @Test
-    void hasParticipant_emptyId_returnsFalse() {
-        assertFalse(challenge.hasParticipant(""));
-    }
+	// ---------- participantProgress map ----------
 
-    // ---------- participantProgress map ----------
+	@Test
+	void participantProgressMap_isMap() {
+		assertNotNull(challenge.getParticipantProgress(),
+						"participantProgress must not be null. Thread safety is ensured by ReentrantLock in service layer");
+	}
 
-    @Test
-    void participantProgressMap_isMap() {
-        assertNotNull(challenge.getParticipantProgress(),
-                "participantProgress must not be null. Thread safety is ensured by ReentrantLock in service layer (Bug fix #3)");
-    }
+	@Test
+	void participantProgressMap_accumulatesValues() {
+		challenge.getParticipantProgress().put("user1", 100L);
+		challenge.getParticipantProgress().merge("user1", 50L, Long::sum);
+		assertEquals(150L, challenge.getParticipantProgress().get("user1"));
+	}
 
-    @Test
-    void participantProgressMap_accumulatesValues() {
-        challenge.getParticipantProgress().put("user1", 100L);
-        challenge.getParticipantProgress().merge("user1", 50L, Long::sum);
-        assertEquals(150L, challenge.getParticipantProgress().get("user1"));
-    }
+	// ---------- readResolve (deserialization) ----------
 
-    // ---------- readResolve (deserialization) ----------
+	@Test
+	void readResolve_preservesProgressDataAfterDeserialization() throws Exception {
+		// Simulate a HashMap being set (as from Ignite deserialization — ConcurrentHashMap
+		// is not used in the model field to avoid Ignite serialization issues under Java 21)
+		java.util.Map<String, Long> plain = new java.util.HashMap<>();
+		plain.put("user1", 42L);
+		challenge.setParticipantProgress(plain);
 
-    @Test
-    void readResolve_preservesProgressDataAfterDeserialization() throws Exception {
-        // Simulate a HashMap being set (as from Ignite deserialization — ConcurrentHashMap
-        // is not used in the model field to avoid Ignite serialization issues under Java 21)
-        java.util.Map<String, Long> plain = new java.util.HashMap<>();
-        plain.put("user1", 42L);
-        challenge.setParticipantProgress(plain);
+		// Invoke readResolve via reflection
+		java.lang.reflect.Method readResolve = Challenge.class.getDeclaredMethod("readResolve");
+		readResolve.setAccessible(true);
+		readResolve.invoke(challenge);
 
-        // Invoke readResolve via reflection
-        java.lang.reflect.Method readResolve = Challenge.class.getDeclaredMethod("readResolve");
-        readResolve.setAccessible(true);
-        readResolve.invoke(challenge);
-
-        assertNotNull(challenge.getParticipantProgress(),
-                "readResolve must preserve participantProgress (not null)");
-        assertEquals(42L, challenge.getParticipantProgress().get("user1"),
-                "readResolve must preserve data in participantProgress");
-    }
+		assertNotNull(challenge.getParticipantProgress(),
+						"readResolve must preserve participantProgress (not null)");
+		assertEquals(42L, challenge.getParticipantProgress().get("user1"),
+						"readResolve must preserve data in participantProgress");
+	}
 }

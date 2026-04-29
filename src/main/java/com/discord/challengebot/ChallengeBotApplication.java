@@ -14,12 +14,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 public class ChallengeBotApplication {
 
-    /**
-     * Точка входа в приложение.
-     *
-     * @param args аргументы командной строки
-     */
-    public static void main(String[] args) {
-        SpringApplication.run(ChallengeBotApplication.class, args);
-    }
+	/**
+	 * Точка входа в приложение.
+	 *
+	 * @param args аргументы командной строки
+	 */
+	static void main(String[] args) {
+		SpringApplication.run(ChallengeBotApplication.class, args);
+	}
 }

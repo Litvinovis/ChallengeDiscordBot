@@ -17,48 +17,48 @@ import org.springframework.core.annotation.Order;
 @Component
 @Order(1)
 public class UpdateNameCommand extends BaseCommand {
-    private static final Logger logger = LoggerFactory.getLogger(UpdateNameCommand.class);
+	private static final Logger logger = LoggerFactory.getLogger(UpdateNameCommand.class);
 
-    @Autowired
-    private IUserService userService;
+	@Autowired
+	private IUserService userService;
 
-    /**
-     * {@inheritDoc}
-     * Обрабатывает команду {@code обновить_имя}.
-     *
-     * @param cmd строка команды
-     * @return {@code true}, если команда равна "обновить_имя"
-     */
-    @Override
-    public boolean canHandle(String cmd) {
-        return "обновить_имя".equals(cmd);
-    }
+	/**
+	 * {@inheritDoc}
+	 * Обрабатывает команду {@code обновить_имя}.
+	 *
+	 * @param cmd строка команды
+	 * @return {@code true}, если команда равна "обновить_имя"
+	 */
+	@Override
+	public boolean canHandle(String cmd) {
+		return "обновить_имя".equals(cmd);
+	}
 
-    /**
-     * {@inheritDoc}
-     * Обновляет имя пользователя в хранилище данных.
-     *
-     * @param event    событие получения сообщения Discord
-     * @param args     аргументы: args[1..] — новое имя (необязательно)
-     * @param authorId идентификатор автора команды
-     * @param username текущее имя пользователя в Discord
-     */
-    @Override
-    public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
-        try {
-            TextChannel channel = event.getChannel().asTextChannel();
-            String newUsername = username;
-            if (args.length > 1) {
-                newUsername = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
-            }
-            boolean updated = userService.updateParticipantUsername(authorId, newUsername);
-            if (updated) {
-                channel.sendMessage("Ваше имя успешно обновлено на: " + newUsername).queue();
-            } else {
-                channel.sendMessage("Ошибка при обновлении имени.").queue();
-            }
-        } catch (Exception e) {
-            logger.error("Ошибка обработки команды обновить_имя", e);
-        }
-    }
+	/**
+	 * {@inheritDoc}
+	 * Обновляет имя пользователя в хранилище данных.
+	 *
+	 * @param event    событие получения сообщения Discord
+	 * @param args     аргументы: args[1..] — новое имя (необязательно)
+	 * @param authorId идентификатор автора команды
+	 * @param username текущее имя пользователя в Discord
+	 */
+	@Override
+	public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
+		try {
+			TextChannel channel = event.getChannel().asTextChannel();
+			String newUsername = username;
+			if (args.length > 1) {
+				newUsername = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+			}
+			boolean updated = userService.updateParticipantUsername(authorId, newUsername);
+			if (updated) {
+				channel.sendMessage("Ваше имя успешно обновлено на: " + newUsername).queue();
+			} else {
+				channel.sendMessage("Ошибка при обновлении имени.").queue();
+			}
+		} catch (Exception e) {
+			logger.error("Ошибка обработки команды обновить_имя", e);
+		}
+	}
 }

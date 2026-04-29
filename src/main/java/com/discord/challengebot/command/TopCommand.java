@@ -22,59 +22,60 @@ import java.util.Map;
 @Component
 @Order(1)
 public class TopCommand extends BaseCommand {
-    private static final Logger logger = LoggerFactory.getLogger(TopCommand.class);
+	private static final Logger logger = LoggerFactory.getLogger(TopCommand.class);
 
-    @Autowired
-    private IChallengeService challengeService;
-    @Autowired
-    private IStatisticsService statisticsService;
+	@Autowired
+	private IChallengeService challengeService;
+	@Autowired
+	private IStatisticsService statisticsService;
 
-    /**
-     * {@inheritDoc}
-     * Обрабатывает команду {@code топ}.
-     *
-     * @param cmd строка команды
-     * @return {@code true}, если команда равна "топ"
-     */
-    @Override
-    public boolean canHandle(String cmd) {
-        return "топ".equals(cmd);
-    }
+	/**
+	 * {@inheritDoc}
+	 * Обрабатывает команду {@code топ}.
+	 *
+	 * @param cmd строка команды
+	 * @return {@code true}, если команда равна "топ"
+	 */
+	@Override
+	public boolean canHandle(String cmd) {
+		return "топ".equals(cmd);
+	}
 
-    /**
-     * {@inheritDoc}
-     * Отправляет в канал отформатированную таблицу лидеров.
-     *
-     * @param event    событие получения сообщения Discord
-     * @param args     аргументы: args[1] — название испытания, args[2] — количество участников (необязательно)
-     * @param authorId идентификатор автора команды
-     * @param username имя автора команды
-     */
-    @Override
-    public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
-        try {
-            TextChannel channel = event.getChannel().asTextChannel();
-            if (args.length < 2) {
-                channel.sendMessage("Укажите название испытания. Используйте: +топ <испытание> [количество]").queue();
-                return;
-            }
-            String challengeName = args[1];
-            int limit = 5;
-            if (args.length > 2) {
-                try {
-                    limit = Math.min(Integer.parseInt(args[2]), 20);
-                } catch (NumberFormatException _) {}
-            }
-            Challenge challenge = challengeService.getChallenge(challengeName);
-            if (challenge == null) {
-                channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
-                return;
-            }
-            List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, limit);
-            String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
-            channel.sendMessage(leaderboardMessage).queue();
-        } catch (Exception e) {
-            logger.error("Ошибка обработки команды топ", e);
-        }
-    }
+	/**
+	 * {@inheritDoc}
+	 * Отправляет в канал отформатированную таблицу лидеров.
+	 *
+	 * @param event    событие получения сообщения Discord
+	 * @param args     аргументы: args[1] — название испытания, args[2] — количество участников (необязательно)
+	 * @param authorId идентификатор автора команды
+	 * @param username имя автора команды
+	 */
+	@Override
+	public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
+		try {
+			TextChannel channel = event.getChannel().asTextChannel();
+			if (args.length < 2) {
+				channel.sendMessage("Укажите название испытания. Используйте: +топ <испытание> [количество]").queue();
+				return;
+			}
+			String challengeName = args[1];
+			int limit = 5;
+			if (args.length > 2) {
+				try {
+					limit = Math.min(Integer.parseInt(args[2]), 20);
+				} catch (NumberFormatException _) {
+				}
+			}
+			Challenge challenge = challengeService.getChallenge(challengeName);
+			if (challenge == null) {
+				channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+				return;
+			}
+			List<Map.Entry<String, Long>> leaderboard = challengeService.getTopParticipants(challenge, limit);
+			String leaderboardMessage = statisticsService.formatLeaderboardForDiscord(challenge, leaderboard);
+			channel.sendMessage(leaderboardMessage).queue();
+		} catch (Exception e) {
+			logger.error("Ошибка обработки команды топ", e);
+		}
+	}
 }

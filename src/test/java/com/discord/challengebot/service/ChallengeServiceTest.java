@@ -94,7 +94,7 @@ class ChallengeServiceTest {
     }
 
     /**
-     * Bug fix #2: addProgress не должен бросать NPE при null challenge.
+     * addProgress не должен бросать NPE при null challenge.
      */
     @Test
     void testAddProgressWithNullChallenge() {
@@ -103,7 +103,7 @@ class ChallengeServiceTest {
     }
 
     /**
-     * Bug fix #2: setParticipantProgress не должен бросать NPE при null challenge.
+     * setParticipantProgress не должен бросать NPE при null challenge.
      */
     @Test
     void testSetParticipantProgressWithNullChallenge() {
@@ -171,7 +171,7 @@ class ChallengeServiceTest {
     }
 
     /**
-     * Bug fix #5: hasParticipant должен работать корректно (Set-семантика).
+     * hasParticipant должен работать корректно (Set-семантика).
      */
     @Test
     void testHasParticipantUsesSetSemantics() {

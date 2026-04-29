@@ -23,90 +23,90 @@ import java.util.Arrays;
 @Component
 @Order(1)
 public class ForecastCommand extends BaseCommand {
-    private static final Logger logger = LoggerFactory.getLogger(ForecastCommand.class);
+	private static final Logger logger = LoggerFactory.getLogger(ForecastCommand.class);
 
-    @Autowired
-    private IChallengeService challengeService;
+	@Autowired
+	private IChallengeService challengeService;
 
-    @Autowired
-    private IStatisticsService statisticsService;
+	@Autowired
+	private IStatisticsService statisticsService;
 
-    /**
-     * {@inheritDoc}
-     * Обрабатывает команду {@code прогноз}.
-     *
-     * @param cmd строка команды
-     * @return {@code true}, если команда равна "прогноз"
-     */
-    @Override
-    public boolean canHandle(String cmd) {
-        return "прогноз".equals(cmd);
-    }
+	/**
+	 * {@inheritDoc}
+	 * Обрабатывает команду {@code прогноз}.
+	 *
+	 * @param cmd строка команды
+	 * @return {@code true}, если команда равна "прогноз"
+	 */
+	@Override
+	public boolean canHandle(String cmd) {
+		return "прогноз".equals(cmd);
+	}
 
-    /**
-     * {@inheritDoc}
-     * Отправляет прогнозируемую дату завершения испытания для пользователя.
-     *
-     * @param event    событие получения сообщения Discord
-     * @param args     аргументы: args[1..] — название испытания
-     * @param authorId идентификатор автора команды
-     * @param username имя автора команды
-     */
-    @Override
-    public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
-        try {
-            TextChannel channel = event.getChannel().asTextChannel();
+	/**
+	 * {@inheritDoc}
+	 * Отправляет прогнозируемую дату завершения испытания для пользователя.
+	 *
+	 * @param event    событие получения сообщения Discord
+	 * @param args     аргументы: args[1..] — название испытания
+	 * @param authorId идентификатор автора команды
+	 * @param username имя автора команды
+	 */
+	@Override
+	public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
+		try {
+			TextChannel channel = event.getChannel().asTextChannel();
 
-            if (args.length < 2) {
-                channel.sendMessage("Укажите название испытания. Использование: +прогноз <испытание>").queue();
-                return;
-            }
+			if (args.length < 2) {
+				channel.sendMessage("Укажите название испытания. Использование: +прогноз <испытание>").queue();
+				return;
+			}
 
-            String challengeName = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
-            Challenge challenge = challengeService.getChallenge(challengeName);
+			String challengeName = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+			Challenge challenge = challengeService.getChallenge(challengeName);
 
-            if (challenge == null) {
-                channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
-                return;
-            }
+			if (challenge == null) {
+				channel.sendMessage("Испытание \"" + challengeName + "\" не найдено.").queue();
+				return;
+			}
 
-            long userProgress = challenge.getParticipantProgress().getOrDefault(authorId, 0L);
-            long targetValue = challenge.getTargetValue();
+			long userProgress = challenge.getParticipantProgress().getOrDefault(authorId, 0L);
+			long targetValue = challenge.getTargetValue();
 
-            if (userProgress >= targetValue) {
-                channel.sendMessage(String.format(
-                        "✅ Ты уже выполнил цель по испытанию \"%s\"! (%d/%d)",
-                        challenge.getName(), userProgress, targetValue
-                )).queue();
-                return;
-            }
+			if (userProgress >= targetValue) {
+				channel.sendMessage(String.format(
+								"✅ Ты уже выполнил цель по испытанию \"%s\"! (%d/%d)",
+								challenge.getName(), userProgress, targetValue
+				)).queue();
+				return;
+			}
 
-            // Пробуем получить прогноз через интерфейс, затем через полную реализацию
-            LocalDate forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
-            if (forecast == null && statisticsService instanceof StatisticsService) {
-                forecast = ((StatisticsService) statisticsService).forecastCompletionDate(challenge, authorId);
-            }
+			// Пробуем получить прогноз через интерфейс, затем через полную реализацию
+			LocalDate forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
+			if (forecast == null && statisticsService instanceof StatisticsService) {
+				forecast = ((StatisticsService) statisticsService).forecastCompletionDate(challenge, authorId);
+			}
 
-            if (forecast == null) {
-                channel.sendMessage(String.format(
-                        "📊 Недостаточно данных для прогноза по испытанию \"%s\".\n" +
-                        "Продолжай выполнять задание, и через несколько дней появится прогноз!",
-                        challenge.getName()
-                )).queue();
-                return;
-            }
+			if (forecast == null) {
+				channel.sendMessage(String.format(
+								"📊 Недостаточно данных для прогноза по испытанию \"%s\".\n" +
+												"Продолжай выполнять задание, и через несколько дней появится прогноз!",
+								challenge.getName()
+				)).queue();
+				return;
+			}
 
-            long remaining = targetValue - userProgress;
-            channel.sendMessage(String.format(
-                    "📅 **Прогноз по испытанию \"%s\":**\n" +
-                    "Выполнено: %d / %d\n" +
-                    "Осталось: %d\n" +
-                    "При текущем темпе ты закончишь цель к **%s**",
-                    challenge.getName(), userProgress, targetValue, remaining, forecast.toString()
-            )).queue();
+			long remaining = targetValue - userProgress;
+			channel.sendMessage(String.format(
+							"📅 **Прогноз по испытанию \"%s\":**\n" +
+											"Выполнено: %d / %d\n" +
+											"Осталось: %d\n" +
+											"При текущем темпе ты закончишь цель к **%s**",
+							challenge.getName(), userProgress, targetValue, remaining, forecast
+			)).queue();
 
-        } catch (Exception e) {
-            logger.error("Ошибка обработки команды прогноз для пользователя {}", username, e);
-        }
-    }
+		} catch (Exception e) {
+			logger.error("Ошибка обработки команды прогноз для пользователя {}", username, e);
+		}
+	}
 }

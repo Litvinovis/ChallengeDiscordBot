@@ -18,18 +18,18 @@ import java.util.concurrent.TimeUnit;
 @EnableCaching
 public class CacheConfig {
 
-    /**
-     * Создаёт менеджер кэша с Caffeine.
-     * Параметры: максимум 500 записей, TTL — 1 час после записи.
-     *
-     * @return настроенный CacheManager
-     */
-    @Bean
-    public CacheManager cacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager("achievements");
-        manager.setCaffeine(Caffeine.newBuilder()
-                .expireAfterWrite(1, TimeUnit.HOURS)
-                .maximumSize(500));
-        return manager;
-    }
+	/**
+	 * Создаёт менеджер кэша с Caffeine.
+	 * Параметры: максимум 500 записей, TTL — 1 час после записи.
+	 *
+	 * @return настроенный CacheManager
+	 */
+	@Bean
+	public CacheManager cacheManager() {
+		CaffeineCacheManager manager = new CaffeineCacheManager("achievements");
+		manager.setCaffeine(Caffeine.newBuilder()
+						.expireAfterWrite(1, TimeUnit.HOURS)
+						.maximumSize(500));
+		return manager;
+	}
 }

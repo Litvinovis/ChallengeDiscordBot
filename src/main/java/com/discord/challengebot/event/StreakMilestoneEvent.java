@@ -8,8 +8,4 @@ package com.discord.challengebot.event;
  * @param username имя пользователя (для отображения)
  * @param streak   текущая длина серии в днях
  */
-public record StreakMilestoneEvent(
-        String userId,
-        String username,
-        int streak
-) {}
+public record StreakMilestoneEvent(String userId, String username, int streak) { }

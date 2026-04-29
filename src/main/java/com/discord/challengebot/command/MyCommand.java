@@ -20,55 +20,55 @@ import java.util.List;
 @Component
 @Order(1)
 public class MyCommand extends BaseCommand {
-    private static final Logger logger = LoggerFactory.getLogger(MyCommand.class);
+	private static final Logger logger = LoggerFactory.getLogger(MyCommand.class);
 
-    @Autowired
-    private IChallengeService challengeService;
+	@Autowired
+	private IChallengeService challengeService;
 
-    /**
-     * {@inheritDoc}
-     * Обрабатывает команду {@code мои}.
-     *
-     * @param cmd строка команды
-     * @return {@code true}, если команда равна "мои"
-     */
-    @Override
-    public boolean canHandle(String cmd) {
-        return "мои".equals(cmd);
-    }
+	/**
+	 * {@inheritDoc}
+	 * Обрабатывает команду {@code мои}.
+	 *
+	 * @param cmd строка команды
+	 * @return {@code true}, если команда равна "мои"
+	 */
+	@Override
+	public boolean canHandle(String cmd) {
+		return "мои".equals(cmd);
+	}
 
-    /**
-     * {@inheritDoc}
-     * Отправляет в канал список личных испытаний с прогрессом.
-     *
-     * @param event    событие получения сообщения Discord
-     * @param args     аргументы команды (не используются)
-     * @param authorId идентификатор автора команды
-     * @param username имя автора команды
-     */
-    @Override
-    public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
-        try {
-            TextChannel channel = event.getChannel().asTextChannel();
-            List<Challenge> userChallenges = challengeService.getUserChallenges(authorId);
+	/**
+	 * {@inheritDoc}
+	 * Отправляет в канал список личных испытаний с прогрессом.
+	 *
+	 * @param event    событие получения сообщения Discord
+	 * @param args     аргументы команды (не используются)
+	 * @param authorId идентификатор автора команды
+	 * @param username имя автора команды
+	 */
+	@Override
+	public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
+		try {
+			TextChannel channel = event.getChannel().asTextChannel();
+			List<Challenge> userChallenges = challengeService.getUserChallenges(authorId);
 
-            if (userChallenges.isEmpty()) {
-                channel.sendMessage("У вас нет активных испытаний.").queue();
-                return;
-            }
+			if (userChallenges.isEmpty()) {
+				channel.sendMessage("У вас нет активных испытаний.").queue();
+				return;
+			}
 
-            StringBuilder message = new StringBuilder("**Ваши испытания:**\n\n");
-            for (Challenge challenge : userChallenges) {
-                ChallengeStats stats = challengeService.getChallengeStats(challenge);
-                if (stats != null) {
-                    message.append("- ").append(challenge.getName()).append(": ")
-                            .append(stats.currentValue()).append("/").append(stats.targetValue())
-                            .append(" (").append(String.format("%.2f", stats.percentage())).append("%)\n");
-                }
-            }
-            channel.sendMessage(message.toString()).queue();
-        } catch (Exception e) {
-            logger.error("Ошибка обработки команды мои", e);
-        }
-    }
+			StringBuilder message = new StringBuilder("**Ваши испытания:**\n\n");
+			for (Challenge challenge : userChallenges) {
+				ChallengeStats stats = challengeService.getChallengeStats(challenge);
+				if (stats != null) {
+					message.append("- ").append(challenge.getName()).append(": ")
+									.append(stats.currentValue()).append("/").append(stats.targetValue())
+									.append(" (").append(String.format("%.2f", stats.percentage())).append("%)\n");
+				}
+			}
+			channel.sendMessage(message.toString()).queue();
+		} catch (Exception e) {
+			logger.error("Ошибка обработки команды мои", e);
+		}
+	}
 }

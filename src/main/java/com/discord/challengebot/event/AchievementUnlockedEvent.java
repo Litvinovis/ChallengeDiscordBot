@@ -9,9 +9,4 @@ package com.discord.challengebot.event;
  * @param achievementName название достижения
  * @param challengeName   название испытания
  */
-public record AchievementUnlockedEvent(
-        String userId,
-        String username,
-        String achievementName,
-        String challengeName
-) {}
+public record AchievementUnlockedEvent(String userId, String username, String achievementName, String challengeName) { }
