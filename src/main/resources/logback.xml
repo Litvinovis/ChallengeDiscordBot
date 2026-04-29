@@ -86,9 +86,6 @@
     <!-- Логирование для JDA -->
     <logger name="net.dv8tion.jda" level="INFO" />
     
-    <!-- Логирование для Apache Ignite -->
-    <logger name="org.apache.ignite" level="WARN" />
-    
     <!-- Корневой логгер -->
     <root level="INFO">
         <appender-ref ref="CONSOLE" />

@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Конфигурация Spring Cache с Caffeine в качестве провайдера.
  * Кэш "achievements" хранит выданные достижения пользователей в памяти,
- * уменьшая обращения к Ignite при частых проверках.
+ * уменьшая обращения к БД при частых проверках.
  */
 @Configuration
 @EnableCaching
