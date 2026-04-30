@@ -9,7 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -194,9 +196,8 @@ public class ChallengeService implements IChallengeService {
 			long remaining = challenge.getTargetValue() - challenge.getCurrentValue();
 			double percentage = challenge.getTargetValue() > 0
 							? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
-			LocalDateTime now = LocalDateTime.now();
 			long daysRemaining = challenge.getEndDate() != null
-							? java.time.Duration.between(now, challenge.getEndDate()).toDays() : 0;
+							? ChronoUnit.DAYS.between(LocalDate.now(), challenge.getEndDate().toLocalDate()) : 0;
 			int participantCount = Math.max(loadParticipantIds(challenge).size(), 1);
 			double dailyTarget = daysRemaining > 0
 							? (double) remaining / participantCount / daysRemaining : 0;

@@ -228,25 +228,6 @@ class StatisticsServiceExtendedTest {
 		assertTrue(report.contains("Pushups"));
 	}
 
-	// ---- formatReportForDiscord (deprecated single-arg) ----
-
-	@Test
-	void formatReportForDiscord_deprecated_nullStats_returnsEmpty() {
-		assertEquals("", statisticsService.formatReportForDiscord(null));
-	}
-
-	@Test
-	void formatReportForDiscord_deprecated_validStats_containsKeyFields() {
-		ChallengeStats stats = new ChallengeStats("Squats", 500L, 100L, 400L, 20.0, 40.0, 10);
-
-		String result = statisticsService.formatReportForDiscord(stats);
-
-		assertTrue(result.contains("Squats"));
-		assertTrue(result.contains("500"));
-		assertTrue(result.contains("100"));
-		assertTrue(result.contains("400"));
-	}
-
 	// ---- formatDailyReportForDiscord ----
 
 	@Test
