@@ -4,6 +4,8 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,11 +18,15 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class StatisticsServiceForecastTest {
 
+	@Mock private DiscordService discordService;
+	@Mock private ParticipantService participantService;
+
 	private StatisticsService statisticsService;
 
 	@BeforeEach
 	void setUp() {
-		statisticsService = new StatisticsService();
+		MockitoAnnotations.openMocks(this);
+		statisticsService = new StatisticsService(discordService, participantService);
 	}
 
 	// ---- Тесты forecastCompletionDate(String, String) ----

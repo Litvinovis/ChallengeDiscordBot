@@ -68,8 +68,6 @@ public class DiscordService implements IDiscordService {
 	 */
 	@PostConstruct
 	public void init() {
-		statisticsService.setDiscordService(this);
-		statisticsService.setParticipantService(participantService);
 		logger.info("Инициализация Discord бота");
 		int delaySec = 5;
 		while (true) {
