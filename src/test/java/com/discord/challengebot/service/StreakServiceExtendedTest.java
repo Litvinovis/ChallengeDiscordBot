@@ -14,6 +14,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,6 +28,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class StreakServiceExtendedTest {
+
+	private static final ZoneId ZONE = ZoneId.of("Europe/Moscow");
 
 	@Mock
 	private ParticipantRepository participantRepository;
@@ -53,7 +56,7 @@ class StreakServiceExtendedTest {
 	void testConsecutiveDayIncrementsStreak() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(2);
-		participant.setLastActivityDate(LocalDate.now().minusDays(1));
+		participant.setLastActivityDate(LocalDate.now(ZONE).minusDays(1));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
@@ -65,7 +68,7 @@ class StreakServiceExtendedTest {
 	void testSameDayDoesNotChangeStreak() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(5);
-		participant.setLastActivityDate(LocalDate.now());
+		participant.setLastActivityDate(LocalDate.now(ZONE));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
@@ -77,7 +80,7 @@ class StreakServiceExtendedTest {
 	void testMissedDayResetsStreakTo1() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(10);
-		participant.setLastActivityDate(LocalDate.now().minusDays(3));
+		participant.setLastActivityDate(LocalDate.now(ZONE).minusDays(3));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
@@ -91,7 +94,7 @@ class StreakServiceExtendedTest {
 	void testEventPublishedAt3Days() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(2);
-		participant.setLastActivityDate(LocalDate.now().minusDays(1));
+		participant.setLastActivityDate(LocalDate.now(ZONE).minusDays(1));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
@@ -107,7 +110,7 @@ class StreakServiceExtendedTest {
 	void testEventPublishedAt7Days() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(6);
-		participant.setLastActivityDate(LocalDate.now().minusDays(1));
+		participant.setLastActivityDate(LocalDate.now(ZONE).minusDays(1));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
@@ -122,7 +125,7 @@ class StreakServiceExtendedTest {
 	void testEventPublishedAt30Days() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(29);
-		participant.setLastActivityDate(LocalDate.now().minusDays(1));
+		participant.setLastActivityDate(LocalDate.now(ZONE).minusDays(1));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
@@ -137,7 +140,7 @@ class StreakServiceExtendedTest {
 	void testNoEventAt5Days() {
 		Participant participant = new Participant("user1", "TestUser");
 		participant.setCurrentStreak(4);
-		participant.setLastActivityDate(LocalDate.now().minusDays(1));
+		participant.setLastActivityDate(LocalDate.now(ZONE).minusDays(1));
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 
 		streakService.recordActivity("user1");
