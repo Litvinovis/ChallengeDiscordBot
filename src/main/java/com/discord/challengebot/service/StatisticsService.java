@@ -132,10 +132,17 @@ public class StatisticsService implements IStatisticsService {
 				sb.append("\n**Топ-3 участников:**\n");
 				for (int i = 0; i < topParticipants.size(); i++) {
 					Map.Entry<String, Long> entry = topParticipants.get(i);
+					int streak = getParticipantStreak(entry.getKey());
+					String streakSuffix = streak > 1 ? " 🔥 " + streak + " дн." : "";
 					sb.append((i + 1)).append(". ").append(resolveUsername(entry.getKey()))
-							.append(" - ").append(entry.getValue()).append(" ").append(challenge.getUnit()).append("\n");
+							.append(" - ").append(entry.getValue()).append(" ").append(challenge.getUnit())
+							.append(streakSuffix).append("\n");
 				}
 			}
+
+			// Streak leader among all participants
+			appendStreakLeader(sb, challenge);
+
 			return sb.toString();
 		} catch (Exception e) {
 			logger.error("Ошибка при форматировании отчета для Discord", e);
@@ -291,6 +298,36 @@ public class StatisticsService implements IStatisticsService {
 			}
 		} catch (Exception e) {
 			logger.error("Ошибка при записи ежедневного прогресса", e);
+		}
+	}
+
+	private int getParticipantStreak(String userId) {
+		try {
+			Participant participant = participantService.getParticipant(userId);
+			return participant != null ? participant.getCurrentStreak() : 0;
+		} catch (Exception e) {
+			logger.debug("Не удалось получить серию для участника {}: {}", userId, e.getMessage());
+			return 0;
+		}
+	}
+
+	private void appendStreakLeader(StringBuilder sb, Challenge challenge) {
+		try {
+			String leaderId = null;
+			int maxStreak = 1;
+			for (String userId : challenge.getParticipantProgress().keySet()) {
+				int streak = getParticipantStreak(userId);
+				if (streak > maxStreak) {
+					maxStreak = streak;
+					leaderId = userId;
+				}
+			}
+			if (leaderId != null) {
+				sb.append("🔥 Стрик-лидер: ").append(resolveUsername(leaderId))
+						.append(" — ").append(maxStreak).append(" дней подряд\n");
+			}
+		} catch (Exception e) {
+			logger.debug("Ошибка при определении лидера серии: {}", e.getMessage());
 		}
 	}
 
