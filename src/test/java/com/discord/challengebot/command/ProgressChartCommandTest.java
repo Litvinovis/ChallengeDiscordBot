@@ -61,6 +61,9 @@ class ProgressChartCommandTest {
 		when(event.getChannel()).thenReturn(channelUnion);
 		when(channelUnion.getType()).thenReturn(ChannelType.TEXT);
 		when(channelUnion.asTextChannel()).thenReturn(textChannel);
+		// replyError() вызывает event.getChannel().sendMessage() — через channelUnion
+		when(channelUnion.sendMessage(anyString())).thenReturn(messageCreateAction);
+		// на случай если что-то идёт через textChannel напрямую
 		when(textChannel.sendMessage(anyString())).thenReturn(messageCreateAction);
 		doNothing().when(messageCreateAction).queue();
 	}
@@ -82,7 +85,7 @@ class ProgressChartCommandTest {
 		command.execute(event, new String[]{"график"}, AUTHOR_ID, USERNAME);
 
 		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-		verify(textChannel).sendMessage(captor.capture());
+		verify(channelUnion).sendMessage(captor.capture());
 		assertTrue(captor.getValue().contains("Укажите название испытания"));
 	}
 
@@ -93,7 +96,7 @@ class ProgressChartCommandTest {
 		command.execute(event, new String[]{"график", "Отжимания"}, AUTHOR_ID, USERNAME);
 
 		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-		verify(textChannel).sendMessage(captor.capture());
+		verify(channelUnion).sendMessage(captor.capture());
 		assertTrue(captor.getValue().contains("не найдено"));
 	}
 
@@ -106,7 +109,7 @@ class ProgressChartCommandTest {
 		command.execute(event, new String[]{"график", "Отжимания"}, AUTHOR_ID, USERNAME);
 
 		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-		verify(textChannel).sendMessage(captor.capture());
+		verify(channelUnion).sendMessage(captor.capture());
 		assertTrue(captor.getValue().contains("Не удалось получить статистику"));
 	}
 
@@ -123,7 +126,7 @@ class ProgressChartCommandTest {
 		command.execute(event, new String[]{"график", "Отжимания"}, AUTHOR_ID, USERNAME);
 
 		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-		verify(textChannel).sendMessage(captor.capture());
+		verify(channelUnion).sendMessage(captor.capture());
 		assertTrue(captor.getValue().contains("Не удалось сгенерировать график"));
 	}
 
