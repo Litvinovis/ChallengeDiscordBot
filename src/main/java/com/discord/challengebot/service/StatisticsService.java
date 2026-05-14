@@ -8,6 +8,7 @@ import com.discord.challengebot.repository.ProgressHistoryRepository;
 import net.dv8tion.jda.api.entities.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,7 @@ public class StatisticsService implements IStatisticsService {
 	private final ParticipantService participantService;
 	private final ProgressHistoryRepository progressHistoryRepository;
 
+	@Autowired
 	public StatisticsService(@Lazy DiscordService discordService,
 	                         @Lazy ParticipantService participantService,
 	                         @Lazy ProgressHistoryRepository progressHistoryRepository) {
