@@ -31,3 +31,27 @@ CREATE TABLE IF NOT EXISTS challenge_participants (
     last_activity_date    TEXT,
     awarded_achievements  TEXT NOT NULL DEFAULT '[]'
 );
+
+CREATE TABLE IF NOT EXISTS progress_history (
+    id           BIGSERIAL PRIMARY KEY,
+    challenge_id TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
+    username     TEXT,
+    amount       BIGINT NOT NULL,
+    recorded_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_progress_history_challenge_user ON progress_history(challenge_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_progress_history_recorded_at ON progress_history(recorded_at);
+
+CREATE TABLE IF NOT EXISTS challenge_archive (
+    id            TEXT PRIMARY KEY,
+    name          TEXT,
+    target_value  BIGINT,
+    current_value BIGINT,
+    chal_type     TEXT,
+    start_date    TEXT,
+    end_date      TEXT,
+    description   TEXT,
+    unit          TEXT,
+    archived_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

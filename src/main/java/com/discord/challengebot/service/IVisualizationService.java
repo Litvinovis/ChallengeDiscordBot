@@ -2,6 +2,8 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.dto.ChallengeStats;
 
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -24,4 +26,22 @@ public interface IVisualizationService {
 	 * @return CompletableFuture с байтами PNG-изображения
 	 */
 	CompletableFuture<byte[]> generatePercentageChart(ChallengeStats stats);
+
+	/**
+	 * Асинхронно генерирует столбчатый график динамики прогресса по дням.
+	 *
+	 * @param challengeName название испытания
+	 * @param dailyTotals   карта дата -> суммарный прогресс за день
+	 * @return CompletableFuture с байтами PNG-изображения
+	 */
+	CompletableFuture<byte[]> generateDailyProgressChart(String challengeName, Map<LocalDate, Long> dailyTotals);
+
+	/**
+	 * Асинхронно генерирует круговую диаграмму вклада участников.
+	 *
+	 * @param challengeName        название испытания
+	 * @param participantProgress  карта userId -> суммарный прогресс
+	 * @return CompletableFuture с байтами PNG-изображения
+	 */
+	CompletableFuture<byte[]> generateParticipationPieChart(String challengeName, Map<String, Long> participantProgress);
 }

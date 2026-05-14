@@ -4,6 +4,7 @@ import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import net.dv8tion.jda.api.entities.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +12,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -29,11 +32,20 @@ public class StatisticsService implements IStatisticsService {
 
 	private final DiscordService discordService;
 	private final ParticipantService participantService;
+	private final ProgressHistoryRepository progressHistoryRepository;
 
 	public StatisticsService(@Lazy DiscordService discordService,
-	                         @Lazy ParticipantService participantService) {
+	                         @Lazy ParticipantService participantService,
+	                         @Lazy ProgressHistoryRepository progressHistoryRepository) {
 		this.discordService = discordService;
 		this.participantService = participantService;
+		this.progressHistoryRepository = progressHistoryRepository;
+	}
+
+	/** For tests only — progressHistoryRepository will be null (guarded). */
+	public StatisticsService(@Lazy DiscordService discordService,
+	                         @Lazy ParticipantService participantService) {
+		this(discordService, participantService, null);
 	}
 
 	@Override
@@ -143,6 +155,12 @@ public class StatisticsService implements IStatisticsService {
 
 			// Streak leader among all participants
 			appendStreakLeader(sb, challenge);
+
+			// Weekly comparison
+			appendWeeklyComparison(sb, challenge);
+
+			// Best day
+			appendBestDay(sb, challenge);
 
 			return sb.toString();
 		} catch (Exception e) {
@@ -285,8 +303,21 @@ public class StatisticsService implements IStatisticsService {
 	}
 
 	public void recordDailyProgress(String challengeId, String userId, long progressAmount) {
+		recordDailyProgress(challengeId, userId, null, progressAmount);
+	}
+
+	public void recordDailyProgress(String challengeId, String userId, String username, long progressAmount) {
 		try {
 			if (challengeId == null || userId == null) return;
+			// Persist to DB
+			if (progressHistoryRepository != null) {
+				try {
+					progressHistoryRepository.insert(challengeId, userId, username, progressAmount);
+				} catch (Exception ex) {
+					logger.warn("Не удалось записать историю прогресса в БД: {}", ex.getMessage());
+				}
+			}
+			// Keep in-memory cache for forecast
 			if (progressHistoryCache.size() >= MAX_CACHE_SIZE) {
 				String firstKey = progressHistoryCache.keySet().iterator().next();
 				progressHistoryCache.remove(firstKey);
@@ -329,6 +360,40 @@ public class StatisticsService implements IStatisticsService {
 			}
 		} catch (Exception e) {
 			logger.debug("Ошибка при определении лидера серии: {}", e.getMessage());
+		}
+	}
+
+	private void appendWeeklyComparison(StringBuilder sb, Challenge challenge) {
+		try {
+			if (progressHistoryRepository == null) return;
+			LocalDateTime now = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+			Map<String, Long> thisWeek = progressHistoryRepository.getUserTotalsInRange(
+					challenge.getId(), now.minusDays(7), now);
+			Map<String, Long> lastWeek = progressHistoryRepository.getUserTotalsInRange(
+					challenge.getId(), now.minusDays(14), now.minusDays(7));
+			long thisWeekTotal = thisWeek.values().stream().mapToLong(Long::longValue).sum();
+			long lastWeekTotal = lastWeek.values().stream().mapToLong(Long::longValue).sum();
+			long delta = thisWeekTotal - lastWeekTotal;
+			String sign = delta >= 0 ? "+" : "";
+			sb.append(String.format("📈 Эта неделя: %d | Прошлая неделя: %d | Δ %s%d\n",
+					thisWeekTotal, lastWeekTotal, sign, delta));
+		} catch (Exception e) {
+			logger.debug("Ошибка при добавлении сравнения по неделям: {}", e.getMessage());
+		}
+	}
+
+	private void appendBestDay(StringBuilder sb, Challenge challenge) {
+		try {
+			if (progressHistoryRepository == null) return;
+			Map.Entry<LocalDate, Long> best = progressHistoryRepository.getBestDayAll(challenge.getId());
+			if (best != null) {
+				String dateStr = best.getKey().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+				sb.append("🏆 Лучший день: ").append(dateStr)
+						.append(" (").append(best.getValue()).append(" ")
+						.append(challenge.getUnit() != null ? challenge.getUnit() : "").append(")\n");
+			}
+		} catch (Exception e) {
+			logger.debug("Ошибка при добавлении лучшего дня: {}", e.getMessage());
 		}
 	}
 

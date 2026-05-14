@@ -4,6 +4,7 @@ import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.event.AchievementUnlockedEvent;
+import com.discord.challengebot.event.ChallengeHalfwayEvent;
 import com.discord.challengebot.event.StreakMilestoneEvent;
 import com.discord.challengebot.model.Challenge;
 import net.dv8tion.jda.api.JDA;
@@ -21,7 +22,11 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Сервис взаимодействия с Discord.
@@ -165,6 +170,25 @@ public class DiscordService implements IDiscordService {
 			}
 		} catch (Exception e) {
 			logger.error("Ошибка отправки уведомления о серии для пользователя {}", event.userId(), e);
+		}
+	}
+
+	/**
+	 * Слушатель события достижения 50% прогресса по испытанию.
+	 *
+	 * @param event событие достижения половины цели
+	 */
+	@EventListener
+	public void onChallengeHalfway(ChallengeHalfwayEvent event) {
+		try {
+			Challenge challenge = event.getChallenge();
+			if (challenge == null) return;
+			String message = String.format(
+					"🎉 Испытание **%s** достигло **50%%** прогресса! (%d / %d). Продолжаем!",
+					challenge.getName(), challenge.getCurrentValue(), challenge.getTargetValue());
+			sendMessageToChannel(resolveAnnouncementChannel(), message);
+		} catch (Exception e) {
+			logger.error("Ошибка отправки уведомления о 50% прогресса", e);
 		}
 	}
 
@@ -342,6 +366,38 @@ public class DiscordService implements IDiscordService {
 			}
 		} catch (Exception e) {
 			logger.error("Ошибка при отправке недельных отчётов", e);
+		}
+	}
+
+	/**
+	 * Формирует и отправляет ежемесячный отчёт о прогрессе всех активных испытаний.
+	 */
+	public void sendMonthlyReport() {
+		try {
+			List<Challenge> challenges = challengeService.getActiveChallenges();
+			String month = LocalDateTime.now(ZoneId.of("Europe/Moscow"))
+					.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru")));
+			sendMessageToChannel(discordConfig.getReportChannel(),
+					"**📅 Месячный итог — " + month + "**");
+			if (challenges.isEmpty()) {
+				sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
+				return;
+			}
+			for (Challenge challenge : challenges) {
+				try {
+					ChallengeStats stats = statisticsService.calculateStats(challenge);
+					if (stats == null) continue;
+					var top3 = challengeService.getTopParticipants(challenge, 3);
+					String report = statisticsService.formatDailyReportForDiscord(challenge, stats, top3);
+					if (!report.isBlank()) {
+						sendMessageToChannel(discordConfig.getReportChannel(), report);
+					}
+				} catch (Exception e) {
+					logger.error("Ошибка при отправке месячного отчёта для испытания {}", challenge.getName(), e);
+				}
+			}
+		} catch (Exception e) {
+			logger.error("Ошибка при отправке ежемесячных отчётов", e);
 		}
 	}
 
