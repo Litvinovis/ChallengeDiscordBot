@@ -1,12 +1,15 @@
 package com.discord.challengebot.service;
 
 import com.discord.challengebot.dto.ChallengeStats;
+import com.discord.challengebot.event.ChallengeHalfwayEvent;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
-import com.discord.challengebot.repository.ChallengeRepository;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
+import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,20 +34,28 @@ public class ChallengeService implements IChallengeService {
 	private final ChallengeRepository challengeRepository;
 	private final ChallengeProgressRepository progressRepository;
 	private final ParticipantService participantService;
+	private final ProgressHistoryRepository progressHistoryRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	/**
 	 * Создаёт сервис управления испытаниями.
 	 *
-	 * @param challengeRepository репозиторий испытаний
-	 * @param progressRepository  репозиторий прогресса участников
-	 * @param participantService  сервис управления участниками
+	 * @param challengeRepository      репозиторий испытаний
+	 * @param progressRepository       репозиторий прогресса участников
+	 * @param participantService       сервис управления участниками
+	 * @param progressHistoryRepository репозиторий истории прогресса
+	 * @param eventPublisher           публикатор Spring-событий
 	 */
 	public ChallengeService(ChallengeRepository challengeRepository,
 	                        ChallengeProgressRepository progressRepository,
-	                        ParticipantService participantService) {
+	                        ParticipantService participantService,
+	                        ProgressHistoryRepository progressHistoryRepository,
+	                        ApplicationEventPublisher eventPublisher) {
 		this.challengeRepository = challengeRepository;
 		this.progressRepository = progressRepository;
 		this.participantService = participantService;
+		this.progressHistoryRepository = progressHistoryRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	// ---- вспомогательные методы работы с хранилищем ----
@@ -129,12 +140,30 @@ public class ChallengeService implements IChallengeService {
 			challenge.addParticipant(userId);
 
 			// Обновляем общий прогресс (сумма по всем участникам)
+			long previousTotal = challenge.getCurrentValue();
 			progress.put(userId, newUserProgress);
 			long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
 			challenge.setCurrentValue(totalProgress);
 
 			// Синхронизируем в-памяти карту для текущей сессии
 			challenge.getParticipantProgress().put(userId, newUserProgress);
+
+			// Записываем в историю прогресса
+			try {
+				progressHistoryRepository.insert(challenge.getId(), userId, username, amount);
+			} catch (Exception ex) {
+				logger.warn("Не удалось записать историю прогресса: {}", ex.getMessage());
+			}
+
+			// Проверяем пересечение отметки 50%
+			long target = challenge.getTargetValue();
+			if (target > 0 && previousTotal < target / 2 && totalProgress >= target / 2) {
+				try {
+					eventPublisher.publishEvent(new ChallengeHalfwayEvent(this, challenge));
+				} catch (Exception ex) {
+					logger.warn("Не удалось опубликовать событие ChallengeHalfwayEvent: {}", ex.getMessage());
+				}
+			}
 
 			saveChallenge(challenge);
 			logger.info("Прогресс добавлен: пользователь={}, испытание={}, добавлено={}, итого={}",

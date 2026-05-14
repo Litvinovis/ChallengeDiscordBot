@@ -1,8 +1,9 @@
 package com.discord.challengebot.scheduled;
 
-import com.discord.challengebot.service.DiscordService;
-import com.discord.challengebot.service.ChallengeService;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.repository.ChallengeArchiveRepository;
+import com.discord.challengebot.service.ChallengeService;
+import com.discord.challengebot.service.DiscordService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,9 @@ public class DailyReportScheduler {
 
 	@Autowired
 	private ChallengeService challengeService;
+
+	@Autowired
+	private ChallengeArchiveRepository challengeArchiveRepository;
 
 	/**
 	 * Отправка ежедневных отчетов о прогрессе в 7:00 утра
@@ -104,6 +108,19 @@ public class DailyReportScheduler {
 	}
 
 	/**
+	 * Ежемесячный отчёт 1-го числа каждого месяца в 9:00
+	 */
+	@Scheduled(cron = "0 0 9 1 * ?")
+	public void sendMonthlyReport() {
+		logger.info("Отправка ежемесячного отчёта");
+		try {
+			discordService.sendMonthlyReport();
+		} catch (Exception e) {
+			logger.error("Ошибка при отправке ежемесячного отчёта", e);
+		}
+	}
+
+	/**
 	 * Очистка старых данных каждый день в 2:00 ночи
 	 */
 	@Scheduled(cron = "0 0 2 * * ?") // Каждый день в 2:00
@@ -115,12 +132,17 @@ public class DailyReportScheduler {
 			LocalDateTime thirtyDaysAgo = LocalDateTime.now(ZoneId.of("Europe/Moscow")).minusDays(30);
 			int deletedCount = 0;
 
-			// Удаляем завершенные испытания старше 30 дней
+			// Архивируем и удаляем завершенные испытания старше 30 дней
 			for (Challenge challenge : allChallenges) {
 				if (!challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
+					try {
+						challengeArchiveRepository.archive(challenge);
+					} catch (Exception e) {
+						logger.warn("Не удалось архивировать испытание {}: {}", challenge.getName(), e.getMessage());
+					}
 					if (challengeService.deleteChallenge(challenge.getName())) {
 						deletedCount++;
-						logger.info("Удалено старое завершенное испытание: {}", challenge.getName());
+						logger.info("Архивировано и удалено старое завершенное испытание: {}", challenge.getName());
 					}
 				}
 			}
