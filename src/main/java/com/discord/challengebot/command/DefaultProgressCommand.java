@@ -65,10 +65,13 @@ public class DefaultProgressCommand extends BaseCommand {
 
 			String challengeName = args[0];
 			long amount;
+			boolean isSubtract;
 			try {
 				amount = Long.parseLong(args[1]);
-				if (amount < 0) {
-					channel.sendMessage("Количество не может быть отрицательным числом.").queue();
+				isSubtract = amount < 0;
+				amount = Math.abs(amount);
+				if (amount == 0) {
+					channel.sendMessage("Количество не может быть равно нулю.").queue();
 					return;
 				}
 			} catch (NumberFormatException e) {
@@ -87,36 +90,42 @@ public class DefaultProgressCommand extends BaseCommand {
 				return;
 			}
 
-			Challenge updatedChallenge = challengeService.addProgress(challenge, authorId, username, amount);
+			Challenge updatedChallenge = isSubtract
+				? challengeService.subtractProgress(challenge, authorId, username, amount)
+				: challengeService.addProgress(challenge, authorId, username, amount);
 			if (updatedChallenge != null) {
 				long userTotalProgress = updatedChallenge.getParticipantProgress().getOrDefault(authorId, 0L);
 				long totalChallengeProgress = updatedChallenge.getCurrentValue();
 				long targetValue = updatedChallenge.getTargetValue();
 
 				String message = String.format(
-								"Прогресс по испытанию \"%s\" обновлен на %d, общее количество выполненных тобой действий - %d. Общий прогресс %d/%d.",
-								challengeName, amount, userTotalProgress, totalChallengeProgress, targetValue);
+					isSubtract
+						? "✅ -%d %s (у тебя: %d, всего: %d/%d)"
+						: "✅ +%d %s (у тебя: %d, всего: %d/%d)",
+					amount, challengeName, userTotalProgress, totalChallengeProgress, targetValue);
 				channel.sendMessage(message).queue();
 
-				// Record streak activity
-				try {
-					streakService.recordActivity(authorId);
-				} catch (Exception e) {
-					logger.debug("Ошибка обновления серии для пользователя {}", authorId);
-				}
+				if (!isSubtract) {
+					// Record streak activity
+					try {
+						streakService.recordActivity(authorId);
+					} catch (Exception e) {
+						logger.debug("Ошибка обновления серии для пользователя {}", authorId);
+					}
 
-				// Record daily progress for forecast
-				try {
-					statisticsService.recordDailyProgress(updatedChallenge.getId(), authorId, amount);
-				} catch (Exception e) {
-					logger.debug("Ошибка записи ежедневного прогресса для пользователя {}", authorId);
-				}
+					// Record daily progress for forecast
+					try {
+						statisticsService.recordDailyProgress(updatedChallenge.getId(), authorId, amount);
+					} catch (Exception e) {
+						logger.debug("Ошибка записи ежедневного прогресса для пользователя {}", authorId);
+					}
 
-				// Check achievements
-				try {
-					achievementService.checkAndAwardAchievements(authorId, updatedChallenge.getId(), userTotalProgress);
-				} catch (Exception e) {
-					logger.debug("Ошибка проверки достижений для пользователя {}", authorId);
+					// Check achievements
+					try {
+						achievementService.checkAndAwardAchievements(authorId, updatedChallenge.getId(), userTotalProgress);
+					} catch (Exception e) {
+						logger.debug("Ошибка проверки достижений для пользователя {}", authorId);
+					}
 				}
 			} else {
 				channel.sendMessage("Ошибка при обновлении прогресса по испытанию \"" + challengeName + "\".").queue();

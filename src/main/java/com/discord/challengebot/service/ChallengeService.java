@@ -149,6 +149,30 @@ public class ChallengeService implements IChallengeService {
 	 * {@inheritDoc}
 	 */
 	@Override
+	public Challenge subtractProgress(Challenge challenge, String userId, String username, long amount) {
+		try {
+			if (challenge == null || userId == null || amount <= 0) return challenge;
+			var progress = loadProgress(challenge);
+			long currentUserProgress = progress.getOrDefault(userId, 0L);
+			long newUserProgress = Math.max(0, currentUserProgress - amount);
+			progressRepository.upsert(challenge.getId(), userId, newUserProgress);
+			progress.put(userId, newUserProgress);
+			long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
+			challenge.setCurrentValue(totalProgress);
+			challenge.getParticipantProgress().put(userId, newUserProgress);
+			saveChallenge(challenge);
+			logger.info("Прогресс уменьшен: пользователь={}, испытание={}, убрано={}, итого={}", userId, challenge.getName(), amount, newUserProgress);
+			return challenge;
+		} catch (Exception e) {
+			logger.error("Ошибка при уменьшении прогресса: {}", challenge != null ? challenge.getName() : "null", e);
+			return challenge;
+		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
 	public Challenge getChallenge(String name) {
 		try {
 			return findChallenge(name);

@@ -324,6 +324,43 @@ public class DiscordService implements IDiscordService {
 	}
 
 	/**
+	 * Формирует и отправляет еженедельный отчёт о прогрессе всех активных испытаний.
+	 */
+	public void sendWeeklyReport() {
+		try {
+			List<Challenge> challenges = challengeService.getActiveChallenges();
+			if (challenges.isEmpty()) return;
+			for (Challenge challenge : challenges) {
+				try {
+					ChallengeStats stats = statisticsService.calculateStats(challenge);
+					if (stats == null) continue;
+					String report = formatWeeklyReport(challenge, stats);
+					sendMessageToChannel(discordConfig.getReportChannel(), report);
+				} catch (Exception e) {
+					logger.error("Ошибка при отправке недельного отчёта для испытания {}", challenge.getName(), e);
+				}
+			}
+		} catch (Exception e) {
+			logger.error("Ошибка при отправке недельных отчётов", e);
+		}
+	}
+
+	private String formatWeeklyReport(Challenge challenge, ChallengeStats stats) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("📅 **Итоги недели — ").append(challenge.getName()).append("**\n");
+		double pct = stats.percentage();
+		sb.append(String.format("📊 Прогресс: **%d / %d** (%.1f%%)\n",
+			challenge.getCurrentValue(), challenge.getTargetValue(), pct));
+		if (challenge.getEndDate() != null) {
+			long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(
+				java.time.LocalDateTime.now(), challenge.getEndDate());
+			sb.append("⏳ До конца: **").append(Math.max(0, daysLeft)).append(" дн.**\n");
+		}
+		sb.append("💪 Продолжайте в том же духе!");
+		return sb.toString();
+	}
+
+	/**
 	 * {@inheritDoc}
 	 */
 	@Override
