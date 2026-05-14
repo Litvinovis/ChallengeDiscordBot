@@ -62,6 +62,14 @@ public class ChallengeRepository {
 		return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
 	}
 
+	public Optional<Challenge> findByName(String name) {
+		if (name == null) return Optional.empty();
+		List<Challenge> results = jdbc.query(
+						"SELECT id, name, target_value, current_value, chal_type, start_date, end_date, active, description, unit, participants FROM challenges WHERE name = ?",
+						this::mapRow, name);
+		return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
+	}
+
 	public List<Challenge> findAll() {
 		return jdbc.query(
 						"SELECT id, name, target_value, current_value, chal_type, start_date, end_date, active, description, unit, participants FROM challenges ORDER BY name",

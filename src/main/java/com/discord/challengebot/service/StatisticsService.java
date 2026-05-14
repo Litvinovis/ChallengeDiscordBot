@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -118,8 +119,8 @@ public class StatisticsService implements IStatisticsService {
 			sb.append("Цель: ").append(stats.targetValue()).append("\n");
 			sb.append("Выполнено: ").append(stats.currentValue()).append("\n");
 			sb.append("Осталось: ").append(stats.remaining()).append("\n");
-			sb.append("Процент выполнения: ").append(String.format("%.2f", stats.percentage()).replace('.', ',')).append("%\n");
-			sb.append("Ежедневная цель: ").append(String.format("%.2f", stats.dailyTarget()).replace('.', ',')).append(" в день\n");
+			sb.append("Процент выполнения: ").append(String.format(Locale.forLanguageTag("ru"), "%.2f", stats.percentage())).append("%\n");
+			sb.append("Ежедневная цель: ").append(String.format(Locale.forLanguageTag("ru"), "%.2f", stats.dailyTarget())).append(" в день\n");
 			sb.append("Дней осталось: ").append(stats.daysRemaining()).append("\n");
 			sb.append("Зарегистрировано участников: ").append(challenge.getParticipants().size()).append("\n");
 
