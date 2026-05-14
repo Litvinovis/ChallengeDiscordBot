@@ -39,6 +39,17 @@ public interface IChallengeService {
 	Challenge addProgress(Challenge challenge, String userId, String username, long amount);
 
 	/**
+	 * Уменьшает прогресс пользователя в испытании (не ниже нуля).
+	 *
+	 * @param challenge испытание
+	 * @param userId    идентификатор пользователя
+	 * @param username  имя пользователя
+	 * @param amount    положительное количество для вычитания
+	 * @return обновлённое испытание
+	 */
+	Challenge subtractProgress(Challenge challenge, String userId, String username, long amount);
+
+	/**
 	 * Возвращает испытание по его названию.
 	 *
 	 * @param name название испытания
