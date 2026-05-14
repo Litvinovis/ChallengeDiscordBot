@@ -149,8 +149,7 @@ class ChallengeTest {
 
 	@Test
 	void readResolve_preservesProgressDataAfterDeserialization() throws Exception {
-		// Simulate a HashMap being set (as from Ignite deserialization — ConcurrentHashMap
-		// is not used in the model field to avoid Ignite serialization issues under Java 21)
+		// Simulate a plain HashMap being set (ConcurrentHashMap is not used in the model field)
 		java.util.Map<String, Long> plain = new java.util.HashMap<>();
 		plain.put("user1", 42L);
 		challenge.setParticipantProgress(plain);
