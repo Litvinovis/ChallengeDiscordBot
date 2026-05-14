@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -51,7 +52,7 @@ public class DailyReportScheduler {
 		try {
 			// Получаем все активные испытания
 			List<Challenge> challenges = challengeService.getAllChallenges();
-			LocalDateTime now = LocalDateTime.now();
+			LocalDateTime now = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
 
 			logger.debug("Получено {} активных испытаний для проверки завершения", challenges.size());
 
@@ -111,7 +112,7 @@ public class DailyReportScheduler {
 		try {
 			// Получаем все испытания
 			List<Challenge> allChallenges = challengeService.getAllChallenges();
-			LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+			LocalDateTime thirtyDaysAgo = LocalDateTime.now(ZoneId.of("Europe/Moscow")).minusDays(30);
 			int deletedCount = 0;
 
 			// Удаляем завершенные испытания старше 30 дней

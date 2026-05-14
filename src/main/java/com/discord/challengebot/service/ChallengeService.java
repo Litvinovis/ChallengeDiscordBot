@@ -8,9 +8,11 @@ import com.discord.challengebot.repository.ChallengeProgressRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,10 +58,9 @@ public class ChallengeService implements IChallengeService {
 		if (name == null || name.isBlank()) return null;
 		String id = name.toLowerCase().replace(" ", "_");
 		var opt = challengeRepository.findById(id);
-		return opt.orElseGet(() -> challengeRepository.findAll().stream()
-						.filter(c -> name.equals(c.getName()))
-						.findFirst().orElse(null));
-		// Fallback: полный перебор для legacy id
+		if (opt.isPresent()) return opt.get();
+		// Fallback для legacy-id: поиск по имени через SQL (O(1))
+		return challengeRepository.findByName(name).orElse(null);
 	}
 
 	private Map<String, Long> loadProgress(Challenge challenge) {
@@ -90,7 +91,7 @@ public class ChallengeService implements IChallengeService {
 			challenge.setTargetValue(targetValue);
 			challenge.setCurrentValue(0);
 			challenge.setType(type);
-			challenge.setStartDate(LocalDateTime.now());
+			challenge.setStartDate(LocalDateTime.now(ZoneId.of("Europe/Moscow")));
 			challenge.setEndDate(endDate);
 			challenge.setActive(true);
 			challenge.setDescription(description);
@@ -107,6 +108,7 @@ public class ChallengeService implements IChallengeService {
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public Challenge addProgress(Challenge challenge, String userId, String username, long amount) {
 		try {
@@ -148,6 +150,7 @@ public class ChallengeService implements IChallengeService {
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public Challenge subtractProgress(Challenge challenge, String userId, String username, long amount) {
 		try {

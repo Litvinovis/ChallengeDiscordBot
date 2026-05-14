@@ -14,6 +14,7 @@ import org.springframework.core.annotation.Order;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -77,7 +78,7 @@ public class NewChallengeCommand extends BaseCommand {
 				return;
 			}
 
-			LocalDateTime endDate = LocalDateTime.now().plusDays(365);
+			LocalDateTime endDate = LocalDateTime.now(ZoneId.of("Europe/Moscow")).plusDays(365);
 			ChallengeType type = isAdmin ? ChallengeType.GROUP : ChallengeType.INDIVIDUAL;
 			String description = "Испытание по " + name;
 			String unit = "единиц";

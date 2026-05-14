@@ -353,7 +353,7 @@ public class DiscordService implements IDiscordService {
 			challenge.getCurrentValue(), challenge.getTargetValue(), pct));
 		if (challenge.getEndDate() != null) {
 			long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(
-				java.time.LocalDateTime.now(), challenge.getEndDate());
+				java.time.LocalDateTime.now(java.time.ZoneId.of("Europe/Moscow")), challenge.getEndDate());
 			sb.append("⏳ До конца: **").append(Math.max(0, daysLeft)).append(" дн.**\n");
 		}
 		sb.append("💪 Продолжайте в том же духе!");
