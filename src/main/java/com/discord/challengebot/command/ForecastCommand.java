@@ -81,10 +81,13 @@ public class ForecastCommand extends BaseCommand {
 				return;
 			}
 
-			// Пробуем получить прогноз через интерфейс, затем через полную реализацию
-			LocalDate forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
-			if (forecast == null && statisticsService instanceof StatisticsService) {
-				forecast = ((StatisticsService) statisticsService).forecastCompletionDate(challenge, authorId);
+			// Приоритет — расчёт по испытанию (учитывает остаток до цели), затем интерфейсный вариант
+			LocalDate forecast = null;
+			if (statisticsService instanceof StatisticsService impl) {
+				forecast = impl.forecastCompletionDate(challenge, authorId);
+			}
+			if (forecast == null) {
+				forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
 			}
 
 			if (forecast == null) {

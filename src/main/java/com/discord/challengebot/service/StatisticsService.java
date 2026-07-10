@@ -311,14 +311,8 @@ public class StatisticsService implements IStatisticsService {
 	public void recordDailyProgress(String challengeId, String userId, String username, long progressAmount) {
 		try {
 			if (challengeId == null || userId == null) return;
-			// Persist to DB
-			if (progressHistoryRepository != null) {
-				try {
-					progressHistoryRepository.insert(challengeId, userId, username, progressAmount);
-				} catch (Exception ex) {
-					logger.warn("Не удалось записать историю прогресса в БД: {}", ex.getMessage());
-				}
-			}
+			// Запись в БД не выполняется: история уже сохраняется в ChallengeService.addProgress,
+			// повторный insert здесь удваивал данные в progress_history
 			// Keep in-memory cache for forecast
 			if (progressHistoryCache.size() >= MAX_CACHE_SIZE) {
 				String firstKey = progressHistoryCache.keySet().iterator().next();

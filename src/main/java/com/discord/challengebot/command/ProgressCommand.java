@@ -86,10 +86,12 @@ public class ProgressCommand extends BaseCommand {
 				if (userProgress >= challenge.getTargetValue()) {
 					message.append("\n✅ Уже выполнено!");
 				} else {
-					LocalDate forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
-					if (forecast == null && statisticsService instanceof com.discord.challengebot.service.StatisticsService) {
-						forecast = ((com.discord.challengebot.service.StatisticsService) statisticsService)
-										.forecastCompletionDate(challenge, authorId);
+					LocalDate forecast = null;
+					if (statisticsService instanceof com.discord.challengebot.service.StatisticsService impl) {
+						forecast = impl.forecastCompletionDate(challenge, authorId);
+					}
+					if (forecast == null) {
+						forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
 					}
 					if (forecast != null) {
 						message.append(String.format("\n📅 При текущем темпе: завершишь к %s", forecast));

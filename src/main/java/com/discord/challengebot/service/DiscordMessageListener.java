@@ -64,7 +64,12 @@ public class DiscordMessageListener extends ListenerAdapter {
 			}
 
 			TextChannel channel = event.getChannel().asTextChannel();
-			List<String> configuredChannelIds = discordConfig.getChannelIds();
+			// Незаданные env-переменные дают пустые строки в списке — отбрасываем их,
+			// иначе fallback на channel-id/имя канала никогда не срабатывает
+			List<String> configuredChannelIds = discordConfig.getChannelIds() == null ? null
+							: discordConfig.getChannelIds().stream()
+											.filter(id -> id != null && !id.isBlank())
+											.toList();
 			String configuredChannelId = discordConfig.getChannelId();
 			if (configuredChannelIds != null && !configuredChannelIds.isEmpty()) {
 				if (!configuredChannelIds.contains(channel.getId())) {
