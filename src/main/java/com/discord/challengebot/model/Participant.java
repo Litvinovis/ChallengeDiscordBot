@@ -3,7 +3,7 @@ package com.discord.challengebot.model;
 import java.io.Serial;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import com.discord.challengebot.util.TimeZones;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +47,7 @@ public class Participant implements Serializable {
 	public Participant(String userId, String username) {
 		this.userId = userId;
 		this.username = username;
-		this.joinDate = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+		this.joinDate = LocalDateTime.now(TimeZones.MOSCOW);
 		this.registeredChallenges = new ArrayList<>();
 	}
 

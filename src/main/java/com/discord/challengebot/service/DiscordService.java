@@ -23,7 +23,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import com.discord.challengebot.util.TimeZones;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -80,9 +80,7 @@ public class DiscordService implements IDiscordService {
 			try {
 				attempt = JDABuilder.createDefault(discordConfig.getToken())
 								.enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
-								.addEventListeners(new DiscordMessageListener(
-												this, discordConfig, challengeService, participantService,
-												statisticsService, commandRegistry))
+								.addEventListeners(new DiscordMessageListener(this, discordConfig, commandRegistry))
 								.build();
 				attempt.awaitReady();
 				jda = attempt;
@@ -375,7 +373,7 @@ public class DiscordService implements IDiscordService {
 	public void sendMonthlyReport() {
 		try {
 			List<Challenge> challenges = challengeService.getActiveChallenges();
-			String month = LocalDateTime.now(ZoneId.of("Europe/Moscow"))
+			String month = LocalDateTime.now(TimeZones.MOSCOW)
 					.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru")));
 			sendMessageToChannel(discordConfig.getReportChannel(),
 					"**📅 Месячный итог — " + month + "**");
@@ -409,7 +407,7 @@ public class DiscordService implements IDiscordService {
 			challenge.getCurrentValue(), challenge.getTargetValue(), pct));
 		if (challenge.getEndDate() != null) {
 			long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(
-				java.time.LocalDateTime.now(java.time.ZoneId.of("Europe/Moscow")), challenge.getEndDate());
+				java.time.LocalDateTime.now(TimeZones.MOSCOW), challenge.getEndDate());
 			sb.append("⏳ До конца: **").append(Math.max(0, daysLeft)).append(" дн.**\n");
 		}
 		sb.append("💪 Продолжайте в том же духе!");

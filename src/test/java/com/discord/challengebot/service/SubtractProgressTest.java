@@ -47,14 +47,15 @@ class SubtractProgressTest {
     @Test
     void subtractProgress_reducesUserProgress() {
         Challenge challenge = makeChallenge(50L);
+        // Состояние в БД после атомарного декремента
         Map<String, Long> progress = new HashMap<>();
-        progress.put("user1", 50L);
+        progress.put("user1", 30L);
         when(progressRepository.findByChallengeId("test")).thenReturn(progress);
 
         Challenge result = challengeService.subtractProgress(challenge, "user1", "alice", 20L);
 
         assertNotNull(result);
-        verify(progressRepository).upsert("test", "user1", 30L);
+        verify(progressRepository).subtractAmount("test", "user1", 20L);
         assertEquals(30L, result.getParticipantProgress().get("user1"));
         assertEquals(30L, result.getCurrentValue());
     }
@@ -62,14 +63,15 @@ class SubtractProgressTest {
     @Test
     void subtractProgress_floorAtZero() {
         Challenge challenge = makeChallenge(10L);
+        // GREATEST(0, ...) в БД не даёт прогрессу уйти ниже нуля
         Map<String, Long> progress = new HashMap<>();
-        progress.put("user1", 10L);
+        progress.put("user1", 0L);
         when(progressRepository.findByChallengeId("test")).thenReturn(progress);
 
         Challenge result = challengeService.subtractProgress(challenge, "user1", "alice", 50L);
 
         assertNotNull(result);
-        verify(progressRepository).upsert("test", "user1", 0L);
+        verify(progressRepository).subtractAmount("test", "user1", 50L);
         assertEquals(0L, result.getParticipantProgress().get("user1"));
         assertEquals(0L, result.getCurrentValue());
     }

@@ -102,11 +102,12 @@ public interface IStatisticsService {
 	                                   List<Map.Entry<String, Long>> topParticipants);
 
 	/**
-	 * Прогнозирует дату завершения испытания для пользователя на основе истории прогресса.
+	 * Прогнозирует дату завершения испытания для пользователя на основе истории прогресса:
+	 * остаток до цели делится на средний дневной темп за последние 7 дней.
 	 *
-	 * @param challengeId идентификатор испытания
-	 * @param userId      идентификатор пользователя
+	 * @param challenge испытание
+	 * @param userId    идентификатор пользователя
 	 * @return прогнозируемая дата завершения или {@code null} при недостатке данных
 	 */
-	LocalDate forecastCompletionDate(String challengeId, String userId);
+	LocalDate forecastCompletionDate(Challenge challenge, String userId);
 }

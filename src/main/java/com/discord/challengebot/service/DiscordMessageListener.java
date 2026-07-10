@@ -29,18 +29,13 @@ public class DiscordMessageListener extends ListenerAdapter {
 	private JDA jda;
 
 	/**
-	 * Конструктор с внедрением всех зависимостей.
+	 * Конструктор с внедрением зависимостей.
 	 *
-	 * @param discordService    сервис взаимодействия с Discord
-	 * @param discordConfig     конфигурация Discord бота
-	 * @param challengeService  сервис управления испытаниями
-	 * @param userService       сервис управления пользователями
-	 * @param statisticsService сервис статистики
-	 * @param commandRegistry   реестр команд
+	 * @param discordService  сервис взаимодействия с Discord
+	 * @param discordConfig   конфигурация Discord бота
+	 * @param commandRegistry реестр команд
 	 */
 	public DiscordMessageListener(IDiscordService discordService, DiscordConfig discordConfig,
-	                              IChallengeService challengeService, IUserService userService,
-	                              IStatisticsService statisticsService,
 	                              CommandRegistry commandRegistry) {
 		this.discordService = discordService;
 		this.discordConfig = discordConfig;
@@ -64,7 +59,12 @@ public class DiscordMessageListener extends ListenerAdapter {
 			}
 
 			TextChannel channel = event.getChannel().asTextChannel();
-			List<String> configuredChannelIds = discordConfig.getChannelIds();
+			// Незаданные env-переменные дают пустые строки в списке — отбрасываем их,
+			// иначе fallback на channel-id/имя канала никогда не срабатывает
+			List<String> configuredChannelIds = discordConfig.getChannelIds() == null ? null
+							: discordConfig.getChannelIds().stream()
+											.filter(id -> id != null && !id.isBlank())
+											.toList();
 			String configuredChannelId = discordConfig.getChannelId();
 			if (configuredChannelIds != null && !configuredChannelIds.isEmpty()) {
 				if (!configuredChannelIds.contains(channel.getId())) {

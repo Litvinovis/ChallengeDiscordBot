@@ -27,6 +27,22 @@ public class ChallengeProgressRepository {
 						challengeId, userId, progress);
 	}
 
+	/** Атомарно прибавляет amount к прогрессу участника (защита от гонок при одновременных командах). */
+	public void addAmount(String challengeId, String userId, long amount) {
+		jdbc.update(
+						"INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, ?) " +
+										"ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = challenge_progress.progress + EXCLUDED.progress",
+						challengeId, userId, amount);
+	}
+
+	/** Атомарно вычитает amount из прогресса участника, не опускаясь ниже нуля. */
+	public void subtractAmount(String challengeId, String userId, long amount) {
+		jdbc.update(
+						"INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, 0) " +
+										"ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = GREATEST(0, challenge_progress.progress - ?)",
+						challengeId, userId, amount);
+	}
+
 	public Map<String, Long> findByChallengeId(String challengeId) {
 		Map<String, Long> result = new HashMap<>();
 		jdbc.query(

@@ -3,7 +3,6 @@ package com.discord.challengebot.command;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.service.IChallengeService;
 import com.discord.challengebot.service.IStatisticsService;
-import com.discord.challengebot.service.StatisticsService;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import org.slf4j.Logger;
@@ -81,11 +80,7 @@ public class ForecastCommand extends BaseCommand {
 				return;
 			}
 
-			// Пробуем получить прогноз через интерфейс, затем через полную реализацию
-			LocalDate forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
-			if (forecast == null && statisticsService instanceof StatisticsService) {
-				forecast = ((StatisticsService) statisticsService).forecastCompletionDate(challenge, authorId);
-			}
+			LocalDate forecast = statisticsService.forecastCompletionDate(challenge, authorId);
 
 			if (forecast == null) {
 				channel.sendMessage(String.format(

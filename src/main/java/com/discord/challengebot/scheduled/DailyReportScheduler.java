@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import com.discord.challengebot.util.TimeZones;
 import java.util.List;
 
 /**
@@ -56,7 +56,7 @@ public class DailyReportScheduler {
 		try {
 			// Получаем все активные испытания
 			List<Challenge> challenges = challengeService.getAllChallenges();
-			LocalDateTime now = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+			LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
 
 			logger.debug("Получено {} активных испытаний для проверки завершения", challenges.size());
 
@@ -129,7 +129,7 @@ public class DailyReportScheduler {
 		try {
 			// Получаем все испытания
 			List<Challenge> allChallenges = challengeService.getAllChallenges();
-			LocalDateTime thirtyDaysAgo = LocalDateTime.now(ZoneId.of("Europe/Moscow")).minusDays(30);
+			LocalDateTime thirtyDaysAgo = LocalDateTime.now(TimeZones.MOSCOW).minusDays(30);
 			int deletedCount = 0;
 
 			// Архивируем и удаляем завершенные испытания старше 30 дней

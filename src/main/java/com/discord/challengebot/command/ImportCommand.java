@@ -2,6 +2,7 @@ package com.discord.challengebot.command;
 
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
+import com.discord.challengebot.repository.ChallengeRepository;
 import com.discord.challengebot.service.IChallengeService;
 import com.discord.challengebot.service.IUserService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,8 +16,11 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Команда {@code +импорт} — импорт испытаний и прогресса из прикреплённого JSON-файла (только для администраторов).
@@ -30,6 +34,8 @@ public class ImportCommand extends BaseCommand {
     private IChallengeService challengeService;
     @Autowired
     private ChallengeProgressRepository progressRepository;
+    @Autowired
+    private ChallengeRepository challengeRepository;
     @Autowired
     private IUserService userService;
 
@@ -52,7 +58,8 @@ public class ImportCommand extends BaseCommand {
                 replyError(event, "Прикрепите JSON-файл бэкапа к сообщению.");
                 return;
             }
-            byte[] jsonBytes = attachments.get(0).getProxy().download().get().readAllBytes();
+            byte[] jsonBytes = attachments.get(0).getProxy().download()
+                    .get(30, TimeUnit.SECONDS).readAllBytes();
             JsonNode root = objectMapper.readTree(jsonBytes);
             int imported = 0;
 
@@ -84,6 +91,7 @@ public class ImportCommand extends BaseCommand {
             }
 
             JsonNode progressNode = root.path("progress");
+            Set<String> touchedChallengeIds = new HashSet<>();
             if (progressNode.isObject()) {
                 progressNode.fields().forEachRemaining(challengeEntry -> {
                     String challengeId = challengeEntry.getKey();
@@ -93,11 +101,26 @@ public class ImportCommand extends BaseCommand {
                         long amount = userEntry.getValue().asLong(0);
                         try {
                             progressRepository.upsert(challengeId, userId, amount);
+                            touchedChallengeIds.add(challengeId);
                         } catch (Exception e) {
                             logger.warn("Не удалось импортировать прогресс {}/{}: {}", challengeId, userId, e.getMessage());
                         }
                     });
                 });
+            }
+
+            // Пересчитываем общий прогресс и список участников испытаний по импортированным данным
+            for (String challengeId : touchedChallengeIds) {
+                try {
+                    challengeRepository.findById(challengeId).ifPresent(ch -> {
+                        Map<String, Long> allProgress = progressRepository.findByChallengeId(challengeId);
+                        ch.setCurrentValue(allProgress.values().stream().mapToLong(Long::longValue).sum());
+                        allProgress.keySet().forEach(ch::addParticipant);
+                        challengeRepository.save(ch);
+                    });
+                } catch (Exception e) {
+                    logger.warn("Не удалось пересчитать прогресс испытания {}: {}", challengeId, e.getMessage());
+                }
             }
 
             reply(event, "✅ Импорт завершён. Загружено испытаний: " + imported);
