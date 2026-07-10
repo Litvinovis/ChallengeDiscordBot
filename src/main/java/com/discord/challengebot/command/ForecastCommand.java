@@ -3,7 +3,6 @@ package com.discord.challengebot.command;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.service.IChallengeService;
 import com.discord.challengebot.service.IStatisticsService;
-import com.discord.challengebot.service.StatisticsService;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import org.slf4j.Logger;
@@ -81,14 +80,7 @@ public class ForecastCommand extends BaseCommand {
 				return;
 			}
 
-			// Приоритет — расчёт по испытанию (учитывает остаток до цели), затем интерфейсный вариант
-			LocalDate forecast = null;
-			if (statisticsService instanceof StatisticsService impl) {
-				forecast = impl.forecastCompletionDate(challenge, authorId);
-			}
-			if (forecast == null) {
-				forecast = statisticsService.forecastCompletionDate(challenge.getId(), authorId);
-			}
+			LocalDate forecast = statisticsService.forecastCompletionDate(challenge, authorId);
 
 			if (forecast == null) {
 				channel.sendMessage(String.format(

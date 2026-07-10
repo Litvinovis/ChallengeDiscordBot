@@ -3,7 +3,6 @@ package com.discord.challengebot.command;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.service.AchievementService;
 import com.discord.challengebot.service.IChallengeService;
-import com.discord.challengebot.service.StatisticsService;
 import com.discord.challengebot.service.StreakService;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -17,7 +16,7 @@ import org.springframework.stereotype.Component;
 /**
  * Обработчик команд обновления прогресса по умолчанию, например {@code +отжимания 10}.
  * Срабатывает как запасной вариант, если ни одна другая команда не подошла.
- * Добавляет прогресс, обновляет серию активности, записывает историю прогноза и проверяет достижения.
+ * Добавляет прогресс, обновляет серию активности и проверяет достижения.
  */
 @Component
 @Order()
@@ -30,8 +29,6 @@ public class DefaultProgressCommand extends BaseCommand {
 	private AchievementService achievementService;
 	@Autowired
 	private StreakService streakService;
-	@Autowired
-	private StatisticsService statisticsService;
 
 	/**
 	 * {@inheritDoc}
@@ -111,13 +108,6 @@ public class DefaultProgressCommand extends BaseCommand {
 						streakService.recordActivity(authorId);
 					} catch (Exception e) {
 						logger.debug("Ошибка обновления серии для пользователя {}", authorId);
-					}
-
-					// Record daily progress for forecast
-					try {
-						statisticsService.recordDailyProgress(updatedChallenge.getId(), authorId, amount);
-					} catch (Exception e) {
-						logger.debug("Ошибка записи ежедневного прогресса для пользователя {}", authorId);
 					}
 
 					// Check achievements

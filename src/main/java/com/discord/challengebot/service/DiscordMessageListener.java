@@ -29,18 +29,13 @@ public class DiscordMessageListener extends ListenerAdapter {
 	private JDA jda;
 
 	/**
-	 * Конструктор с внедрением всех зависимостей.
+	 * Конструктор с внедрением зависимостей.
 	 *
-	 * @param discordService    сервис взаимодействия с Discord
-	 * @param discordConfig     конфигурация Discord бота
-	 * @param challengeService  сервис управления испытаниями
-	 * @param userService       сервис управления пользователями
-	 * @param statisticsService сервис статистики
-	 * @param commandRegistry   реестр команд
+	 * @param discordService  сервис взаимодействия с Discord
+	 * @param discordConfig   конфигурация Discord бота
+	 * @param commandRegistry реестр команд
 	 */
 	public DiscordMessageListener(IDiscordService discordService, DiscordConfig discordConfig,
-	                              IChallengeService challengeService, IUserService userService,
-	                              IStatisticsService statisticsService,
 	                              CommandRegistry commandRegistry) {
 		this.discordService = discordService;
 		this.discordConfig = discordConfig;

@@ -42,7 +42,6 @@ public class Challenge implements Serializable {
 	public Challenge() {
 		this.participantProgress = new HashMap<>();
 		this.participants = new ArrayList<>();
-		logger.debug("Создан новый экземпляр Challenge");
 	}
 
 	/**
@@ -71,7 +70,6 @@ public class Challenge implements Serializable {
 		this.description = description;
 		this.unit = unit;
 		this.participants = new ArrayList<>();
-		logger.debug("Создан новый экземпляр Challenge с параметрами: id={}, name={}", id, name);
 	}
 
 	/**
@@ -89,7 +87,6 @@ public class Challenge implements Serializable {
 	 * @param id идентификатор испытания
 	 */
 	public void setId(String id) {
-		logger.debug("Установка ID испытания: {}", id);
 		this.id = id;
 	}
 
@@ -108,7 +105,6 @@ public class Challenge implements Serializable {
 	 * @param name название испытания
 	 */
 	public void setName(String name) {
-		logger.debug("Установка названия испытания: {}", name);
 		this.name = name;
 	}
 
@@ -127,7 +123,6 @@ public class Challenge implements Serializable {
 	 * @param targetValue новое целевое значение
 	 */
 	public void setTargetValue(long targetValue) {
-		logger.debug("Установка целевого значения испытания '{}': {}", name, targetValue);
 		this.targetValue = targetValue;
 	}
 
@@ -146,7 +141,6 @@ public class Challenge implements Serializable {
 	 * @param currentValue новое текущее значение
 	 */
 	public void setCurrentValue(long currentValue) {
-		logger.debug("Установка текущего значения испытания '{}': {}", name, currentValue);
 		this.currentValue = currentValue;
 	}
 
@@ -165,7 +159,6 @@ public class Challenge implements Serializable {
 	 * @param type тип испытания
 	 */
 	public void setType(ChallengeType type) {
-		logger.debug("Установка типа испытания '{}': {}", name, type);
 		this.type = type;
 	}
 
@@ -184,7 +177,6 @@ public class Challenge implements Serializable {
 	 * @param startDate дата и время начала испытания
 	 */
 	public void setStartDate(LocalDateTime startDate) {
-		logger.debug("Установка даты начала испытания '{}': {}", name, startDate);
 		this.startDate = startDate;
 	}
 
@@ -203,7 +195,6 @@ public class Challenge implements Serializable {
 	 * @param endDate дата и время окончания испытания
 	 */
 	public void setEndDate(LocalDateTime endDate) {
-		logger.debug("Установка даты окончания испытания '{}': {}", name, endDate);
 		this.endDate = endDate;
 	}
 
@@ -222,7 +213,6 @@ public class Challenge implements Serializable {
 	 * @param participantProgress карта прогресса участников
 	 */
 	public void setParticipantProgress(Map<String, Long> participantProgress) {
-		logger.debug("Установка прогресса участников испытания '{}'", name);
 		this.participantProgress = participantProgress;
 	}
 
@@ -241,7 +231,6 @@ public class Challenge implements Serializable {
 	 * @param active {@code true} для активации, {@code false} для остановки
 	 */
 	public void setActive(boolean active) {
-		logger.debug("Установка статуса активности испытания '{}': {}", name, active);
 		this.active = active;
 	}
 
@@ -260,7 +249,6 @@ public class Challenge implements Serializable {
 	 * @param description описание испытания
 	 */
 	public void setDescription(String description) {
-		logger.debug("Установка описания испытания '{}'", name);
 		this.description = description;
 	}
 
@@ -279,7 +267,6 @@ public class Challenge implements Serializable {
 	 * @param unit единица измерения
 	 */
 	public void setUnit(String unit) {
-		logger.debug("Установка единицы измерения испытания '{}': {}", name, unit);
 		this.unit = unit;
 	}
 
@@ -298,7 +285,6 @@ public class Challenge implements Serializable {
 	 * @param participants список userId участников
 	 */
 	public void setParticipants(List<String> participants) {
-		logger.debug("Установка списка участников испытания '{}'", name);
 		this.participants = participants;
 	}
 
@@ -325,14 +311,10 @@ public class Challenge implements Serializable {
 				return;
 			}
 
-			boolean added = getParticipantsSet().add(userId);
-			if (added) {
+			if (getParticipantsSet().add(userId)) {
 				// Keep backing list in sync
 				if (participants == null) participants = new ArrayList<>();
 				if (!participants.contains(userId)) participants.add(userId);
-				logger.debug("Участник '{}' добавлен в испытание '{}'", userId, name);
-			} else {
-				logger.debug("Участник '{}' уже присутствует в испытании '{}'", userId, name);
 			}
 		} catch (Exception e) {
 			logger.error("Ошибка при добавлении участника '{}' в испытание '{}'", userId, name, e);
@@ -351,13 +333,8 @@ public class Challenge implements Serializable {
 				return;
 			}
 
-			boolean removed = getParticipantsSet().remove(userId);
+			getParticipantsSet().remove(userId);
 			if (participants != null) participants.remove(userId);
-			if (removed) {
-				logger.debug("Участник '{}' удален из испытания '{}'", userId, name);
-			} else {
-				logger.debug("Участник '{}' не найден в испытании '{}'", userId, name);
-			}
 		} catch (Exception e) {
 			logger.error("Ошибка при удалении участника '{}' из испытания '{}'", userId, name, e);
 		}
@@ -376,9 +353,7 @@ public class Challenge implements Serializable {
 				return false;
 			}
 
-			boolean hasParticipant = getParticipantsSet().contains(userId);
-			logger.debug("Проверка наличия участника '{}' в испытании '{}': {}", userId, name, hasParticipant);
-			return hasParticipant;
+			return getParticipantsSet().contains(userId);
 		} catch (Exception e) {
 			logger.error("Ошибка при проверке наличия участника '{}' в испытании '{}'", userId, name, e);
 			return false;

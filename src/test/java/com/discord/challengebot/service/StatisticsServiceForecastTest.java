@@ -2,6 +2,7 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -9,62 +10,47 @@ import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 /**
- * Тесты для функции прогнозирования и LRU-кэша в StatisticsService.
+ * Тесты для функции прогнозирования в StatisticsService.
  */
 class StatisticsServiceForecastTest {
 
 	@Mock private DiscordService discordService;
 	@Mock private ParticipantService participantService;
+	@Mock private ProgressHistoryRepository progressHistoryRepository;
 
 	private StatisticsService statisticsService;
 
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		statisticsService = new StatisticsService(discordService, participantService);
+		statisticsService = new StatisticsService(discordService, participantService, progressHistoryRepository);
 	}
 
-	// ---- Тесты forecastCompletionDate(String, String) ----
-
 	@Test
-	void testForecastNullChallengeIdReturnsNull() {
-		LocalDate result = statisticsService.forecastCompletionDate((String) null, "user1");
+	void testForecastWithChallengeNullReturnsNull() {
+		LocalDate result = statisticsService.forecastCompletionDate(null, "user1");
 		assertNull(result);
 	}
 
 	@Test
 	void testForecastNullUserIdReturnsNull() {
-		LocalDate result = statisticsService.forecastCompletionDate("challenge1", null);
+		LocalDate result = statisticsService.forecastCompletionDate(buildChallenge(1000, 300), null);
 		assertNull(result);
 	}
-
-	@Test
-	void testForecastWithNoHistoryReturnsNull() {
-		LocalDate result = statisticsService.forecastCompletionDate("challenge1", "user1");
-		assertNull(result);
-	}
-
-	@Test
-	void testForecastWithHistoryReturnsFutureDate() {
-		// Записываем 7 дней прогресса по 50 единиц
-		for (int i = 0; i < 7; i++) {
-			statisticsService.recordDailyProgress("challenge1", "user1", 50L);
-		}
-		// Прогноз по этим данным не null (avgPerDay > 0)
-		LocalDate result = statisticsService.forecastCompletionDate("challenge1", "user1");
-		assertNotNull(result);
-		assertTrue(result.isAfter(LocalDate.now()) || result.isEqual(LocalDate.now()));
-	}
-
-	// ---- Тесты forecastCompletionDate(Challenge, String) ----
 
 	@Test
 	void testForecastWithChallengeAndNoHistory() {
+		when(progressHistoryRepository.getDailyTotals(anyString(), anyString(), anyInt()))
+				.thenReturn(Map.of());
 		Challenge challenge = buildChallenge(1000, 300);
 		// Устанавливаем прогресс участника, чтобы avgPerDay > 0
 		challenge.getParticipantProgress().put("user1", 300L);
@@ -84,69 +70,48 @@ class StatisticsServiceForecastTest {
 	}
 
 	@Test
-	void testForecastWithChallengeNullReturnsNull() {
-		LocalDate result = statisticsService.forecastCompletionDate((Challenge) null, "user1");
-		assertNull(result);
-	}
-
-	@Test
 	void testForecastWithChallengeAndHistory() {
 		Challenge challenge = buildChallenge(2000, 500);
 		challenge.getParticipantProgress().put("user1", 500L);
 
-		// Записываем историю: 100 единиц/день × 7 дней
-		for (int i = 0; i < 7; i++) {
-			statisticsService.recordDailyProgress(challenge.getId(), "user1", 100L);
-		}
+		// История: 100 единиц/день за последние 7 дней
+		LocalDate today = LocalDate.now();
+		Map<LocalDate, Long> daily = Map.of(
+				today.minusDays(1), 100L,
+				today.minusDays(2), 100L,
+				today.minusDays(3), 100L,
+				today.minusDays(4), 100L,
+				today.minusDays(5), 100L,
+				today.minusDays(6), 100L,
+				today.minusDays(7), 100L);
+		when(progressHistoryRepository.getDailyTotals(challenge.getId(), "user1", 7))
+				.thenReturn(daily);
 
 		LocalDate result = statisticsService.forecastCompletionDate(challenge, "user1");
 		assertNotNull(result);
-		// При темпе 100/день и 1500 оставшихся — ожидаем ~15 дней вперед
+		// При темпе 700/7=100 в день и 1500 оставшихся — ожидаем ~15 дней вперёд
+		assertEquals(today.plusDays(15), result);
+	}
+
+	@Test
+	void testForecastWithNoProgressAtAllReturnsNull() {
+		when(progressHistoryRepository.getDailyTotals(anyString(), anyString(), anyInt()))
+				.thenReturn(Map.of());
+		Challenge challenge = buildChallenge(1000, 0);
+		LocalDate result = statisticsService.forecastCompletionDate(challenge, "user1");
+		// Ни истории, ни накопленного прогресса — прогноз невозможен
+		assertNull(result);
+	}
+
+	@Test
+	void testForecastWithNullRepositoryUsesFallback() {
+		// Тестовый конструктор без репозитория — используется общий средний темп
+		StatisticsService withoutRepo = new StatisticsService(discordService, participantService);
+		Challenge challenge = buildChallenge(1000, 300);
+		challenge.getParticipantProgress().put("user1", 300L);
+		LocalDate result = withoutRepo.forecastCompletionDate(challenge, "user1");
+		assertNotNull(result);
 		assertTrue(result.isAfter(LocalDate.now()));
-	}
-
-	// ---- Тесты LRU-кэша recordDailyProgress ----
-
-	@Test
-	void testRecordDailyProgressNullChallengeIdDoesNotThrow() {
-		assertDoesNotThrow(() -> statisticsService.recordDailyProgress(null, "user1", 100));
-	}
-
-	@Test
-	void testRecordDailyProgressNullUserIdDoesNotThrow() {
-		assertDoesNotThrow(() -> statisticsService.recordDailyProgress("challenge1", null, 100));
-	}
-
-	@Test
-	void testRecordDailyProgressStoresValues() {
-		statisticsService.recordDailyProgress("challenge1", "user1", 50L);
-		statisticsService.recordDailyProgress("challenge1", "user1", 75L);
-		// Проверяем через прогноз: если есть история, прогноз вернет не null
-		LocalDate result = statisticsService.forecastCompletionDate("challenge1", "user1");
-		assertNotNull(result);
-	}
-
-	@Test
-	void testLruEvictsOldEntriesWhenCacheExceeds10000Keys() {
-		// Добавляем 10001 уникальных ключей — старый должен быть вытеснен
-		for (int i = 0; i <= 10000; i++) {
-			statisticsService.recordDailyProgress("challenge" + i, "user" + i, 100L);
-		}
-		// Сервис не должен бросить исключение
-		// Прогноз для последнего ключа должен работать
-		LocalDate result = statisticsService.forecastCompletionDate("challenge10000", "user10000");
-		assertNotNull(result);
-	}
-
-	@Test
-	void testHistoryPerKeyLimitedTo365Entries() {
-		// Добавляем 400 записей для одного ключа
-		for (int i = 0; i < 400; i++) {
-			statisticsService.recordDailyProgress("challenge1", "user1", 10L);
-		}
-		// Прогноз должен работать нормально
-		LocalDate result = statisticsService.forecastCompletionDate("challenge1", "user1");
-		assertNotNull(result);
 	}
 
 	// ---- Вспомогательные методы ----

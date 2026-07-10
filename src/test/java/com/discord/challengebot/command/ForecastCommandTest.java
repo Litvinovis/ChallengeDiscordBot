@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -123,7 +124,7 @@ class ForecastCommandTest {
 	@Test
 	void testForecastWithNoHistoryReturnsInsufficientData() {
 		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
-		when(statisticsService.forecastCompletionDate(anyString(), anyString())).thenReturn(null);
+		when(statisticsService.forecastCompletionDate(any(Challenge.class), anyString())).thenReturn(null);
 
 		forecastCommand.execute(event, new String[]{"прогноз", "Отжимания"}, "user1", "TestUser");
 
@@ -139,7 +140,7 @@ class ForecastCommandTest {
 	void testForecastWithValidDate() {
 		LocalDate forecastDate = LocalDate.now().plusDays(14);
 		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
-		when(statisticsService.forecastCompletionDate("отжимания", "user1")).thenReturn(forecastDate);
+		when(statisticsService.forecastCompletionDate(challenge, "user1")).thenReturn(forecastDate);
 
 		forecastCommand.execute(event, new String[]{"прогноз", "Отжимания"}, "user1", "TestUser");
 
@@ -153,7 +154,7 @@ class ForecastCommandTest {
 	void testForecastMessageContainsChallengeName() {
 		LocalDate forecastDate = LocalDate.now().plusDays(10);
 		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
-		when(statisticsService.forecastCompletionDate("отжимания", "user1")).thenReturn(forecastDate);
+		when(statisticsService.forecastCompletionDate(challenge, "user1")).thenReturn(forecastDate);
 
 		forecastCommand.execute(event, new String[]{"прогноз", "Отжимания"}, "user1", "TestUser");
 
@@ -177,7 +178,7 @@ class ForecastCommandTest {
 		multiWord.setParticipantProgress(new ConcurrentHashMap<>());
 
 		when(challengeService.getChallenge("Отжимания на кулаках")).thenReturn(multiWord);
-		when(statisticsService.forecastCompletionDate(anyString(), anyString())).thenReturn(null);
+		when(statisticsService.forecastCompletionDate(any(Challenge.class), anyString())).thenReturn(null);
 
 		forecastCommand.execute(event, new String[]{"прогноз", "Отжимания", "на", "кулаках"}, "user1", "TestUser");
 

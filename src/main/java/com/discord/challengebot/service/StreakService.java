@@ -9,7 +9,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
+import com.discord.challengebot.util.TimeZones;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -22,7 +22,7 @@ import java.time.temporal.ChronoUnit;
 public class StreakService {
 	private static final Logger logger = LoggerFactory.getLogger(StreakService.class);
 	// Фиксированный часовой пояс для корректного расчёта границ суток независимо от timezone сервера
-	private static final ZoneId ZONE = ZoneId.of("Europe/Moscow");
+	private static final java.time.ZoneId ZONE = TimeZones.MOSCOW;
 
 	private final ParticipantRepository participantRepository;
 	private final ApplicationEventPublisher eventPublisher;

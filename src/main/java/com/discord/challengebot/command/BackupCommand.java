@@ -15,7 +15,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import com.discord.challengebot.util.TimeZones;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,7 +58,7 @@ public class BackupCommand extends BaseCommand {
                 progress.put(c.getId(), progressRepository.findByChallengeId(c.getId()));
             }
             Map<String, Object> backup = new LinkedHashMap<>();
-            backup.put("exportedAt", LocalDateTime.now(ZoneId.of("Europe/Moscow")).toString());
+            backup.put("exportedAt", LocalDateTime.now(TimeZones.MOSCOW).toString());
             backup.put("challenges", challenges);
             backup.put("progress", progress);
             byte[] jsonBytes = objectMapper.writeValueAsBytes(backup);

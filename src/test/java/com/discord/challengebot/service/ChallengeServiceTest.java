@@ -81,15 +81,17 @@ class ChallengeServiceTest {
         challenge.setActive(true);
         challenge.setEndDate(LocalDateTime.now().plusDays(30));
 
-        // progressRepository.findByChallengeId возвращает пустую карту (новый участник)
-        when(progressRepository.findByChallengeId("отжимания")).thenReturn(new HashMap<>());
+        // Состояние в БД после атомарного инкремента нового участника
+        Map<String, Long> progressAfter = new HashMap<>();
+        progressAfter.put(userId, 10L);
+        when(progressRepository.findByChallengeId("отжимания")).thenReturn(progressAfter);
         when(participantService.registerForChallenge(userId, username, "Отжимания")).thenReturn(true);
 
         Challenge updatedChallenge = challengeService.addProgress(challenge, userId, username, amount);
 
         assertNotNull(updatedChallenge);
         verify(participantService).registerForChallenge(userId, username, "Отжимания");
-        verify(progressRepository).upsert("отжимания", userId, 10L);
+        verify(progressRepository).addAmount("отжимания", userId, 10L);
         verify(challengeRepository).save(challenge);
     }
 

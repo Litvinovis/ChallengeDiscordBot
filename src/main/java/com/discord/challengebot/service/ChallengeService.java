@@ -7,6 +7,7 @@ import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
 import com.discord.challengebot.repository.ProgressHistoryRepository;
+import com.discord.challengebot.util.TimeZones;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -15,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,7 +102,7 @@ public class ChallengeService implements IChallengeService {
 			challenge.setTargetValue(targetValue);
 			challenge.setCurrentValue(0);
 			challenge.setType(type);
-			challenge.setStartDate(LocalDateTime.now(ZoneId.of("Europe/Moscow")));
+			challenge.setStartDate(LocalDateTime.now(TimeZones.MOSCOW));
 			challenge.setEndDate(endDate);
 			challenge.setActive(true);
 			challenge.setDescription(description);
@@ -130,18 +130,16 @@ public class ChallengeService implements IChallengeService {
 			// Регистрируем участника в системе
 			participantService.registerForChallenge(userId, username != null ? username : userId, challenge.getName());
 
-			// Обновляем прогресс через нормализованную таблицу
+			// Атомарный инкремент в БД защищает от гонок при одновременных командах
+			progressRepository.addAmount(challenge.getId(), userId, amount);
 			var progress = loadProgress(challenge);
-			long currentUserProgress = progress.getOrDefault(userId, 0L);
-			long newUserProgress = currentUserProgress + amount;
-			progressRepository.upsert(challenge.getId(), userId, newUserProgress);
+			long newUserProgress = progress.getOrDefault(userId, 0L);
 
 			// Добавляем участника в список (для обратной совместимости с Challenge.participants)
 			challenge.addParticipant(userId);
 
 			// Обновляем общий прогресс (сумма по всем участникам)
 			long previousTotal = challenge.getCurrentValue();
-			progress.put(userId, newUserProgress);
 			long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
 			challenge.setCurrentValue(totalProgress);
 
@@ -184,11 +182,10 @@ public class ChallengeService implements IChallengeService {
 	public Challenge subtractProgress(Challenge challenge, String userId, String username, long amount) {
 		try {
 			if (challenge == null || userId == null || amount <= 0) return challenge;
+			// Атомарный декремент в БД защищает от гонок при одновременных командах
+			progressRepository.subtractAmount(challenge.getId(), userId, amount);
 			var progress = loadProgress(challenge);
-			long currentUserProgress = progress.getOrDefault(userId, 0L);
-			long newUserProgress = Math.max(0, currentUserProgress - amount);
-			progressRepository.upsert(challenge.getId(), userId, newUserProgress);
-			progress.put(userId, newUserProgress);
+			long newUserProgress = progress.getOrDefault(userId, 0L);
 			long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
 			challenge.setCurrentValue(totalProgress);
 			challenge.getParticipantProgress().put(userId, newUserProgress);
@@ -253,7 +250,7 @@ public class ChallengeService implements IChallengeService {
 			double percentage = challenge.getTargetValue() > 0
 							? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
 			long daysRemaining = challenge.getEndDate() != null
-							? ChronoUnit.DAYS.between(LocalDate.now(), challenge.getEndDate().toLocalDate()) : 0;
+							? ChronoUnit.DAYS.between(LocalDate.now(TimeZones.MOSCOW), challenge.getEndDate().toLocalDate()) : 0;
 			int participantCount = Math.max(loadParticipantIds(challenge).size(), 1);
 			double dailyTarget = daysRemaining > 0
 							? (double) remaining / participantCount / daysRemaining : 0;

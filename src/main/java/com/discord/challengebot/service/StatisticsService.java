@@ -5,6 +5,7 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
 import com.discord.challengebot.repository.ProgressHistoryRepository;
+import com.discord.challengebot.util.TimeZones;
 import net.dv8tion.jda.api.entities.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,22 +15,16 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
 public class StatisticsService implements IStatisticsService {
 	private static final Logger logger = LoggerFactory.getLogger(StatisticsService.class);
-
-	private static final int MAX_CACHE_SIZE = 10000;
-	private static final int MAX_HISTORY_PER_KEY = 365;
-	private final Map<String, List<Long>> progressHistoryCache = new ConcurrentHashMap<>();
 
 	private final DiscordService discordService;
 	private final ParticipantService participantService;
@@ -57,7 +52,7 @@ public class StatisticsService implements IStatisticsService {
 			long remaining = challenge.getTargetValue() - challenge.getCurrentValue();
 			double percentage = challenge.getTargetValue() > 0
 					? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
-			LocalDate today = LocalDate.now();
+			LocalDate today = LocalDate.now(TimeZones.MOSCOW);
 			LocalDate endDate = challenge.getEndDate().toLocalDate();
 			long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
 			int participantCount = Math.max(challenge.getParticipants().size(), 1);
@@ -81,7 +76,7 @@ public class StatisticsService implements IStatisticsService {
 		if (challenge == null) return 0;
 		try {
 			long remaining = calculateRemaining(challenge);
-			long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), challenge.getEndDate().toLocalDate());
+			long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(TimeZones.MOSCOW), challenge.getEndDate().toLocalDate());
 			if (daysRemaining <= 0) return 0;
 			int participantCount = Math.max(challenge.getParticipants().size(), 1);
 			return (double) remaining / participantCount / daysRemaining;
@@ -257,75 +252,36 @@ public class StatisticsService implements IStatisticsService {
 	}
 
 	@Override
-	public LocalDate forecastCompletionDate(String challengeId, String userId) {
-		try {
-			if (challengeId == null || userId == null) return null;
-			String key = challengeId + ":" + userId;
-			List<Long> history = progressHistoryCache.get(key);
-			if (history == null || history.isEmpty()) return null;
-			int windowSize = Math.min(7, history.size());
-			List<Long> window = history.subList(history.size() - windowSize, history.size());
-			double avgPerDay = window.stream().mapToLong(Long::longValue).average().orElse(0);
-			if (avgPerDay <= 0) return null;
-			return LocalDate.now().plusDays((long) Math.ceil(1 / avgPerDay));
-		} catch (Exception e) {
-			logger.error("Ошибка при прогнозировании даты завершения", e);
-			return null;
-		}
-	}
-
 	public LocalDate forecastCompletionDate(Challenge challenge, String userId) {
 		try {
 			if (challenge == null || userId == null) return null;
 			long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
 			long remaining = challenge.getTargetValue() - userProgress;
-			if (remaining <= 0) return LocalDate.now();
+			LocalDate today = LocalDate.now(TimeZones.MOSCOW);
+			if (remaining <= 0) return today;
 
-			String key = challenge.getId() + ":" + userId;
-			List<Long> history = progressHistoryCache.get(key);
-			double avgPerDay;
-			if (history != null && !history.isEmpty()) {
-				int windowSize = Math.min(7, history.size());
-				List<Long> window = history.subList(history.size() - windowSize, history.size());
-				avgPerDay = window.stream().mapToLong(Long::longValue).average().orElse(0);
-			} else {
+			// Средний дневной темп за последние 7 дней из истории прогресса (переживает рестарты)
+			double avgPerDay = 0;
+			if (progressHistoryRepository != null) {
+				Map<LocalDate, Long> daily = progressHistoryRepository.getDailyTotals(
+						challenge.getId(), userId, 7);
+				long weekTotal = daily.values().stream().mapToLong(Long::longValue).sum();
+				avgPerDay = weekTotal / 7.0;
+			}
+			if (avgPerDay <= 0) {
+				// Fallback: общий средний темп с начала испытания
 				LocalDate start = challenge.getStartDate() != null
-						? challenge.getStartDate().toLocalDate() : LocalDate.now();
-				long daysSinceStart = ChronoUnit.DAYS.between(start, LocalDate.now());
+						? challenge.getStartDate().toLocalDate() : today;
+				long daysSinceStart = ChronoUnit.DAYS.between(start, today);
 				if (daysSinceStart <= 0) return null;
 				avgPerDay = (double) userProgress / daysSinceStart;
 			}
 			if (avgPerDay <= 0) return null;
 			long daysNeeded = (long) Math.ceil((double) remaining / avgPerDay);
-			return LocalDate.now().plusDays(daysNeeded);
+			return today.plusDays(daysNeeded);
 		} catch (Exception e) {
 			logger.error("Ошибка при прогнозировании даты завершения", e);
 			return null;
-		}
-	}
-
-	public void recordDailyProgress(String challengeId, String userId, long progressAmount) {
-		recordDailyProgress(challengeId, userId, null, progressAmount);
-	}
-
-	public void recordDailyProgress(String challengeId, String userId, String username, long progressAmount) {
-		try {
-			if (challengeId == null || userId == null) return;
-			// Запись в БД не выполняется: история уже сохраняется в ChallengeService.addProgress,
-			// повторный insert здесь удваивал данные в progress_history
-			// Keep in-memory cache for forecast
-			if (progressHistoryCache.size() >= MAX_CACHE_SIZE) {
-				String firstKey = progressHistoryCache.keySet().iterator().next();
-				progressHistoryCache.remove(firstKey);
-			}
-			String key = challengeId + ":" + userId;
-			List<Long> history = progressHistoryCache.computeIfAbsent(key, k -> new java.util.ArrayList<>());
-			history.add(progressAmount);
-			if (history.size() > MAX_HISTORY_PER_KEY) {
-				history.removeFirst();
-			}
-		} catch (Exception e) {
-			logger.error("Ошибка при записи ежедневного прогресса", e);
 		}
 	}
 
@@ -362,7 +318,7 @@ public class StatisticsService implements IStatisticsService {
 	private void appendWeeklyComparison(StringBuilder sb, Challenge challenge) {
 		try {
 			if (progressHistoryRepository == null) return;
-			LocalDateTime now = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+			LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
 			Map<String, Long> thisWeek = progressHistoryRepository.getUserTotalsInRange(
 					challenge.getId(), now.minusDays(7), now);
 			Map<String, Long> lastWeek = progressHistoryRepository.getUserTotalsInRange(
@@ -407,7 +363,9 @@ public class StatisticsService implements IStatisticsService {
 			if (discordService.getJDA() != null) {
 				User user = discordService.getJDA().getUserById(userId);
 				if (user == null) {
-					user = discordService.getJDA().retrieveUserById(userId).complete();
+					// Блокирующий REST-запрос ограничиваем таймаутом, чтобы не подвесить поток отчёта
+					user = discordService.getJDA().retrieveUserById(userId)
+							.timeout(5, java.util.concurrent.TimeUnit.SECONDS).complete();
 				}
 				if (user != null) return user.getName();
 			}

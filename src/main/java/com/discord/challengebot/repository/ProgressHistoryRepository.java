@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import com.discord.challengebot.util.TimeZones;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -72,8 +72,8 @@ public class ProgressHistoryRepository {
         jdbc.query(sql, rs -> {
             result.put(rs.getString("user_id"), rs.getLong("total"));
         }, challengeId,
-                Timestamp.valueOf(from.atZone(ZoneId.of("Europe/Moscow")).toLocalDateTime()),
-                Timestamp.valueOf(to.atZone(ZoneId.of("Europe/Moscow")).toLocalDateTime()));
+                Timestamp.from(from.atZone(TimeZones.MOSCOW).toInstant()),
+                Timestamp.from(to.atZone(TimeZones.MOSCOW).toInstant()));
         return result;
     }
 
