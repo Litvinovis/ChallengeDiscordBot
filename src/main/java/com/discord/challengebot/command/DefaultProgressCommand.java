@@ -107,14 +107,15 @@ public class DefaultProgressCommand extends BaseCommand {
 					try {
 						streakService.recordActivity(authorId);
 					} catch (Exception e) {
-						logger.debug("Ошибка обновления серии для пользователя {}", authorId);
+						// Игрок молча терял стрик — оператору нужен след
+						logger.warn("Не удалось обновить серию активности пользователя {}", authorId, e);
 					}
 
 					// Check achievements
 					try {
 						achievementService.checkAndAwardAchievements(authorId, updatedChallenge.getId(), userTotalProgress);
 					} catch (Exception e) {
-						logger.debug("Ошибка проверки достижений для пользователя {}", authorId);
+						logger.warn("Не удалось проверить достижения пользователя {}", authorId, e);
 					}
 				}
 			} else {
