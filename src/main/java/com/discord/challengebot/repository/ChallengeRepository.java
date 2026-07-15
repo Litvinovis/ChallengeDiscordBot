@@ -134,6 +134,8 @@ public class ChallengeRepository {
 		try {
 			return MAPPER.writeValueAsString(value);
 		} catch (Exception e) {
+			// Молчаливый фолбэк затирал список участников в БД пустым — след обязателен
+			log.warn("Не удалось сериализовать участников испытания, записан пустой список", e);
 			return "[]";
 		}
 	}
@@ -144,6 +146,7 @@ public class ChallengeRepository {
 			return MAPPER.readValue(json, new TypeReference<List<String>>() {
 			});
 		} catch (Exception e) {
+			log.warn("Повреждён JSON участников в БД, использован пустой список: {}", json, e);
 			return new ArrayList<>();
 		}
 	}
