@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import com.discord.challengebot.util.TimeZones;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +119,17 @@ public class ProgressHistoryRepository {
                     ldt));
         }, challengeId, userId);
         return result;
+    }
+
+    /** Whether any progress was recorded for the given challenges in the last N hours. */
+    public boolean hasProgressLastHours(List<String> challengeIds, int hours) {
+        if (challengeIds.isEmpty()) return false;
+        String placeholders = String.join(",", Collections.nCopies(challengeIds.size(), "?"));
+        String sql = "SELECT EXISTS(SELECT 1 FROM progress_history " +
+                "WHERE challenge_id IN (" + placeholders + ") " +
+                "AND recorded_at >= NOW() - INTERVAL '" + hours + " hours')";
+        Boolean result = jdbc.queryForObject(sql, Boolean.class, challengeIds.toArray());
+        return Boolean.TRUE.equals(result);
     }
 
     /** Sum per user in the last 24 hours for a challenge. Returns Map<userId, total>. */
