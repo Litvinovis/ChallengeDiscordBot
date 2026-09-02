@@ -7,6 +7,7 @@ import com.discord.challengebot.event.AchievementUnlockedEvent;
 import com.discord.challengebot.event.ChallengeHalfwayEvent;
 import com.discord.challengebot.event.StreakMilestoneEvent;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
@@ -37,11 +38,15 @@ import java.util.Locale;
 public class DiscordService implements IDiscordService {
 	private static final Logger logger = LoggerFactory.getLogger(DiscordService.class);
 
+	/** Окно, за которое ищется прогресс: отчёт не отправляется, если за это время изменений не было. */
+	private static final int REPORT_WINDOW_HOURS = 24;
+
 	private final DiscordConfig discordConfig;
 	private final ChallengeService challengeService;
 	private final ParticipantService participantService;
 	private final StatisticsService statisticsService;
 	private final CommandRegistry commandRegistry;
+	private final ProgressHistoryRepository progressHistoryRepository;
 
 	private JDA jda;
 
@@ -53,17 +58,20 @@ public class DiscordService implements IDiscordService {
 	 * @param participantService сервис управления участниками
 	 * @param statisticsService  сервис статистики
 	 * @param commandRegistry    реестр команд
+	 * @param progressHistoryRepository репозиторий истории прогресса
 	 */
 	public DiscordService(DiscordConfig discordConfig,
 	                      ChallengeService challengeService,
 	                      ParticipantService participantService,
 	                      StatisticsService statisticsService,
-	                      @Lazy CommandRegistry commandRegistry) {
+	                      @Lazy CommandRegistry commandRegistry,
+	                      ProgressHistoryRepository progressHistoryRepository) {
 		this.discordConfig = discordConfig;
 		this.challengeService = challengeService;
 		this.participantService = participantService;
 		this.statisticsService = statisticsService;
 		this.commandRegistry = commandRegistry;
+		this.progressHistoryRepository = progressHistoryRepository;
 	}
 
 	/**
@@ -326,7 +334,12 @@ public class DiscordService implements IDiscordService {
 			List<Challenge> challenges = challengeService.getAllChallenges().stream()
 							.filter(Challenge::isActive).toList();
 			if (challenges.isEmpty()) {
-				sendMessageToChannel(discordConfig.getReportChannel(), "📋 Активных испытаний нет.");
+				logger.info("Ежедневный отчёт пропущен: активных испытаний нет");
+				return;
+			}
+			List<String> challengeIds = challenges.stream().map(Challenge::getId).toList();
+			if (!progressHistoryRepository.hasProgressLastHours(challengeIds, REPORT_WINDOW_HOURS)) {
+				logger.info("Ежедневный отчёт пропущен: за последние {} ч. прогресса не было", REPORT_WINDOW_HOURS);
 				return;
 			}
 			sendMessageToChannel(discordConfig.getReportChannel(),

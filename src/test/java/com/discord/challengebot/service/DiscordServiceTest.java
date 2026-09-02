@@ -2,11 +2,15 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -27,6 +31,9 @@ class DiscordServiceTest {
 
 	@Mock
 	private CommandRegistry commandRegistry;
+
+	@Mock
+	private ProgressHistoryRepository progressHistoryRepository;
 
 	@InjectMocks
 	private DiscordService discordService;
@@ -90,5 +97,40 @@ class DiscordServiceTest {
 		when(discordConfig.getReportGuildId()).thenReturn(guildId);
 
 		assertEquals(guildId, discordConfig.getReportGuildId());
+	}
+
+	@Test
+	void testSendDailyReport_SkippedWhenNoProgress() {
+		Challenge challenge = new Challenge();
+		challenge.setId("c1");
+		challenge.setActive(true);
+		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
+		when(progressHistoryRepository.hasProgressLastHours(List.of("c1"), 24)).thenReturn(false);
+
+		discordService.sendDailyReport();
+
+		verify(challengeService, never()).getChallengeStats(any());
+	}
+
+	@Test
+	void testSendDailyReport_SentWhenProgressExists() {
+		Challenge challenge = new Challenge();
+		challenge.setId("c1");
+		challenge.setActive(true);
+		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
+		when(progressHistoryRepository.hasProgressLastHours(List.of("c1"), 24)).thenReturn(true);
+
+		discordService.sendDailyReport();
+
+		verify(challengeService, times(1)).getChallengeStats(challenge);
+	}
+
+	@Test
+	void testSendDailyReport_SkippedWhenNoActiveChallenges() {
+		when(challengeService.getAllChallenges()).thenReturn(List.of());
+
+		discordService.sendDailyReport();
+
+		verify(progressHistoryRepository, never()).hasProgressLastHours(any(), anyInt());
 	}
 }

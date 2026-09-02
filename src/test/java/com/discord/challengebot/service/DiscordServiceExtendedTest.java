@@ -2,6 +2,7 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,9 @@ class DiscordServiceExtendedTest {
 
 	@Mock
 	private CommandRegistry commandRegistry;
+
+	@Mock
+	private ProgressHistoryRepository progressHistoryRepository;
 
 	@InjectMocks
 	private DiscordService discordService;
