@@ -117,6 +117,8 @@ public class ParticipantRepository {
 		try {
 			return MAPPER.writeValueAsString(value);
 		} catch (Exception e) {
+			// Молчаливый фолбэк затирал испытания и достижения участника — след обязателен
+			log.warn("Не удалось сериализовать данные участника, записан пустой список", e);
 			return "[]";
 		}
 	}
@@ -127,6 +129,7 @@ public class ParticipantRepository {
 			return MAPPER.readValue(json, new TypeReference<>() {
 			});
 		} catch (Exception e) {
+			log.warn("Повреждён JSON списка в записи участника, использован пустой список: {}", json, e);
 			return new ArrayList<>();
 		}
 	}
@@ -137,6 +140,7 @@ public class ParticipantRepository {
 			return MAPPER.readValue(json, new TypeReference<>() {
 			});
 		} catch (Exception e) {
+			log.warn("Повреждён JSON достижений участника, использовано пустое множество: {}", json, e);
 			return new HashSet<>();
 		}
 	}

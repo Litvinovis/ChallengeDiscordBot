@@ -5,6 +5,7 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -34,6 +35,9 @@ class ChallengeServiceExtendedTest {
 
 	@Mock
 	private ParticipantService participantService;
+
+	@Mock
+	private ProgressHistoryRepository progressHistoryRepository;
 
 	@InjectMocks
 	private ChallengeService challengeService;
@@ -134,8 +138,8 @@ class ChallengeServiceExtendedTest {
 		c2.setId("c2");
 
 		when(challengeRepository.findAll()).thenReturn(Arrays.asList(c1, c2));
-		when(progressRepository.findByChallengeId("c1")).thenReturn(Map.of("user1", 100L));
-		// c2 returns empty (default from BeforeEach)
+		// user1 состоит только в c1 — один запрос по пользователю вместо запроса на испытание
+		when(progressRepository.findByUserId("user1")).thenReturn(Map.of("c1", 100L));
 
 		List<Challenge> result = challengeService.getUserChallenges("user1");
 		assertEquals(1, result.size());
@@ -167,7 +171,7 @@ class ChallengeServiceExtendedTest {
 
 		assertNotNull(result);
 		assertFalse(result.isActive());
-		verify(challengeRepository).save(challenge);
+		verify(challengeRepository).updateActive(challenge.getId(), false);
 	}
 
 	@Test
@@ -189,7 +193,7 @@ class ChallengeServiceExtendedTest {
 
 		assertNotNull(result);
 		assertEquals(2000L, result.getTargetValue());
-		verify(challengeRepository).save(challenge);
+		verify(challengeRepository).updateTargetValue(challenge.getId(), 2000L);
 	}
 
 	@Test
@@ -233,7 +237,7 @@ class ChallengeServiceExtendedTest {
 
 		assertNotNull(result);
 		assertEquals(newDate, result.getEndDate());
-		verify(challengeRepository).save(challenge);
+		verify(challengeRepository).updateEndDate(challenge.getId(), newDate);
 	}
 
 	@Test
@@ -275,7 +279,8 @@ class ChallengeServiceExtendedTest {
 		assertNotNull(result);
 		assertFalse(result.hasParticipant("user1"));
 		assertEquals(200L, result.getCurrentValue(), "Total must be recalculated without user1");
-		verify(challengeRepository).save(challenge);
+		verify(challengeRepository).removeParticipant("pushups", "user1");
+		verify(challengeRepository).refreshCurrentValue("pushups");
 	}
 
 	@Test
@@ -306,7 +311,7 @@ class ChallengeServiceExtendedTest {
 		challengeService.completeChallenge(challenge);
 
 		assertFalse(challenge.isActive());
-		verify(challengeRepository).save(challenge);
+		verify(challengeRepository).updateActive(challenge.getId(), false);
 	}
 
 	@Test
@@ -375,7 +380,7 @@ class ChallengeServiceExtendedTest {
 		assertNotNull(result);
 		assertTrue(result.hasParticipant("user1"));
 		assertEquals(0L, result.getParticipantProgress().get("user1"));
-		verify(challengeRepository).save(challenge);
+		verify(challengeRepository).addParticipant(challenge.getId(), "user1");
 	}
 
 	@Test

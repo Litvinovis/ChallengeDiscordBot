@@ -122,56 +122,43 @@ public class ChallengeService implements IChallengeService {
 	@Transactional
 	@Override
 	public Challenge addProgress(Challenge challenge, String userId, String username, long amount) {
-		try {
-			if (challenge == null || userId == null || userId.isBlank() || amount < 0) {
-				return challenge;
-			}
-
-			// Регистрируем участника в системе
-			participantService.registerForChallenge(userId, username != null ? username : userId, challenge.getName());
-
-			// Атомарный инкремент в БД защищает от гонок при одновременных командах
-			progressRepository.addAmount(challenge.getId(), userId, amount);
-			var progress = loadProgress(challenge);
-			long newUserProgress = progress.getOrDefault(userId, 0L);
-
-			// Добавляем участника в список (для обратной совместимости с Challenge.participants)
-			challenge.addParticipant(userId);
-
-			// Обновляем общий прогресс (сумма по всем участникам)
-			long previousTotal = challenge.getCurrentValue();
-			long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
-			challenge.setCurrentValue(totalProgress);
-
-			// Синхронизируем в-памяти карту для текущей сессии
-			challenge.getParticipantProgress().put(userId, newUserProgress);
-
-			// Записываем в историю прогресса
-			try {
-				progressHistoryRepository.insert(challenge.getId(), userId, username, amount);
-			} catch (Exception ex) {
-				logger.warn("Не удалось записать историю прогресса: {}", ex.getMessage());
-			}
-
-			// Проверяем пересечение отметки 50%
-			long target = challenge.getTargetValue();
-			if (target > 0 && previousTotal < target / 2 && totalProgress >= target / 2) {
-				try {
-					eventPublisher.publishEvent(new ChallengeHalfwayEvent(this, challenge));
-				} catch (Exception ex) {
-					logger.warn("Не удалось опубликовать событие ChallengeHalfwayEvent: {}", ex.getMessage());
-				}
-			}
-
-			saveChallenge(challenge);
-			logger.info("Прогресс добавлен: пользователь={}, испытание={}, добавлено={}, итого={}",
-							userId, challenge.getName(), amount, newUserProgress);
-			return challenge;
-		} catch (Exception e) {
-			logger.error("Ошибка при добавлении прогресса к испытанию: {}",
-							challenge != null ? challenge.getName() : "null", e);
+		if (challenge == null || userId == null || userId.isBlank() || amount < 0) {
 			return challenge;
 		}
+
+		// Ошибки БД намеренно не перехватываются: @Transactional откатит транзакцию
+		// целиком, иначе инкремент прогресса зафиксируется без пересчёта итога.
+		participantService.registerForChallenge(userId, username != null ? username : userId, challenge.getName());
+
+		// Атомарный инкремент в БД защищает от гонок при одновременных командах
+		progressRepository.addAmount(challenge.getId(), userId, amount);
+		progressHistoryRepository.insert(challenge.getId(), userId, username, amount);
+		challengeRepository.addParticipant(challenge.getId(), userId);
+		challengeRepository.refreshCurrentValue(challenge.getId());
+
+		var progress = loadProgress(challenge);
+		long newUserProgress = progress.getOrDefault(userId, 0L);
+		long previousTotal = challenge.getCurrentValue();
+		long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
+
+		// Синхронизируем переданный объект для текущей сессии
+		challenge.addParticipant(userId);
+		challenge.setCurrentValue(totalProgress);
+		challenge.getParticipantProgress().put(userId, newUserProgress);
+
+		// Проверяем пересечение отметки 50%
+		long target = challenge.getTargetValue();
+		if (target > 0 && previousTotal < target / 2 && totalProgress >= target / 2) {
+			try {
+				eventPublisher.publishEvent(new ChallengeHalfwayEvent(this, challenge));
+			} catch (Exception ex) {
+				logger.warn("Не удалось опубликовать событие ChallengeHalfwayEvent: {}", ex.getMessage());
+			}
+		}
+
+		logger.info("Прогресс добавлен: пользователь={}, испытание={}, добавлено={}, итого={}",
+						userId, challenge.getName(), amount, newUserProgress);
+		return challenge;
 	}
 
 	/**
@@ -180,22 +167,21 @@ public class ChallengeService implements IChallengeService {
 	@Transactional
 	@Override
 	public Challenge subtractProgress(Challenge challenge, String userId, String username, long amount) {
-		try {
-			if (challenge == null || userId == null || amount <= 0) return challenge;
-			// Атомарный декремент в БД защищает от гонок при одновременных командах
-			progressRepository.subtractAmount(challenge.getId(), userId, amount);
-			var progress = loadProgress(challenge);
-			long newUserProgress = progress.getOrDefault(userId, 0L);
-			long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
-			challenge.setCurrentValue(totalProgress);
-			challenge.getParticipantProgress().put(userId, newUserProgress);
-			saveChallenge(challenge);
-			logger.info("Прогресс уменьшен: пользователь={}, испытание={}, убрано={}, итого={}", userId, challenge.getName(), amount, newUserProgress);
-			return challenge;
-		} catch (Exception e) {
-			logger.error("Ошибка при уменьшении прогресса: {}", challenge != null ? challenge.getName() : "null", e);
-			return challenge;
-		}
+		if (challenge == null || userId == null || amount <= 0) return challenge;
+
+		// Ошибки БД не перехватываются — см. addProgress
+		progressRepository.subtractAmount(challenge.getId(), userId, amount);
+		challengeRepository.refreshCurrentValue(challenge.getId());
+
+		var progress = loadProgress(challenge);
+		long newUserProgress = progress.getOrDefault(userId, 0L);
+		long totalProgress = progress.values().stream().mapToLong(Long::longValue).sum();
+		challenge.setCurrentValue(totalProgress);
+		challenge.getParticipantProgress().put(userId, newUserProgress);
+
+		logger.info("Прогресс уменьшен: пользователь={}, испытание={}, убрано={}, итого={}",
+						userId, challenge.getName(), amount, newUserProgress);
+		return challenge;
 	}
 
 	/**
@@ -283,8 +269,10 @@ public class ChallengeService implements IChallengeService {
 	public List<Challenge> getUserChallenges(String userId) {
 		try {
 			if (userId == null || userId.isBlank()) return new ArrayList<>();
+			// Один запрос вместо запроса на каждое испытание
+			var userChallengeIds = progressRepository.findByUserId(userId).keySet();
 			return getAllChallenges().stream()
-							.filter(ch -> progressRepository.findByChallengeId(ch.getId()).containsKey(userId))
+							.filter(ch -> userChallengeIds.contains(ch.getId()))
 							.collect(Collectors.toList());
 		} catch (Exception e) {
 			logger.error("Ошибка при получении испытаний пользователя: {}", userId, e);
@@ -327,7 +315,7 @@ public class ChallengeService implements IChallengeService {
 	public Challenge updateChallengeStatus(Challenge challenge, boolean active) {
 		if (challenge == null) return null;
 		challenge.setActive(active);
-		saveChallenge(challenge);
+		challengeRepository.updateActive(challenge.getId(), active);
 		return challenge;
 	}
 
@@ -338,7 +326,7 @@ public class ChallengeService implements IChallengeService {
 	public Challenge updateChallengeTarget(Challenge challenge, long newTarget) {
 		if (challenge == null || newTarget <= 0) return challenge;
 		challenge.setTargetValue(newTarget);
-		saveChallenge(challenge);
+		challengeRepository.updateTargetValue(challenge.getId(), newTarget);
 		return challenge;
 	}
 
@@ -349,7 +337,7 @@ public class ChallengeService implements IChallengeService {
 	public Challenge updateChallengeEndDate(Challenge challenge, LocalDateTime newEndDate) {
 		if (challenge == null || newEndDate == null) return challenge;
 		challenge.setEndDate(newEndDate);
-		saveChallenge(challenge);
+		challengeRepository.updateEndDate(challenge.getId(), newEndDate);
 		return challenge;
 	}
 
@@ -361,14 +349,13 @@ public class ChallengeService implements IChallengeService {
 		try {
 			if (challenge == null || userId == null || userId.isBlank() || progress < 0) return challenge;
 			progressRepository.upsert(challenge.getId(), userId, progress);
+			challengeRepository.addParticipant(challenge.getId(), userId);
+			challengeRepository.refreshCurrentValue(challenge.getId());
 			challenge.addParticipant(userId);
 			// Синхронизируем в-памяти для текущей сессии
 			challenge.getParticipantProgress().put(userId, progress);
-			// Пересчитываем общий прогресс
 			var allProgress = loadProgress(challenge);
-			long totalProgress = allProgress.values().stream().mapToLong(Long::longValue).sum();
-			challenge.setCurrentValue(totalProgress);
-			saveChallenge(challenge);
+			challenge.setCurrentValue(allProgress.values().stream().mapToLong(Long::longValue).sum());
 			return challenge;
 		} catch (Exception e) {
 			logger.error("Ошибка при установке прогресса: userId={}, challenge={}", userId,
@@ -385,11 +372,12 @@ public class ChallengeService implements IChallengeService {
 		try {
 			if (challenge == null || userId == null || userId.isBlank()) return challenge;
 			progressRepository.delete(challenge.getId(), userId);
+			challengeRepository.removeParticipant(challenge.getId(), userId);
+			challengeRepository.refreshCurrentValue(challenge.getId());
 			challenge.removeParticipant(userId);
 			challenge.getParticipantProgress().remove(userId);
 			long totalProgress = loadProgress(challenge).values().stream().mapToLong(Long::longValue).sum();
 			challenge.setCurrentValue(totalProgress);
-			saveChallenge(challenge);
 			return challenge;
 		} catch (Exception e) {
 			logger.error("Ошибка при удалении участника: userId={}, challenge={}", userId,
@@ -407,12 +395,12 @@ public class ChallengeService implements IChallengeService {
 			if (challenge == null || userId == null || userId.isBlank()) return challenge;
 			participantService.registerForChallenge(userId,
 							username != null ? username : userId, challenge.getName());
+			challengeRepository.addParticipant(challenge.getId(), userId);
 			challenge.addParticipant(userId);
 			if (!challenge.getParticipantProgress().containsKey(userId)) {
 				progressRepository.upsert(challenge.getId(), userId, 0L);
 				challenge.getParticipantProgress().put(userId, 0L);
 			}
-			saveChallenge(challenge);
 			return challenge;
 		} catch (Exception e) {
 			logger.error("Ошибка при добавлении участника: userId={}, challenge={}", userId,
@@ -454,7 +442,7 @@ public class ChallengeService implements IChallengeService {
 	public void completeChallenge(Challenge challenge) {
 		if (challenge == null) return;
 		challenge.setActive(false);
-		saveChallenge(challenge);
+		challengeRepository.updateActive(challenge.getId(), false);
 		logger.info("Испытание '{}' завершено", challenge.getName());
 	}
 }

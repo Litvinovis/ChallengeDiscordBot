@@ -123,6 +123,11 @@ public class DefaultProgressCommand extends BaseCommand {
 			}
 		} catch (Exception e) {
 			logger.error("Ошибка обработки команды обновления прогресса для пользователя {}", username, e);
+			try {
+				event.getChannel().sendMessage("⚠️ Не удалось сохранить прогресс. Попробуйте позже.").queue();
+			} catch (Exception sendEx) {
+				logger.warn("Не удалось отправить сообщение об ошибке в канал", sendEx);
+			}
 		}
 	}
 }

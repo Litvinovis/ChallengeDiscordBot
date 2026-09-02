@@ -76,6 +76,59 @@ public class ChallengeRepository {
 						this::mapRow);
 	}
 
+	/**
+	 * Пересчитывает current_value испытания из challenge_progress одним запросом.
+	 * Точечный UPDATE вместо перезаписи всей строки не даёт параллельным командам
+	 * затирать чужие изменения (цель, даты, название).
+	 */
+	public void refreshCurrentValue(String challengeId) {
+		if (challengeId == null) return;
+		jdbc.update("UPDATE challenges SET current_value = " +
+										"(SELECT COALESCE(SUM(progress), 0) FROM challenge_progress WHERE challenge_id = ?) " +
+										"WHERE id = ?",
+						challengeId, challengeId);
+	}
+
+	/** Добавляет участника в JSON-список испытания, не трогая остальные поля. */
+	public void addParticipant(String challengeId, String userId) {
+		if (challengeId == null || userId == null) return;
+		jdbc.update("UPDATE challenges SET participants = COALESCE((" +
+										"SELECT jsonb_agg(value)::text FROM (" +
+										"  SELECT jsonb_array_elements_text(participants::jsonb) AS value" +
+										"  UNION SELECT ?::text" +
+										") s), '[]') WHERE id = ?",
+						userId, challengeId);
+	}
+
+	/** Убирает участника из JSON-списка испытания, не трогая остальные поля. */
+	public void removeParticipant(String challengeId, String userId) {
+		if (challengeId == null || userId == null) return;
+		jdbc.update("UPDATE challenges SET participants = COALESCE((" +
+										"SELECT jsonb_agg(value)::text FROM (" +
+										"  SELECT jsonb_array_elements_text(participants::jsonb) AS value" +
+										") s WHERE value <> ?), '[]') WHERE id = ?",
+						userId, challengeId);
+	}
+
+	/** Обновляет только целевое значение испытания. */
+	public void updateTargetValue(String id, long targetValue) {
+		if (id == null) return;
+		jdbc.update("UPDATE challenges SET target_value = ? WHERE id = ?", targetValue, id);
+	}
+
+	/** Обновляет только дату окончания испытания. */
+	public void updateEndDate(String id, LocalDateTime endDate) {
+		if (id == null) return;
+		jdbc.update("UPDATE challenges SET end_date = ? WHERE id = ?",
+						endDate != null ? endDate.toString() : null, id);
+	}
+
+	/** Обновляет только флаг активности испытания. */
+	public void updateActive(String id, boolean active) {
+		if (id == null) return;
+		jdbc.update("UPDATE challenges SET active = ? WHERE id = ?", active, id);
+	}
+
 	public void deleteById(String id) {
 		if (id == null) return;
 		jdbc.update("DELETE FROM challenges WHERE id = ?", id);
