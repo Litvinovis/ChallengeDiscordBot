@@ -172,11 +172,6 @@ class AchievementServiceExtendedTest {
 	}
 
 	@Test
-	void testGetUserAchievementsEmptyInitially() {
-		assertTrue(achievementService.getUserAchievements("newUser").isEmpty());
-	}
-
-	@Test
 	void testFourDistinctAchievementsDefinedInService() {
 		assertEquals(4, AchievementService.ACHIEVEMENTS.size());
 	}

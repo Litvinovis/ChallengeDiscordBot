@@ -99,7 +99,7 @@ class AchievementServiceTest {
 		achievementService.checkAndAwardAchievements("user1", "test_challenge", 100);
 
 		// После первого вызова у участника уже есть достижение — второй вызов не должен его выдавать
-		// @CacheEvict сбрасывает кэш, поэтому второй вызов загрузит данные снова из репозитория
+		// достижения читаются из БД при каждом вызове
 		participant.getAwardedAchievements().add("user1:test_challenge:100_reps");
 		when(participantRepository.findById("user1")).thenReturn(Optional.of(participant));
 

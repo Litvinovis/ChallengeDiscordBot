@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS challenges (
     active               BOOLEAN NOT NULL DEFAULT true,
     description          TEXT,
     unit                 TEXT,
-    participant_progress TEXT NOT NULL DEFAULT '{}',
     participants         TEXT NOT NULL DEFAULT '[]'
 );
 
@@ -55,3 +54,6 @@ CREATE TABLE IF NOT EXISTS challenge_archive (
     unit          TEXT,
     archived_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Наследие Ignite: колонка не читается и не пишется ни одной строкой кода (удалена 02.09.2026)
+ALTER TABLE challenges DROP COLUMN IF EXISTS participant_progress;
