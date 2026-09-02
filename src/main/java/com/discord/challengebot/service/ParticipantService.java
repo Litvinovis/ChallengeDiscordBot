@@ -16,7 +16,7 @@ import java.util.Optional;
 /**
  * Сервис управления участниками Discord-бота.
  * Объединяет функциональность UserService и управление участниками испытаний.
- * Работает напрямую с ParticipantRepository и ChallengeRepository без промежуточного слоя DataStorageService.
+ * Работает напрямую с ParticipantRepository и ChallengeRepository.
  */
 @Service
 public class ParticipantService implements IUserService {

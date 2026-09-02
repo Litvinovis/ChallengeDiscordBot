@@ -16,7 +16,7 @@ import java.time.temporal.ChronoUnit;
  * Сервис управления сериями (streak) активности пользователей.
  * При достижении порогов (3, 7, 30 дней) публикует {@link StreakMilestoneEvent}
  * для отправки поздравления через DiscordService.
- * Работает напрямую с ParticipantRepository, без промежуточного DataStorageService.
+ * Работает напрямую с ParticipantRepository.
  */
 @Service
 public class StreakService {
