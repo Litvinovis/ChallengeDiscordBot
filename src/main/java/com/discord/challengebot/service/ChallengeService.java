@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 /**
  * Сервис управления испытаниями.
  * Работает напрямую с ChallengeRepository и ChallengeProgressRepository
- * без промежуточного слоя DataStorageService.
+ * Изменения прогресса идут одной транзакцией, итог испытания пересчитывается в SQL.
  */
 @Service
 public class ChallengeService implements IChallengeService {
