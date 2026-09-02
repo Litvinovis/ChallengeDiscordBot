@@ -24,8 +24,8 @@ public class ChallengeArchiveRepository {
                 challenge.getTargetValue(),
                 challenge.getCurrentValue(),
                 challenge.getType() != null ? challenge.getType().name() : null,
-                challenge.getStartDate() != null ? challenge.getStartDate().toString() : null,
-                challenge.getEndDate() != null ? challenge.getEndDate().toString() : null,
+                challenge.getStartDate(),
+                challenge.getEndDate(),
                 challenge.getDescription(),
                 challenge.getUnit());
     }

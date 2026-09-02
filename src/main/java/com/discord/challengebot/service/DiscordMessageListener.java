@@ -3,6 +3,7 @@ package com.discord.challengebot.service;
 import com.discord.challengebot.command.Command;
 import com.discord.challengebot.command.CommandRegistry;
 import com.discord.challengebot.config.DiscordConfig;
+import com.discord.challengebot.util.CommandArguments;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -105,7 +106,7 @@ public class DiscordMessageListener extends ListenerAdapter {
 
 	private void processCommand(MessageReceivedEvent event, String command, String userId, String username, String channelId) {
 		try {
-			String[] parts = command.split("\\s+");
+			String[] parts = CommandArguments.split(command);
 			String commandName = parts.length > 0 ? parts[0].toLowerCase() : "";
 
 			// Check authorization

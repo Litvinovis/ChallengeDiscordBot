@@ -45,8 +45,8 @@ public class ChallengeRepository {
 						challenge.getTargetValue(),
 						challenge.getCurrentValue(),
 						challenge.getType() != null ? challenge.getType().name() : ChallengeType.INDIVIDUAL.name(),
-						challenge.getStartDate() != null ? challenge.getStartDate().toString() : null,
-						challenge.getEndDate() != null ? challenge.getEndDate().toString() : null,
+						challenge.getStartDate(),
+						challenge.getEndDate(),
 						challenge.isActive(),
 						challenge.getDescription(),
 						challenge.getUnit(),
@@ -74,6 +74,58 @@ public class ChallengeRepository {
 		return jdbc.query(
 						"SELECT id, name, target_value, current_value, chal_type, start_date, end_date, active, description, unit, participants FROM challenges ORDER BY name",
 						this::mapRow);
+	}
+
+	/**
+	 * Пересчитывает current_value испытания из challenge_progress одним запросом.
+	 * Точечный UPDATE вместо перезаписи всей строки не даёт параллельным командам
+	 * затирать чужие изменения (цель, даты, название).
+	 */
+	public void refreshCurrentValue(String challengeId) {
+		if (challengeId == null) return;
+		jdbc.update("UPDATE challenges SET current_value = " +
+										"(SELECT COALESCE(SUM(progress), 0) FROM challenge_progress WHERE challenge_id = ?) " +
+										"WHERE id = ?",
+						challengeId, challengeId);
+	}
+
+	/** Добавляет участника в JSON-список испытания, не трогая остальные поля. */
+	public void addParticipant(String challengeId, String userId) {
+		if (challengeId == null || userId == null) return;
+		jdbc.update("UPDATE challenges SET participants = COALESCE((" +
+										"SELECT jsonb_agg(value)::text FROM (" +
+										"  SELECT jsonb_array_elements_text(participants::jsonb) AS value" +
+										"  UNION SELECT ?::text" +
+										") s), '[]') WHERE id = ?",
+						userId, challengeId);
+	}
+
+	/** Убирает участника из JSON-списка испытания, не трогая остальные поля. */
+	public void removeParticipant(String challengeId, String userId) {
+		if (challengeId == null || userId == null) return;
+		jdbc.update("UPDATE challenges SET participants = COALESCE((" +
+										"SELECT jsonb_agg(value)::text FROM (" +
+										"  SELECT jsonb_array_elements_text(participants::jsonb) AS value" +
+										") s WHERE value <> ?), '[]') WHERE id = ?",
+						userId, challengeId);
+	}
+
+	/** Обновляет только целевое значение испытания. */
+	public void updateTargetValue(String id, long targetValue) {
+		if (id == null) return;
+		jdbc.update("UPDATE challenges SET target_value = ? WHERE id = ?", targetValue, id);
+	}
+
+	/** Обновляет только дату окончания испытания. */
+	public void updateEndDate(String id, LocalDateTime endDate) {
+		if (id == null) return;
+		jdbc.update("UPDATE challenges SET end_date = ? WHERE id = ?", endDate, id);
+	}
+
+	/** Обновляет только флаг активности испытания. */
+	public void updateActive(String id, boolean active) {
+		if (id == null) return;
+		jdbc.update("UPDATE challenges SET active = ? WHERE id = ?", active, id);
 	}
 
 	public void deleteById(String id) {
@@ -105,23 +157,8 @@ public class ChallengeRepository {
 			ch.setType(ChallengeType.INDIVIDUAL);
 		}
 
-		String startDate = rs.getString("start_date");
-		if (startDate != null && !startDate.isBlank()) {
-			try {
-				ch.setStartDate(LocalDateTime.parse(startDate));
-			} catch (Exception e) {
-				log.warn("Не удалось распарсить start_date для испытания {}: {}", ch.getId(), startDate);
-			}
-		}
-
-		String endDate = rs.getString("end_date");
-		if (endDate != null && !endDate.isBlank()) {
-			try {
-				ch.setEndDate(LocalDateTime.parse(endDate));
-			} catch (Exception e) {
-				log.warn("Не удалось распарсить end_date для испытания {}: {}", ch.getId(), endDate);
-			}
-		}
+		ch.setStartDate(rs.getObject("start_date", LocalDateTime.class));
+		ch.setEndDate(rs.getObject("end_date", LocalDateTime.class));
 
 		ch.setActive(rs.getBoolean("active"));
 		ch.setDescription(rs.getString("description"));

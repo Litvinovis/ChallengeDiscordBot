@@ -5,6 +5,7 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -33,6 +34,9 @@ class ChallengeServiceTest {
 
     @Mock
     private ParticipantService participantService;
+
+    @Mock
+    private ProgressHistoryRepository progressHistoryRepository;
 
     @InjectMocks
     private ChallengeService challengeService;
@@ -92,7 +96,8 @@ class ChallengeServiceTest {
         assertNotNull(updatedChallenge);
         verify(participantService).registerForChallenge(userId, username, "Отжимания");
         verify(progressRepository).addAmount("отжимания", userId, 10L);
-        verify(challengeRepository).save(challenge);
+        verify(challengeRepository).addParticipant("отжимания", userId);
+        verify(challengeRepository).refreshCurrentValue("отжимания");
     }
 
     /**
@@ -212,6 +217,22 @@ class ChallengeServiceTest {
         assertEquals(2500L, stats.currentValue());
         assertEquals(7500L, stats.remaining());
         assertEquals(25.0, stats.percentage(), 0.01);
+    }
+
+    @Test
+    void testAddProgress_PropagatesDbErrorSoTransactionRollsBack() {
+        Challenge challenge = new Challenge();
+        challenge.setId("бег");
+        challenge.setName("Бег");
+        challenge.setTargetValue(1000);
+        doThrow(new RuntimeException("db down"))
+                .when(progressRepository).addAmount("бег", "user1", 10L);
+
+        assertThrows(RuntimeException.class,
+                () -> challengeService.addProgress(challenge, "user1", "Alice", 10L),
+                "Ошибка БД должна выходить наружу, иначе @Transactional не откатит изменения");
+
+        verify(challengeRepository, never()).refreshCurrentValue(anyString());
     }
 
     @Test

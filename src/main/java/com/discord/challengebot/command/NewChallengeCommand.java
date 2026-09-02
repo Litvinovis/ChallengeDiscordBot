@@ -57,7 +57,8 @@ public class NewChallengeCommand extends BaseCommand {
 			TextChannel channel = event.getChannel().asTextChannel();
 
 			if (args.length < 3) {
-				channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания] [тип]").queue();
+				channel.sendMessage("Недостаточно параметров. Используйте: +новый <название> <цель> [дата окончания] [тип]\n"
+								+ "Название из нескольких слов берите в кавычки: `+новый \"бег утром\" 1000`").queue();
 				return;
 			}
 

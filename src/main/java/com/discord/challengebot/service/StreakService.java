@@ -62,7 +62,8 @@ public class StreakService {
 
 			if (lastActivity == null) {
 				participant.setCurrentStreak(1);
-				participant.setLongestStreak(1);
+				// Рекорд не сбрасываем: пустая дата активности не означает, что серий не было
+				participant.setLongestStreak(Math.max(1, participant.getLongestStreak()));
 			} else {
 				long dayGap = ChronoUnit.DAYS.between(lastActivity, today);
 				if (dayGap == 0) {

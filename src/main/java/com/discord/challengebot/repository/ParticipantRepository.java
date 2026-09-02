@@ -45,11 +45,11 @@ public class ParticipantRepository {
 										"last_activity_date = EXCLUDED.last_activity_date, awarded_achievements = EXCLUDED.awarded_achievements",
 						participant.getUserId(),
 						participant.getUsername(),
-						participant.getJoinDate() != null ? participant.getJoinDate().toString() : null,
+						participant.getJoinDate(),
 						toJson(participant.getRegisteredChallenges() != null ? participant.getRegisteredChallenges() : new ArrayList<>()),
 						participant.getCurrentStreak(),
 						participant.getLongestStreak(),
-						participant.getLastActivityDate() != null ? participant.getLastActivityDate().toString() : null,
+						participant.getLastActivityDate(),
 						toJson(participant.getAwardedAchievements() != null ? participant.getAwardedAchievements() : new HashSet<>())
 		);
 	}
@@ -87,27 +87,13 @@ public class ParticipantRepository {
 		p.setUserId(rs.getString("user_id"));
 		p.setUsername(rs.getString("username"));
 
-		String joinDate = rs.getString("join_date");
-		if (joinDate != null && !joinDate.isBlank()) {
-			try {
-				p.setJoinDate(LocalDateTime.parse(joinDate));
-			} catch (Exception e) {
-				log.warn("Не удалось распарсить join_date для участника {}: {}", p.getUserId(), joinDate);
-			}
-		}
+		p.setJoinDate(rs.getObject("join_date", LocalDateTime.class));
 
 		p.setRegisteredChallenges(fromJsonToListString(rs.getString("registered_challenges")));
 		p.setCurrentStreak(rs.getInt("current_streak"));
 		p.setLongestStreak(rs.getInt("longest_streak"));
 
-		String lastActivity = rs.getString("last_activity_date");
-		if (lastActivity != null && !lastActivity.isBlank()) {
-			try {
-				p.setLastActivityDate(LocalDate.parse(lastActivity));
-			} catch (Exception e) {
-				log.warn("Не удалось распарсить last_activity_date для участника {}: {}", p.getUserId(), lastActivity);
-			}
-		}
+		p.setLastActivityDate(rs.getObject("last_activity_date", LocalDate.class));
 
 		p.setAwardedAchievements(fromJsonToSetString(rs.getString("awarded_achievements")));
 		return p;
@@ -117,6 +103,8 @@ public class ParticipantRepository {
 		try {
 			return MAPPER.writeValueAsString(value);
 		} catch (Exception e) {
+			// Молчаливый фолбэк затирал испытания и достижения участника — след обязателен
+			log.warn("Не удалось сериализовать данные участника, записан пустой список", e);
 			return "[]";
 		}
 	}
@@ -127,6 +115,7 @@ public class ParticipantRepository {
 			return MAPPER.readValue(json, new TypeReference<>() {
 			});
 		} catch (Exception e) {
+			log.warn("Повреждён JSON списка в записи участника, использован пустой список: {}", json, e);
 			return new ArrayList<>();
 		}
 	}
@@ -137,6 +126,7 @@ public class ParticipantRepository {
 			return MAPPER.readValue(json, new TypeReference<>() {
 			});
 		} catch (Exception e) {
+			log.warn("Повреждён JSON достижений участника, использовано пустое множество: {}", json, e);
 			return new HashSet<>();
 		}
 	}

@@ -6,8 +6,6 @@ import com.discord.challengebot.model.Participant;
 import com.discord.challengebot.repository.ParticipantRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +18,6 @@ import java.util.Set;
  * При достижении порогов (100, 500, 1000, 5000 повторений) выдаётся бейдж
  * и публикуется событие {@link AchievementUnlockedEvent} для отправки уведомления в Discord.
  * <p>
- * Кэш "achievements" (Caffeine) хранит ключи выданных достижений пользователя в памяти,
  * снижая нагрузку на БД при частых проверках.
  */
 @Service
@@ -62,7 +59,6 @@ public class AchievementService {
 	 * @param challengeId   идентификатор испытания
 	 * @param totalProgress общий накопленный прогресс пользователя в испытании
 	 */
-	@CacheEvict(value = "achievements", key = "#userId")
 	public void checkAndAwardAchievements(String userId, String challengeId, long totalProgress) {
 		try {
 			if (userId == null || challengeId == null) return;
@@ -92,18 +88,6 @@ public class AchievementService {
 		} catch (Exception e) {
 			logger.error("Ошибка при проверке достижений для пользователя {}", userId, e);
 		}
-	}
-
-	/**
-	 * Возвращает множество ключей выданных достижений для пользователя.
-	 * Результат кэшируется Spring Cache ("achievements").
-	 *
-	 * @param userId идентификатор пользователя
-	 * @return множество ключей вида "userId:challengeId:achievementId"
-	 */
-	@Cacheable(value = "achievements", key = "#userId")
-	public Set<String> getUserAchievements(String userId) {
-		return loadAwardedAchievements(userId);
 	}
 
 	/**
