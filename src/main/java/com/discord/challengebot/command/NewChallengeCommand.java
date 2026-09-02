@@ -97,6 +97,13 @@ public class NewChallengeCommand extends BaseCommand {
 				type = ChallengeType.INDIVIDUAL;
 			}
 
+			if (challengeService.getChallenge(name) != null) {
+				channel.sendMessage("⚠️ Испытание \"" + name + "\" уже существует.\n"
+								+ "Изменить цель: `+изменить " + name + " <новая цель>`\n"
+								+ "Удалить: `+удалить " + name + "`").queue();
+				return;
+			}
+
 			Challenge challenge = challengeService.createChallenge(name, target, endDate, type, description, unit);
 			if (challenge != null) {
 				channel.sendMessage("Испытание \"" + name + "\" успешно создано!").queue();
