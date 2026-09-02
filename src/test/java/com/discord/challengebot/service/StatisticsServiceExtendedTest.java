@@ -49,115 +49,23 @@ class StatisticsServiceExtendedTest {
 
 	// ---- calculateRemaining null guard ----
 
-	@Test
-	void calculateRemaining_nullChallenge_returnsZero() {
-		assertEquals(0L, statisticsService.calculateRemaining(null));
-	}
 
-	@Test
-	void calculateRemaining_goalExceeded_returnsNegative() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(100L);
-		challenge.setCurrentValue(150L);
-
-		long remaining = statisticsService.calculateRemaining(challenge);
-		assertEquals(-50L, remaining);
-	}
 
 	// ---- calculateDailyTarget null/expired guards ----
 
-	@Test
-	void calculateDailyTarget_nullChallenge_returnsZero() {
-		assertEquals(0.0, statisticsService.calculateDailyTarget(null), 0.0001);
-	}
 
-	@Test
-	void calculateDailyTarget_expiredChallenge_returnsZero() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(10000L);
-		challenge.setCurrentValue(2500L);
-		challenge.setEndDate(LocalDateTime.now().minusDays(1)); // past
-
-		double dailyTarget = statisticsService.calculateDailyTarget(challenge);
-		assertEquals(0.0, dailyTarget, 0.0001);
-	}
 
 	// ---- calculatePercentage null guard ----
 
-	@Test
-	void calculatePercentage_nullChallenge_returnsZero() {
-		assertEquals(0.0, statisticsService.calculatePercentage(null), 0.0001);
-	}
 
-	@Test
-	void calculatePercentage_goalReached_returns100() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(1000L);
-		challenge.setCurrentValue(1000L);
 
-		assertEquals(100.0, statisticsService.calculatePercentage(challenge), 0.0001);
-	}
-
-	@Test
-	void calculatePercentage_goalExceeded_returnsMoreThan100() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(100L);
-		challenge.setCurrentValue(110L);
-
-		assertTrue(statisticsService.calculatePercentage(challenge) > 100.0);
-	}
 
 	// ---- generateLeaderboard ----
 
-	@Test
-	void generateLeaderboard_sortsByValueDescending() {
-		Challenge challenge = new Challenge();
-		challenge.setName("Pushups");
-		challenge.getParticipantProgress().put("alice", 500L);
-		challenge.getParticipantProgress().put("bob", 1500L);
-		challenge.getParticipantProgress().put("carol", 1000L);
 
-		List<Map.Entry<String, Long>> leaderboard = statisticsService.generateLeaderboard(challenge, 3);
 
-		assertEquals(3, leaderboard.size());
-		assertEquals("bob", leaderboard.get(0).getKey());
-		assertEquals("carol", leaderboard.get(1).getKey());
-		assertEquals("alice", leaderboard.get(2).getKey());
-	}
 
-	@Test
-	void generateLeaderboard_respectsLimit() {
-		Challenge challenge = new Challenge();
-		challenge.setName("Pushups");
-		challenge.getParticipantProgress().put("alice", 100L);
-		challenge.getParticipantProgress().put("bob", 200L);
-		challenge.getParticipantProgress().put("carol", 300L);
 
-		List<Map.Entry<String, Long>> leaderboard = statisticsService.generateLeaderboard(challenge, 2);
-		assertEquals(2, leaderboard.size());
-	}
-
-	@Test
-	void generateLeaderboard_nullChallenge_returnsEmpty() {
-		assertTrue(statisticsService.generateLeaderboard(null, 5).isEmpty());
-	}
-
-	@Test
-	void generateLeaderboard_invalidLimit_returnsEmpty() {
-		Challenge challenge = new Challenge();
-		challenge.setName("Pushups");
-		assertTrue(statisticsService.generateLeaderboard(challenge, 0).isEmpty());
-		assertTrue(statisticsService.generateLeaderboard(challenge, -1).isEmpty());
-	}
-
-	@Test
-	void generateLeaderboard_emptyProgress_returnsEmpty() {
-		Challenge challenge = new Challenge();
-		challenge.setName("Pushups");
-
-		List<Map.Entry<String, Long>> leaderboard = statisticsService.generateLeaderboard(challenge, 5);
-		assertTrue(leaderboard.isEmpty());
-	}
 
 	// ---- formatLeaderboardForDiscord ----
 
@@ -209,24 +117,7 @@ class StatisticsServiceExtendedTest {
 
 	// ---- generateProgressReport ----
 
-	@Test
-	void generateProgressReport_nullChallenge_returnsEmpty() {
-		assertEquals("", statisticsService.generateProgressReport(null));
-	}
 
-	@Test
-	void generateProgressReport_validChallenge_returnsNonEmpty() {
-		Challenge challenge = new Challenge();
-		challenge.setName("Pushups");
-		challenge.setTargetValue(1000L);
-		challenge.setCurrentValue(250L);
-		challenge.setUnit("reps");
-		challenge.setEndDate(LocalDateTime.now().plusDays(10));
-
-		String report = statisticsService.generateProgressReport(challenge);
-		assertFalse(report.isEmpty());
-		assertTrue(report.contains("Pushups"));
-	}
 
 	// ---- formatDailyReportForDiscord ----
 

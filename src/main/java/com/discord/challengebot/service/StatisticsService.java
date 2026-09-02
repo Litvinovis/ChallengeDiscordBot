@@ -65,59 +65,10 @@ public class StatisticsService implements IStatisticsService {
 		}
 	}
 
-	@Override
-	public long calculateRemaining(Challenge challenge) {
-		if (challenge == null) return 0;
-		return challenge.getTargetValue() - challenge.getCurrentValue();
-	}
 
-	@Override
-	public double calculateDailyTarget(Challenge challenge) {
-		if (challenge == null) return 0;
-		try {
-			long remaining = calculateRemaining(challenge);
-			long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(TimeZones.MOSCOW), challenge.getEndDate().toLocalDate());
-			if (daysRemaining <= 0) return 0;
-			int participantCount = Math.max(challenge.getParticipants().size(), 1);
-			return (double) remaining / participantCount / daysRemaining;
-		} catch (Exception e) {
-			logger.error("Ошибка при расчете ежедневной цели для испытания: {}", challenge.getName(), e);
-			return 0;
-		}
-	}
 
-	@Override
-	public double calculatePercentage(Challenge challenge) {
-		if (challenge == null) return 0;
-		return challenge.getTargetValue() > 0
-				? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
-	}
 
-	@Override
-	public String generateProgressReport(Challenge challenge) {
-		if (challenge == null) return "";
-		try {
-			ChallengeStats stats = calculateStats(challenge);
-			return formatReportForDiscord(challenge, stats);
-		} catch (Exception e) {
-			logger.error("Ошибка при генерации отчета о прогрессе для испытания: {}", challenge.getName(), e);
-			return "";
-		}
-	}
 
-	@Override
-	public List<Map.Entry<String, Long>> generateLeaderboard(Challenge challenge, int limit) {
-		if (challenge == null || limit <= 0) return new java.util.ArrayList<>();
-		try {
-			return challenge.getParticipantProgress().entrySet().stream()
-					.sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-					.limit(limit)
-					.collect(Collectors.toList());
-		} catch (Exception e) {
-			logger.error("Ошибка при генерации таблицы лидеров для испытания: {}", challenge.getName(), e);
-			return new java.util.ArrayList<>();
-		}
-	}
 
 	@Override
 	public String formatReportForDiscord(Challenge challenge, ChallengeStats stats) {

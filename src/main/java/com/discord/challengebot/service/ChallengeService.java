@@ -253,18 +253,6 @@ public class ChallengeService implements IChallengeService {
 		}
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public Map<String, ChallengeStats> getAllChallengesStats() {
-		var result = new java.util.HashMap<String, ChallengeStats>();
-		for (var challenge : getAllChallenges()) {
-			var stats = getChallengeStats(challenge);
-			if (stats != null) result.put(challenge.getName(), stats);
-		}
-		return result;
-	}
 
 	/**
 	 * {@inheritDoc}
