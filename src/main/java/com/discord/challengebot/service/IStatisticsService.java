@@ -20,46 +20,10 @@ public interface IStatisticsService {
 	 */
 	ChallengeStats calculateStats(Challenge challenge);
 
-	/**
-	 * Рассчитывает оставшееся количество для выполнения цели испытания.
-	 *
-	 * @param challenge испытание
-	 * @return оставшееся количество
-	 */
-	long calculateRemaining(Challenge challenge);
 
-	/**
-	 * Рассчитывает рекомендуемую ежедневную цель на одного участника.
-	 *
-	 * @param challenge испытание
-	 * @return ежедневная цель
-	 */
-	double calculateDailyTarget(Challenge challenge);
 
-	/**
-	 * Рассчитывает процент выполнения испытания.
-	 *
-	 * @param challenge испытание
-	 * @return процент выполнения (0..100)
-	 */
-	double calculatePercentage(Challenge challenge);
 
-	/**
-	 * Генерирует текстовый отчёт о прогрессе испытания.
-	 *
-	 * @param challenge испытание
-	 * @return строка отчёта
-	 */
-	String generateProgressReport(Challenge challenge);
 
-	/**
-	 * Генерирует таблицу лидеров для испытания.
-	 *
-	 * @param challenge испытание
-	 * @param limit     максимальное количество участников
-	 * @return список пар userId -> прогресс
-	 */
-	List<Map.Entry<String, Long>> generateLeaderboard(Challenge challenge, int limit);
 
 	/**
 	 * Форматирует статистику испытания для вывода в Discord.

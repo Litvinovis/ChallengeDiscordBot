@@ -79,12 +79,6 @@ public interface IChallengeService {
 	 */
 	ChallengeStats getChallengeStats(Challenge challenge);
 
-	/**
-	 * Возвращает карту статистики по всем испытаниям (ключ — название испытания).
-	 *
-	 * @return карта название -> статистика
-	 */
-	Map<String, ChallengeStats> getAllChallengesStats();
 
 	/**
 	 * Возвращает список испытаний, в которых участвует пользователь.

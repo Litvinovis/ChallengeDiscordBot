@@ -40,86 +40,10 @@ class StatisticsServiceTest {
 		assertEquals(7500L, stats.remaining());
 	}
 
-	@Test
-	void testCalculateRemaining() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(10000);
-		challenge.setCurrentValue(2500);
 
-		long remaining = statisticsService.calculateRemaining(challenge);
 
-		assertEquals(7500L, remaining);
-	}
 
-	@Test
-	void testCalculateDailyTarget() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(10000);
-		challenge.setCurrentValue(2500);
-		// Use a future date for testing
-		challenge.setEndDate(LocalDateTime.now().plusDays(10));
 
-		double dailyTarget = statisticsService.calculateDailyTarget(challenge);
-
-		// We expect 7500 remaining over 10 days = 750 per day
-		// But the exact value depends on the current date, so we'll check it's reasonable
-		assertTrue(dailyTarget > 0);
-	}
-
-	@Test
-	void testCalculateDailyTargetWithParticipants() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(10000);
-		challenge.setCurrentValue(2500);
-		// Use a future date for testing
-		challenge.setEndDate(LocalDateTime.now().plusDays(10));
-
-		// Add participants
-		challenge.addParticipant("user1");
-		challenge.addParticipant("user2");
-		challenge.addParticipant("user3");
-		challenge.addParticipant("user4");
-
-		double dailyTarget = statisticsService.calculateDailyTarget(challenge);
-
-		// Calculate expected value with the same calendar-day logic as service
-		long remaining = 10000 - 2500; // 7500
-		long daysRemaining = ChronoUnit.DAYS.between(LocalDate.now(), challenge.getEndDate().toLocalDate());
-
-		// With 4 participants, daily target per participant = remaining / participants / daysRemaining
-		double expected = (double) remaining / 4 / daysRemaining;
-		assertEquals(expected, dailyTarget, 0.01);
-	}
-
-	@Test
-	void testCalculateDailyTargetWithoutParticipants() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(10000);
-		challenge.setCurrentValue(2500);
-		// Use a specific date to ensure consistent test results
-		// The calculation is done in the method using current time, so we need to account for that
-		challenge.setEndDate(LocalDateTime.now().plusDays(10)); // 10 days from now
-
-		// No participants added
-
-		double dailyTarget = statisticsService.calculateDailyTarget(challenge);
-
-		// Calculate the expected value based on 7500 remaining / 1 participant / 10 days = 750
-		// However, due to potential timing differences, we'll use a tolerance
-		double expected = (double) (10000 - 2500) / 1 / 10; // 7500 / 10 = 750
-		assertEquals(expected, dailyTarget, 1.0); // Increased tolerance to account for timing differences
-	}
-
-	@Test
-	void testCalculatePercentage() {
-		Challenge challenge = new Challenge();
-		challenge.setTargetValue(10000);
-		challenge.setCurrentValue(2500);
-
-		double percentage = statisticsService.calculatePercentage(challenge);
-
-		assertEquals(25.0, percentage, 0.01);
-	}
 
 	@Test
 	void testFormatReportForDiscord() {
