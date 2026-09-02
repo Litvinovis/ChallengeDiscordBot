@@ -45,8 +45,8 @@ public class ChallengeRepository {
 						challenge.getTargetValue(),
 						challenge.getCurrentValue(),
 						challenge.getType() != null ? challenge.getType().name() : ChallengeType.INDIVIDUAL.name(),
-						challenge.getStartDate() != null ? challenge.getStartDate().toString() : null,
-						challenge.getEndDate() != null ? challenge.getEndDate().toString() : null,
+						challenge.getStartDate(),
+						challenge.getEndDate(),
 						challenge.isActive(),
 						challenge.getDescription(),
 						challenge.getUnit(),
@@ -119,8 +119,7 @@ public class ChallengeRepository {
 	/** Обновляет только дату окончания испытания. */
 	public void updateEndDate(String id, LocalDateTime endDate) {
 		if (id == null) return;
-		jdbc.update("UPDATE challenges SET end_date = ? WHERE id = ?",
-						endDate != null ? endDate.toString() : null, id);
+		jdbc.update("UPDATE challenges SET end_date = ? WHERE id = ?", endDate, id);
 	}
 
 	/** Обновляет только флаг активности испытания. */
@@ -158,23 +157,8 @@ public class ChallengeRepository {
 			ch.setType(ChallengeType.INDIVIDUAL);
 		}
 
-		String startDate = rs.getString("start_date");
-		if (startDate != null && !startDate.isBlank()) {
-			try {
-				ch.setStartDate(LocalDateTime.parse(startDate));
-			} catch (Exception e) {
-				log.warn("Не удалось распарсить start_date для испытания {}: {}", ch.getId(), startDate);
-			}
-		}
-
-		String endDate = rs.getString("end_date");
-		if (endDate != null && !endDate.isBlank()) {
-			try {
-				ch.setEndDate(LocalDateTime.parse(endDate));
-			} catch (Exception e) {
-				log.warn("Не удалось распарсить end_date для испытания {}: {}", ch.getId(), endDate);
-			}
-		}
+		ch.setStartDate(rs.getObject("start_date", LocalDateTime.class));
+		ch.setEndDate(rs.getObject("end_date", LocalDateTime.class));
 
 		ch.setActive(rs.getBoolean("active"));
 		ch.setDescription(rs.getString("description"));
