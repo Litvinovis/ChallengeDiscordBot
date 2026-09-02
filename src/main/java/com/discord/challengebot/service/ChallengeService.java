@@ -96,6 +96,10 @@ public class ChallengeService implements IChallengeService {
 				logger.warn("Некорректные параметры создания испытания");
 				return null;
 			}
+			if (findChallenge(name) != null) {
+				logger.warn("Испытание '{}' уже существует — создание отменено", name);
+				return null;
+			}
 			var challenge = new Challenge();
 			challenge.setId(name.toLowerCase().replace(" ", "_"));
 			challenge.setName(name);

@@ -234,4 +234,34 @@ class ChallengeServiceTest {
 
         verify(challengeRepository, never()).refreshCurrentValue(anyString());
     }
+
+    @Test
+    void testCreateChallenge_RejectsExistingName() {
+        Challenge existing = new Challenge();
+        existing.setId("отжимания");
+        existing.setName("Отжимания");
+        existing.setTargetValue(10000);
+        when(challengeRepository.findById("отжимания")).thenReturn(Optional.of(existing));
+
+        Challenge result = challengeService.createChallenge("Отжимания", 500,
+                LocalDateTime.now().plusDays(30), ChallengeType.GROUP, "описание", "раз");
+
+        assertNull(result, "Повторное создание не должно возвращать испытание");
+        verify(challengeRepository, never()).save(any());
+    }
+
+    @Test
+    void testCreateChallenge_RejectsExistingNameFoundByLegacyId() {
+        Challenge existing = new Challenge();
+        existing.setId("legacy-id");
+        existing.setName("Отжимания");
+        when(challengeRepository.findById(anyString())).thenReturn(Optional.empty());
+        when(challengeRepository.findByName("Отжимания")).thenReturn(Optional.of(existing));
+
+        Challenge result = challengeService.createChallenge("Отжимания", 500,
+                LocalDateTime.now().plusDays(30), ChallengeType.GROUP, "описание", "раз");
+
+        assertNull(result);
+        verify(challengeRepository, never()).save(any());
+    }
 }
