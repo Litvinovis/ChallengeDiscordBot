@@ -47,28 +47,10 @@ mvn clean package
 ### Запуск приложения
 
 ```bash
-java -jar target/challenge-bot-1.0.0.jar
+java -jar target/challenge-bot-1.0.1.jar
 ```
 
 Схема БД создаётся автоматически при первом запуске (`schema.sql`).
-
-#### Скрипт запуска
-
-Для удобства запуска приложения в репозитории также предоставлены скрипты:
-
-- Для Linux/Mac: [challengeBot.sh](challengeBot.sh)
-
-Перед запуском скриптов убедитесь, что они имеют права на выполнение:
-
-```bash
-chmod +x challengeBot.sh
-```
-
-Затем можно запустить приложение:
-
-```bash
-./challengeBot.sh start
-```
 
 ## Команды бота
 
@@ -172,8 +154,7 @@ chmod +x challengeBot.sh
 
 ```
 /opt/challengeBot/
-├── challenge-bot-1.0.0.jar       # Текущий jar-файл
-├── challengeBot.sh               # Скрипт управления (start/stop/restart/status)
+├── challenge-bot-<версия>.jar     # Текущий jar-файл (юнит ищет его по маске)
 ├── config/
 │   ├── application.yml           # Конфиг с реальными значениями (не в git)
 │   └── logback.xml               # Конфиг логирования
@@ -186,18 +167,14 @@ chmod +x challengeBot.sh
 ### Управление сервисом на сервере
 
 ```bash
-# Через systemd
 sudo systemctl start bot-challenge
 sudo systemctl stop bot-challenge
 sudo systemctl restart bot-challenge
 sudo systemctl status bot-challenge
-
-# Или через скрипт
-/opt/challengeBot/challengeBot.sh start
-/opt/challengeBot/challengeBot.sh stop
-/opt/challengeBot/challengeBot.sh restart
-/opt/challengeBot/challengeBot.sh status
 ```
+
+Юнит `bot-challenge.service` запускает jar по маске `challenge-bot-*.jar`, поэтому
+смена версии в `pom.xml` не требует правки юнита.
 
 ## Разработка
 
