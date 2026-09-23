@@ -1,5 +1,6 @@
 package com.discord.challengebot.command;
 
+import com.discord.challengebot.util.TimeZones;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.service.IChallengeService;
@@ -138,7 +139,7 @@ class ForecastCommandTest {
 
 	@Test
 	void testForecastWithValidDate() {
-		LocalDate forecastDate = LocalDate.now().plusDays(14);
+		LocalDate forecastDate = LocalDate.now(TimeZones.MOSCOW).plusDays(14);
 		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
 		when(statisticsService.forecastCompletionDate(challenge, "user1")).thenReturn(forecastDate);
 
@@ -152,7 +153,7 @@ class ForecastCommandTest {
 
 	@Test
 	void testForecastMessageContainsChallengeName() {
-		LocalDate forecastDate = LocalDate.now().plusDays(10);
+		LocalDate forecastDate = LocalDate.now(TimeZones.MOSCOW).plusDays(10);
 		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
 		when(statisticsService.forecastCompletionDate(challenge, "user1")).thenReturn(forecastDate);
 

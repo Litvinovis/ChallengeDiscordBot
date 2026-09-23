@@ -1,5 +1,6 @@
 package com.discord.challengebot.service;
 
+import com.discord.challengebot.util.TimeZones;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.repository.ProgressHistoryRepository;
@@ -58,7 +59,7 @@ class StatisticsServiceForecastTest {
 		// Нет истории, но есть прогресс участника — используется общий средний темп
 		// avgPerDay = 300 / 10 = 30, remaining = 700, daysNeeded = ceil(700/30) = 24
 		assertNotNull(result);
-		assertTrue(result.isAfter(LocalDate.now()));
+		assertTrue(result.isAfter(LocalDate.now(TimeZones.MOSCOW)));
 	}
 
 	@Test
@@ -66,7 +67,7 @@ class StatisticsServiceForecastTest {
 		Challenge challenge = buildChallenge(1000, 1000);
 		challenge.getParticipantProgress().put("user1", 1000L);
 		LocalDate result = statisticsService.forecastCompletionDate(challenge, "user1");
-		assertEquals(LocalDate.now(), result);
+		assertEquals(LocalDate.now(TimeZones.MOSCOW), result);
 	}
 
 	@Test
@@ -75,7 +76,7 @@ class StatisticsServiceForecastTest {
 		challenge.getParticipantProgress().put("user1", 500L);
 
 		// История: 100 единиц/день за последние 7 дней
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(TimeZones.MOSCOW);
 		Map<LocalDate, Long> daily = Map.of(
 				today.minusDays(1), 100L,
 				today.minusDays(2), 100L,
@@ -111,7 +112,7 @@ class StatisticsServiceForecastTest {
 		challenge.getParticipantProgress().put("user1", 300L);
 		LocalDate result = withoutRepo.forecastCompletionDate(challenge, "user1");
 		assertNotNull(result);
-		assertTrue(result.isAfter(LocalDate.now()));
+		assertTrue(result.isAfter(LocalDate.now(TimeZones.MOSCOW)));
 	}
 
 	// ---- Вспомогательные методы ----
