@@ -48,6 +48,10 @@ jobs:
             sudo rm "$CURRENT_JAR"
           fi
 
+          # Ротация: для отката нужен только свежий бэкап, остальные копились без предела
+          # (по 25–60 МБ за деплой). Оставляем три последних.
+          ls -t ${DEPLOY_DIR}/challenge-bot-*.jar.backup.* 2>/dev/null | tail -n +4 | sudo xargs -r rm -f
+
           # Deploy new jar
           sudo cp "$NEW_JAR" "${DEPLOY_DIR}/${JAR_NAME}"
 
@@ -65,6 +69,9 @@ jobs:
             LATEST_BACKUP=$(ls -t /opt/challengeBot/challenge-bot-*.backup.* 2>/dev/null | head -1)
             if [ -n "$LATEST_BACKUP" ]; then
               RESTORE_NAME=$(echo "$LATEST_BACKUP" | sed 's/\.backup\.[0-9_]*//')
+              # Убираем новый jar: при смене версии в имени рядом остались бы два
+              # challenge-bot-*.jar, и маска в ExecStart подхватила бы оба.
+              sudo find /opt/challengeBot -maxdepth 1 -name 'challenge-bot-*.jar' ! -name "$(basename "$RESTORE_NAME")" -delete
               sudo cp "$LATEST_BACKUP" "$RESTORE_NAME"
               sudo systemctl restart bot-challenge
             fi
