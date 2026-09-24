@@ -88,6 +88,13 @@
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
         </dependency>
+
+        <!-- LocalDateTime в JSON-бэкапе (+бэкап): без модуля сериализация испытаний падает -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
         
         
         <!-- Discord JDA -->

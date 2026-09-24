@@ -89,7 +89,10 @@ public class NewChallengeCommand extends BaseCommand {
 					try {
 						endDate = LocalDate.parse(args[3], DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
 					} catch (DateTimeParseException e2) {
-						logger.warn("Неверный формат даты '{}', используется значение по умолчанию", args[3]);
+						// Раньше молча подставлялся год от сегодня — админ узнавал об этом только из отчётов
+						channel.sendMessage("Неверный формат даты \"" + args[3]
+										+ "\". Используйте dd.MM.yyyy или yyyy-MM-dd.").queue();
+						return;
 					}
 				}
 			}

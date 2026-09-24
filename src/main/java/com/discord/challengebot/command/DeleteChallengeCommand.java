@@ -60,6 +60,7 @@ public class DeleteChallengeCommand extends BaseCommand {
 			}
 		} catch (Exception e) {
 			logger.error("Ошибка обработки команды удаления испытания", e);
+			replyError(event, "Произошла ошибка при удалении испытания.");
 		}
 	}
 }

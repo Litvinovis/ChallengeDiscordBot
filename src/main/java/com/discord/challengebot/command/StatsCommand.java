@@ -69,7 +69,7 @@ public class StatsCommand extends BaseCommand {
 						message.append(statisticsService.formatReportForDiscord(challenge, stats)).append("\n");
 					}
 				}
-				channel.sendMessage(message.toString()).queue();
+				reply(event, message.toString());
 			} else {
 				String challengeName = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
 				Challenge challenge = challengeService.getChallenge(challengeName);

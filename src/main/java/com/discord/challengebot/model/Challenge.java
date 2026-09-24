@@ -213,7 +213,7 @@ public class Challenge implements Serializable {
 	 * @param participantProgress карта прогресса участников
 	 */
 	public void setParticipantProgress(Map<String, Long> participantProgress) {
-		this.participantProgress = participantProgress;
+		this.participantProgress = participantProgress != null ? participantProgress : new HashMap<>();
 	}
 
 	/**
@@ -286,6 +286,7 @@ public class Challenge implements Serializable {
 	 */
 	public void setParticipants(List<String> participants) {
 		this.participants = participants;
+		this.participantsSet = null; // иначе hasParticipant отвечает по старому списку
 	}
 
 	private transient Set<String> participantsSet = null;

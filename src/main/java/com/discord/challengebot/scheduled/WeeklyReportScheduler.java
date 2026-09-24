@@ -14,7 +14,7 @@ public class WeeklyReportScheduler {
     @Autowired
     private DiscordService discordService;
 
-    @Scheduled(cron = "0 0 20 ? * SUN")
+    @Scheduled(cron = "0 0 20 ? * SUN", zone = "Europe/Moscow")
     public void sendWeeklyProgressReports() {
         logger.info("Запуск отправки еженедельных отчётов о прогрессе");
         try {

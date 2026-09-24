@@ -61,17 +61,14 @@ public class ChangeDateCommand extends BaseCommand {
 			String challengeName = args[1];
 			LocalDateTime newEndDate;
 			try {
-				newEndDate = LocalDateTime.parse(args[2] + " 00:00:00", DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
+				newEndDate = LocalDate.parse(args[2], DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
 			} catch (DateTimeParseException e) {
 				try {
-					newEndDate = LocalDate.parse(args[2], DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+					// LocalDateTime.parse с шаблоном без времени всегда падал — ISO-даты не принимались
+					newEndDate = LocalDate.parse(args[2], DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
 				} catch (DateTimeParseException e2) {
-					try {
-						newEndDate = LocalDateTime.parse(args[2], DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-					} catch (DateTimeParseException e3) {
-						channel.sendMessage("Дата должна быть в формате dd.MM.yyyy (например: 31.12.2025).").queue();
-						return;
-					}
+					channel.sendMessage("Дата должна быть в формате dd.MM.yyyy или yyyy-MM-dd (например: 31.12.2025).").queue();
+					return;
 				}
 			}
 			Challenge challenge = challengeService.getChallenge(challengeName);

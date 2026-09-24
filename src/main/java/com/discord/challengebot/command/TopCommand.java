@@ -62,7 +62,7 @@ public class TopCommand extends BaseCommand {
 			int limit = 5;
 			if (args.length > 2) {
 				try {
-					limit = Math.min(Integer.parseInt(args[2]), 20);
+					limit = Math.clamp(Integer.parseInt(args[2]), 1, 20);
 				} catch (NumberFormatException _) {
 				}
 			}

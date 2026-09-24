@@ -56,8 +56,8 @@ public class ChangeChallengeCommand extends BaseCommand {
 			long newTarget;
 			try {
 				newTarget = Long.parseLong(args[2]);
-				if (newTarget < 0) {
-					channel.sendMessage("Цель не может быть отрицательным числом.").queue();
+				if (newTarget <= 0) {
+					channel.sendMessage("Цель должна быть положительным числом.").queue();
 					return;
 				}
 			} catch (NumberFormatException e) {

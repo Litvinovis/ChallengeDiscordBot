@@ -1,5 +1,6 @@
 package com.discord.challengebot.command;
 
+import com.discord.challengebot.util.MessageChunks;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 
 import java.util.List;
@@ -19,7 +20,9 @@ public abstract class BaseCommand implements Command {
 	 * @param message текст сообщения
 	 */
 	protected void reply(MessageReceivedEvent event, String message) {
-		event.getChannel().sendMessage(message).queue();
+		for (String chunk : MessageChunks.split(message, MessageChunks.DISCORD_LIMIT)) {
+			event.getChannel().sendMessage(chunk).queue();
+		}
 	}
 
 	/**

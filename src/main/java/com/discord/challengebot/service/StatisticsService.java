@@ -53,8 +53,8 @@ public class StatisticsService implements IStatisticsService {
 			double percentage = challenge.getTargetValue() > 0
 					? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
 			LocalDate today = LocalDate.now(TimeZones.MOSCOW);
-			LocalDate endDate = challenge.getEndDate().toLocalDate();
-			long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
+			long daysRemaining = challenge.getEndDate() != null
+					? ChronoUnit.DAYS.between(today, challenge.getEndDate().toLocalDate()) : 0;
 			int participantCount = Math.max(challenge.getParticipants().size(), 1);
 			double dailyTarget = daysRemaining > 0 ? (double) remaining / participantCount / daysRemaining : 0;
 			return new ChallengeStats(challenge.getName(), challenge.getTargetValue(),
