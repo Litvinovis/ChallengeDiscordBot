@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -68,10 +69,16 @@ public class ChallengeService implements IChallengeService {
 	private Challenge findChallenge(String name) {
 		if (name == null || name.isBlank()) return null;
 		String id = name.toLowerCase().replace(" ", "_");
-		var opt = challengeRepository.findById(id);
-		if (opt.isPresent()) return opt.get();
 		// Fallback для legacy-id: поиск по имени через SQL (O(1))
-		return challengeRepository.findByName(name).orElse(null);
+		Challenge challenge = challengeRepository.findById(id)
+						.or(() -> challengeRepository.findByName(name))
+						.orElse(null);
+		// Репозиторий не заполняет прогресс участников, а команды (+прогресс, +прогноз,
+		// +участие, +статистика) читают именно его — без этого они всегда видели нули
+		if (challenge != null) {
+			challenge.setParticipantProgress(loadProgress(challenge));
+		}
+		return challenge;
 	}
 
 	private Map<String, Long> loadProgress(Challenge challenge) {
@@ -174,7 +181,12 @@ public class ChallengeService implements IChallengeService {
 		if (challenge == null || userId == null || amount <= 0) return challenge;
 
 		// Ошибки БД не перехватываются — см. addProgress
-		progressRepository.subtractAmount(challenge.getId(), userId, amount);
+		long removed = progressRepository.subtractAmount(challenge.getId(), userId, amount);
+		if (removed > 0) {
+			// Без записи в историю графики, +топ-день, прогноз и сравнение недель
+			// продолжали учитывать ошибочно внесённый и затем отменённый прогресс
+			progressHistoryRepository.insert(challenge.getId(), userId, username, -removed);
+		}
 		challengeRepository.refreshCurrentValue(challenge.getId());
 
 		var progress = loadProgress(challenge);
@@ -207,7 +219,13 @@ public class ChallengeService implements IChallengeService {
 	@Override
 	public List<Challenge> getAllChallenges() {
 		try {
-			return challengeRepository.findAll();
+			var challenges = challengeRepository.findAll();
+			var progressByChallenge = progressRepository.findAllGroupedByChallenge();
+			for (var challenge : challenges) {
+				challenge.setParticipantProgress(
+								progressByChallenge.getOrDefault(challenge.getId(), new HashMap<>()));
+			}
+			return challenges;
 		} catch (Exception e) {
 			logger.error("Ошибка при получении всех испытаний", e);
 			return new ArrayList<>();
@@ -275,29 +293,23 @@ public class ChallengeService implements IChallengeService {
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public boolean deleteChallenge(String challengeName) {
-		try {
-			logger.info("Удаление испытания: {}", challengeName);
-			if (challengeName == null || challengeName.isBlank()) return false;
-			String id = challengeName.toLowerCase().replace(" ", "_");
-			if (challengeRepository.existsById(id)) {
-				progressRepository.deleteByChallengeId(id);
-				challengeRepository.deleteById(id);
-				return true;
-			}
-			for (var c : challengeRepository.findAll()) {
-				if (challengeName.equals(c.getName())) {
-					progressRepository.deleteByChallengeId(c.getId());
-					challengeRepository.deleteById(c.getId());
-					return true;
-				}
-			}
-			return false;
-		} catch (Exception e) {
-			logger.error("Ошибка при удалении испытания: {}", challengeName, e);
-			return false;
+		logger.info("Удаление испытания: {}", challengeName);
+		if (challengeName == null || challengeName.isBlank()) return false;
+		String id = challengeName.toLowerCase().replace(" ", "_");
+		if (!challengeRepository.existsById(id)) {
+			var legacy = challengeRepository.findByName(challengeName);
+			if (legacy.isEmpty()) return false;
+			id = legacy.get().getId();
 		}
+		// Ошибки БД не перехватываются: @Transactional откатит удаление целиком,
+		// иначе испытание могло остаться без прогресса или прогресс без испытания
+		progressRepository.deleteByChallengeId(id);
+		progressHistoryRepository.deleteByChallengeId(id);
+		challengeRepository.deleteById(id);
+		return true;
 	}
 
 	/**

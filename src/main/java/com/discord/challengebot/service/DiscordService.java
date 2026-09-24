@@ -12,6 +12,7 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.exceptions.InvalidTokenException;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.FileUpload;
 import org.slf4j.Logger;
@@ -28,6 +29,7 @@ import com.discord.challengebot.util.TimeZones;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Сервис взаимодействия с Discord.
@@ -40,6 +42,10 @@ public class DiscordService implements IDiscordService {
 
 	/** Окно, за которое ищется прогресс: отчёт не отправляется, если за это время изменений не было. */
 	private static final int REPORT_WINDOW_HOURS = 24;
+
+	private static final Set<String> ADMIN_COMMANDS = Set.of(
+					"новый", "удалить", "остановить", "продолжить", "изменить", "изменить_дату",
+					"установить_прогресс", "добавить_участника", "удалить_участника", "бэкап", "импорт");
 
 	private final DiscordConfig discordConfig;
 	private final ChallengeService challengeService;
@@ -99,6 +105,9 @@ public class DiscordService implements IDiscordService {
 				Thread.currentThread().interrupt();
 				logger.warn("Инициализация Discord бота прервана");
 				return;
+			} catch (InvalidTokenException e) {
+				// Повтор с тем же токеном бессмыслен — падаем, чтобы systemd и smoke-тест деплоя это увидели
+				throw new IllegalStateException("Неверный токен Discord бота (DISCORD_BOT_TOKEN)", e);
 			} catch (Exception e) {
 				if (attempt != null) attempt.shutdownNow();
 				logger.warn("Не удалось подключиться к Discord ({}), повтор через {} сек", e.getMessage(), delaySec);
@@ -492,11 +501,10 @@ public class DiscordService implements IDiscordService {
 		try {
 			if (userId == null || userId.isBlank()) return false;
 			if (command == null || command.isBlank()) return true;
-			if (command.startsWith("новый") || command.startsWith("удалить") ||
-							command.startsWith("остановить") || command.startsWith("продолжить") ||
-							command.startsWith("изменить") || command.startsWith("изменить_дату") ||
-							command.startsWith("установить_прогресс") ||
-							command.startsWith("добавить_участника") || command.startsWith("удалить_участника")) {
+			// Точное совпадение: startsWith не пускал обычных участников вносить прогресс
+			// в испытания с названием вроде «новыйгод» или «изменитьсебя»
+			String commandName = command.strip().split("\\s+", 2)[0];
+			if (ADMIN_COMMANDS.contains(commandName)) {
 				return participantService.isAdminUser(userId);
 			}
 			return true;

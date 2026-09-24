@@ -66,7 +66,6 @@
 
     <logger name="org.springframework" level="WARN" />
     <logger name="net.dv8tion.jda" level="INFO" />
-    <logger name="org.apache.ignite" level="WARN" />
 
     <root level="INFO">
         <appender-ref ref="CONSOLE" />

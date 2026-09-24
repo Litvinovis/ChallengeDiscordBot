@@ -60,9 +60,11 @@ public class ListChallengesCommand extends BaseCommand {
 				message.append("- **").append(challenge.getName()).append("**\n");
 				message.append("  Цель: ").append(challenge.getTargetValue()).append(" ").append(challenge.getUnit()).append("\n");
 				message.append("  Участников: ").append(challenge.getParticipants().size()).append("\n");
-				message.append("  Окончание: ").append(challenge.getEndDate().toLocalDate().toString()).append("\n\n");
+				message.append("  Окончание: ")
+								.append(challenge.getEndDate() != null ? challenge.getEndDate().toLocalDate().toString() : "—")
+								.append("\n\n");
 			}
-			channel.sendMessage(message.toString()).queue();
+			reply(event, message.toString());
 		} catch (Exception e) {
 			logger.error("Ошибка обработки команды испытания", e);
 		}

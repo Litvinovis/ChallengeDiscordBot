@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Repository
@@ -35,12 +36,32 @@ public class ChallengeProgressRepository {
 						challengeId, userId, amount);
 	}
 
-	/** Атомарно вычитает amount из прогресса участника, не опускаясь ниже нуля. */
-	public void subtractAmount(String challengeId, String userId, long amount) {
-		jdbc.update(
-						"INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, 0) " +
-										"ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = GREATEST(0, challenge_progress.progress - ?)",
-						challengeId, userId, amount);
+	/**
+	 * Атомарно вычитает amount из прогресса участника, не опускаясь ниже нуля.
+	 * Строка не создаётся, если участник ещё ничего не вносил.
+	 *
+	 * @return фактически вычтенное значение (меньше amount, если прогресса не хватило)
+	 */
+	public long subtractAmount(String challengeId, String userId, long amount) {
+		List<Long> removed = jdbc.query(
+						"UPDATE challenge_progress cp SET progress = GREATEST(0, cp.progress - ?) " +
+										"FROM (SELECT progress FROM challenge_progress WHERE challenge_id = ? AND user_id = ? FOR UPDATE) old " +
+										"WHERE cp.challenge_id = ? AND cp.user_id = ? " +
+										"RETURNING old.progress - cp.progress",
+						(rs, rowNum) -> rs.getLong(1),
+						amount, challengeId, userId, challengeId, userId);
+		return removed.isEmpty() ? 0L : removed.getFirst();
+	}
+
+	/** Прогресс всех участников по всем испытаниям одним запросом: challengeId -> (userId -> progress). */
+	public Map<String, Map<String, Long>> findAllGroupedByChallenge() {
+		Map<String, Map<String, Long>> result = new HashMap<>();
+		jdbc.query(
+						"SELECT challenge_id, user_id, progress FROM challenge_progress",
+						(RowCallbackHandler) rs -> result
+										.computeIfAbsent(rs.getString("challenge_id"), k -> new HashMap<>())
+										.put(rs.getString("user_id"), rs.getLong("progress")));
+		return result;
 	}
 
 	public Map<String, Long> findByChallengeId(String challengeId) {

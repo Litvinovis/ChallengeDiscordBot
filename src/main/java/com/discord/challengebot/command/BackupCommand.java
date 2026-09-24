@@ -38,6 +38,8 @@ public class BackupCommand extends BaseCommand {
 
     private final ObjectMapper objectMapper = new ObjectMapper()
             .enable(SerializationFeature.INDENT_OUTPUT)
+            // ISO-строки дат — именно их разбирает ImportCommand через LocalDateTime.parse
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .findAndRegisterModules();
 
     @Override

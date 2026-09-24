@@ -41,12 +41,12 @@ jobs:
           NEW_JAR=$(ls target/challenge-bot-*.jar | grep -v original | head -1)
           JAR_NAME=$(basename "$NEW_JAR")
 
-          # Backup current jar
-          CURRENT_JAR=$(ls ${DEPLOY_DIR}/challenge-bot-*.jar 2>/dev/null | grep -v bak | head -1)
-          if [ -n "$CURRENT_JAR" ]; then
+          # Backup current jar(s): юнит запускает jar по маске, лишний jar ломает запуск
+          for CURRENT_JAR in ${DEPLOY_DIR}/challenge-bot-*.jar; do
+            [ -e "$CURRENT_JAR" ] || continue
             sudo cp "$CURRENT_JAR" "${CURRENT_JAR}.backup.$(date +%Y%m%d_%H%M)"
             sudo rm "$CURRENT_JAR"
-          fi
+          done
 
           # Ротация: для отката нужен только свежий бэкап, остальные копились без предела
           # (по 25–60 МБ за деплой). Оставляем три последних.
@@ -62,10 +62,13 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           echo "Waiting for bot to start..."
+          RESTARTS_BEFORE=$(systemctl show -p NRestarts --value bot-challenge)
           sleep 20
           STATUS=$(sudo systemctl is-active bot-challenge)
-          if [ "$STATUS" != "active" ]; then
-            echo "❌ Bot failed to start, rolling back..."
+          RESTARTS_AFTER=$(systemctl show -p NRestarts --value bot-challenge)
+          # Restart=always: падающий в цикле сервис может попасть на момент "active"
+          if [ "$STATUS" != "active" ] || [ "$RESTARTS_AFTER" != "$RESTARTS_BEFORE" ]; then
+            echo "❌ Bot failed to start (status=$STATUS, restarts $RESTARTS_BEFORE→$RESTARTS_AFTER), rolling back..."
             LATEST_BACKUP=$(ls -t /opt/challengeBot/challenge-bot-*.backup.* 2>/dev/null | head -1)
             if [ -n "$LATEST_BACKUP" ]; then
               RESTORE_NAME=$(echo "$LATEST_BACKUP" | sed 's/\.backup\.[0-9_]*//')

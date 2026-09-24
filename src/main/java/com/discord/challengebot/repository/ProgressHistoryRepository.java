@@ -29,6 +29,11 @@ public class ProgressHistoryRepository {
                 challengeId, userId, username, amount);
     }
 
+    /** Удаляет всю историю испытания — иначе новое испытание с тем же id унаследует чужие записи. */
+    public void deleteByChallengeId(String challengeId) {
+        jdbc.update("DELETE FROM progress_history WHERE challenge_id = ?", challengeId);
+    }
+
     /** Daily totals for a specific user in a challenge over last N days. */
     public Map<LocalDate, Long> getDailyTotals(String challengeId, String userId, int days) {
         String sql = "SELECT DATE(recorded_at AT TIME ZONE 'Europe/Moscow') AS day, SUM(amount) AS total " +
@@ -126,7 +131,7 @@ public class ProgressHistoryRepository {
         if (challengeIds.isEmpty()) return false;
         String placeholders = String.join(",", Collections.nCopies(challengeIds.size(), "?"));
         String sql = "SELECT EXISTS(SELECT 1 FROM progress_history " +
-                "WHERE challenge_id IN (" + placeholders + ") " +
+                "WHERE challenge_id IN (" + placeholders + ") AND amount > 0 " +
                 "AND recorded_at >= NOW() - INTERVAL '" + hours + " hours')";
         Boolean result = jdbc.queryForObject(sql, Boolean.class, challengeIds.toArray());
         return Boolean.TRUE.equals(result);
@@ -136,7 +141,7 @@ public class ProgressHistoryRepository {
     public Map<String, Long> getUserTotalsLast24Hours(String challengeId) {
         String sql = "SELECT user_id, SUM(amount) AS total FROM progress_history " +
                 "WHERE challenge_id = ? AND recorded_at >= NOW() - INTERVAL '24 hours' " +
-                "GROUP BY user_id ORDER BY total DESC";
+                "GROUP BY user_id HAVING SUM(amount) > 0 ORDER BY total DESC";
         Map<String, Long> result = new HashMap<>();
         jdbc.query(sql, rs -> {
             result.put(rs.getString("user_id"), rs.getLong("total"));

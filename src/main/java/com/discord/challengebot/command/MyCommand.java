@@ -66,7 +66,7 @@ public class MyCommand extends BaseCommand {
 									.append(" (").append(String.format("%.2f", stats.percentage())).append("%)\n");
 				}
 			}
-			channel.sendMessage(message.toString()).queue();
+			reply(event, message.toString());
 		} catch (Exception e) {
 			logger.error("Ошибка обработки команды мои", e);
 		}

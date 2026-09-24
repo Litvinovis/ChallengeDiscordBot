@@ -35,7 +35,7 @@ public class DailyReportScheduler {
 	/**
 	 * Отправка ежедневных отчетов о прогрессе в 7:00 утра
 	 */
-	@Scheduled(cron = "${scheduled.cron.daily-report}")
+	@Scheduled(cron = "${scheduled.cron.daily-report}", zone = "Europe/Moscow")
 	public void sendDailyProgressReports() {
 		logger.info("Запуск отправки ежедневных отчетов о прогрессе");
 		try {
@@ -49,7 +49,7 @@ public class DailyReportScheduler {
 	/**
 	 * Проверка завершения испытаний каждый час
 	 */
-	@Scheduled(cron = "0 0 * * * ?") // Каждый час
+	@Scheduled(cron = "0 0 * * * ?", zone = "Europe/Moscow") // Каждый час
 	public void checkChallengeCompletions() {
 		logger.info("Проверка завершения испытаний");
 
@@ -110,7 +110,7 @@ public class DailyReportScheduler {
 	/**
 	 * Ежемесячный отчёт 1-го числа каждого месяца в 9:00
 	 */
-	@Scheduled(cron = "0 0 9 1 * ?")
+	@Scheduled(cron = "0 0 9 1 * ?", zone = "Europe/Moscow")
 	public void sendMonthlyReport() {
 		logger.info("Отправка ежемесячного отчёта");
 		try {
@@ -123,7 +123,7 @@ public class DailyReportScheduler {
 	/**
 	 * Очистка старых данных каждый день в 2:00 ночи
 	 */
-	@Scheduled(cron = "0 0 2 * * ?") // Каждый день в 2:00
+	@Scheduled(cron = "0 0 2 * * ?", zone = "Europe/Moscow") // Каждый день в 2:00
 	public void cleanupOldData() {
 		logger.info("Очистка старых данных");
 		try {
@@ -140,9 +140,13 @@ public class DailyReportScheduler {
 					} catch (Exception e) {
 						logger.warn("Не удалось архивировать испытание {}: {}", challenge.getName(), e.getMessage());
 					}
-					if (challengeService.deleteChallenge(challenge.getName())) {
-						deletedCount++;
-						logger.info("Архивировано и удалено старое завершенное испытание: {}", challenge.getName());
+					try {
+						if (challengeService.deleteChallenge(challenge.getName())) {
+							deletedCount++;
+							logger.info("Архивировано и удалено старое завершенное испытание: {}", challenge.getName());
+						}
+					} catch (Exception e) {
+						logger.error("Не удалось удалить архивированное испытание {}", challenge.getName(), e);
 					}
 				}
 			}

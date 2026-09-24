@@ -81,6 +81,25 @@ class DiscordServiceTest {
 	}
 
 	@Test
+	void testIsAuthorizedUser_ProgressForChallengeNamedLikeAdminCommand() {
+		// +новыйгод 10 — это прогресс в испытание «новыйгод», а не админская команда
+		String userId = "12345";
+
+		assertTrue(discordService.isAuthorizedUser(userId, "новыйгод"));
+		assertTrue(discordService.isAuthorizedUser(userId, "изменитьсебя"));
+		verify(participantService, never()).isAdminUser(userId);
+	}
+
+	@Test
+	void testIsAuthorizedUser_BackupRequiresAdmin() {
+		String userId = "12345";
+		when(participantService.isAdminUser(userId)).thenReturn(false);
+
+		assertFalse(discordService.isAuthorizedUser(userId, "бэкап"));
+		assertFalse(discordService.isAuthorizedUser(userId, "импорт"));
+	}
+
+	@Test
 	void testFormatChallengeStats() {
 		// Проверяем что метод делегирует в statisticsService
 		when(statisticsService.formatReportForDiscord(any(), any())).thenReturn("formatted stats");

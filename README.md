@@ -11,7 +11,7 @@ Sport Challenge Bot позволяет организовывать индиви
 - Java 25
 - Spring Boot 4.1
 - PostgreSQL 16 (хранение данных через Spring JDBC / JdbcTemplate)
-- JDA 6.5 (Java Discord API)
+- JDA 6.6 (Java Discord API)
 - Maven (система сборки)
 
 ## Установка и запуск
