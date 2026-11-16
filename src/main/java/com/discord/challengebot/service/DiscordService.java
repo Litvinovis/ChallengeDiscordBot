@@ -254,6 +254,27 @@ public class DiscordService implements IDiscordService {
 		}
 	}
 
+    /** Стадию предупреждения сохраняем только после подтверждённой Discord отправки. */
+    public boolean sendInactivityNotification(String userId, String message) {
+        try {
+            if (jda == null || discordConfig.getReportGuildId() == null || discordConfig.getReportGuildId().isBlank()) {
+                logger.warn("Уведомление о неактивности не отправлено: Discord не готов или не задан DISCORD_REPORT_GUILD_ID");
+                return false;
+            }
+            Guild guild = jda.getGuildById(discordConfig.getReportGuildId());
+            if (guild == null) return false;
+            TextChannel channel = guild.getTextChannelsByName(resolveAnnouncementChannel(), true).stream().findFirst().orElse(null);
+            if (channel == null) return false;
+            // Разрешаем пинг только адресату, даже если в названии испытания есть @everyone или чужое упоминание.
+            channel.sendMessage(message).setAllowedMentions(java.util.Collections.emptySet()).mentionUsers(userId)
+                    .timeout(15, java.util.concurrent.TimeUnit.SECONDS).complete();
+            return true;
+        } catch (Exception e) {
+            logger.warn("Не удалось отправить уведомление о неактивности: {}", e.getMessage());
+            return false;
+        }
+    }
+
 	/**
 	 * {@inheritDoc}
 	 */
@@ -292,6 +313,9 @@ public class DiscordService implements IDiscordService {
 			sb.append("""
 							**Справка по командам бота**
 							
+							**Неактивность:** напоминания через 2 и 3 недели без прогресса, исключение через 4 недели.
+							Новый положительный прогресс в испытании сбрасывает предупреждения.
+
 							**Основные команды:**
 							`+<испытание> <количество>` - Добавить прогресс к испытанию (например: `+отжимания 10`)
 							`+статистика` - Показать статистику по всем испытаниям
@@ -341,7 +365,8 @@ public class DiscordService implements IDiscordService {
 		try {
 			logger.info("Отправка ежедневного отчёта");
 			List<Challenge> challenges = challengeService.getAllChallenges().stream()
-							.filter(Challenge::isActive).toList();
+							.filter(Challenge::isActive)
+                            .filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
 			if (challenges.isEmpty()) {
 				logger.info("Ежедневный отчёт пропущен: активных испытаний нет");
 				return;
@@ -372,7 +397,8 @@ public class DiscordService implements IDiscordService {
 	 */
 	public void sendWeeklyReport() {
 		try {
-			List<Challenge> challenges = challengeService.getActiveChallenges();
+			List<Challenge> challenges = challengeService.getActiveChallenges().stream()
+                    .filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
 			if (challenges.isEmpty()) return;
 			for (Challenge challenge : challenges) {
 				try {
@@ -394,7 +420,8 @@ public class DiscordService implements IDiscordService {
 	 */
 	public void sendMonthlyReport() {
 		try {
-			List<Challenge> challenges = challengeService.getActiveChallenges();
+			List<Challenge> challenges = challengeService.getActiveChallenges().stream()
+                    .filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
 			String month = LocalDateTime.now(TimeZones.MOSCOW)
 					.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru")));
 			sendMessageToChannel(discordConfig.getReportChannel(),

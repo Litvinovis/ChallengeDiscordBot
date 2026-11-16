@@ -57,7 +57,8 @@ public class StatsCommand extends BaseCommand {
 		try {
 			TextChannel channel = event.getChannel().asTextChannel();
 			if (args.length == 1) {
-				List<Challenge> challenges = challengeService.getAllChallenges();
+				List<Challenge> challenges = challengeService.getAllChallenges().stream()
+                        .filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
 				if (challenges.isEmpty()) {
 					channel.sendMessage("Нет доступных испытаний.").queue();
 					return;

@@ -62,6 +62,21 @@ public class ChallengeRepository {
 		return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
 	}
 
+	/** Общий порядок блокировок для прогресса, вступления и исключения: сначала испытание. */
+	public void lockById(String id) {
+		jdbc.query("SELECT id FROM challenges WHERE id = ? FOR UPDATE", (rs, row) -> rs.getString(1), id);
+	}
+
+	public boolean stopIfEmpty(String id) {
+		return jdbc.update("UPDATE challenges SET active = false WHERE id = ? AND active = true " +
+				"AND NOT EXISTS (SELECT 1 FROM challenge_progress WHERE challenge_id = ?)", id, id) > 0;
+	}
+
+	public boolean isInactive(String id) {
+		var states = jdbc.query("SELECT active FROM challenges WHERE id = ?", (rs, row) -> rs.getBoolean(1), id);
+		return states.isEmpty() || !states.getFirst();
+	}
+
 	public Optional<Challenge> findByName(String name) {
 		if (name == null) return Optional.empty();
 		List<Challenge> results = jdbc.query(

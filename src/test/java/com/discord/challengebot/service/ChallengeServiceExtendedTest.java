@@ -406,6 +406,7 @@ class ChallengeServiceExtendedTest {
 		challenge.setName("Pushups");
 		challenge.addParticipant("user1");
 		challenge.getParticipantProgress().put("user1", 500L);
+		when(progressRepository.findByChallengeId("pushups")).thenReturn(Map.of("user1", 500L));
 		when(participantService.registerForChallenge(anyString(), anyString(), anyString())).thenReturn(true);
 
 		Challenge result = challengeService.addParticipantWithUsername(challenge, "user1", "Alice");
