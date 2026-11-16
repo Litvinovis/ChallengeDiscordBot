@@ -42,6 +42,19 @@ CREATE TABLE IF NOT EXISTS progress_history (
 CREATE INDEX IF NOT EXISTS idx_progress_history_challenge_user ON progress_history(challenge_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_progress_history_recorded_at ON progress_history(recorded_at);
 
+-- Состояние участия хранится отдельно для каждого испытания. Обновляем старые строки
+-- только один раз: повторный запуск схемы не должен переносить старую историю на повторное вступление.
+ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS first_inactivity_warning_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS second_inactivity_warning_at TIMESTAMP WITH TIME ZONE;
+UPDATE challenge_progress cp SET joined_at = NOW(), last_progress_at = (
+    SELECT MAX(recorded_at) FROM progress_history ph
+    WHERE ph.challenge_id = cp.challenge_id AND ph.user_id = cp.user_id AND ph.amount > 0
+) WHERE cp.joined_at IS NULL;
+ALTER TABLE challenge_progress ALTER COLUMN joined_at SET DEFAULT NOW();
+ALTER TABLE challenge_progress ALTER COLUMN joined_at SET NOT NULL;
+
 CREATE TABLE IF NOT EXISTS challenge_archive (
     id            TEXT PRIMARY KEY,
     name          TEXT,

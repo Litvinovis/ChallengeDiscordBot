@@ -1,7 +1,6 @@
 package com.discord.challengebot.command;
 
 import com.discord.challengebot.model.ChallengeType;
-import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
 import com.discord.challengebot.service.IChallengeService;
 import com.discord.challengebot.service.IUserService;
@@ -16,10 +15,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -32,8 +28,6 @@ public class ImportCommand extends BaseCommand {
 
     @Autowired
     private IChallengeService challengeService;
-    @Autowired
-    private ChallengeProgressRepository progressRepository;
     @Autowired
     private ChallengeRepository challengeRepository;
     @Autowired
@@ -91,7 +85,6 @@ public class ImportCommand extends BaseCommand {
             }
 
             JsonNode progressNode = root.path("progress");
-            Set<String> touchedChallengeIds = new HashSet<>();
             if (progressNode.isObject()) {
                 progressNode.fields().forEachRemaining(challengeEntry -> {
                     String challengeId = challengeEntry.getKey();
@@ -100,27 +93,14 @@ public class ImportCommand extends BaseCommand {
                         String userId = userEntry.getKey();
                         long amount = userEntry.getValue().asLong(0);
                         try {
-                            progressRepository.upsert(challengeId, userId, amount);
-                            touchedChallengeIds.add(challengeId);
+                            // Импорт соблюдает ту же блокировку участия, что и команды/автоисключение.
+                            challengeRepository.findById(challengeId).ifPresent(ch ->
+                                    challengeService.setParticipantProgress(ch, userId, amount));
                         } catch (Exception e) {
                             logger.warn("Не удалось импортировать прогресс {}/{}: {}", challengeId, userId, e.getMessage());
                         }
                     });
                 });
-            }
-
-            // Пересчитываем общий прогресс и список участников испытаний по импортированным данным
-            for (String challengeId : touchedChallengeIds) {
-                try {
-                    challengeRepository.findById(challengeId).ifPresent(ch -> {
-                        Map<String, Long> allProgress = progressRepository.findByChallengeId(challengeId);
-                        ch.setCurrentValue(allProgress.values().stream().mapToLong(Long::longValue).sum());
-                        allProgress.keySet().forEach(ch::addParticipant);
-                        challengeRepository.save(ch);
-                    });
-                } catch (Exception e) {
-                    logger.warn("Не удалось пересчитать прогресс испытания {}: {}", challengeId, e.getMessage());
-                }
             }
 
             reply(event, "✅ Импорт завершён. Загружено испытаний: " + imported);

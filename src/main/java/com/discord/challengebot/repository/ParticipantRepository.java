@@ -75,6 +75,13 @@ public class ParticipantRepository {
 		jdbc.update("DELETE FROM challenge_participants WHERE user_id = ?", userId);
 	}
 
+	/** Не перезаписываем стрики и достижения при исключении из одного испытания. */
+	public void removeChallengeRegistration(String userId, String challengeName) {
+		jdbc.update("UPDATE challenge_participants SET registered_challenges = COALESCE((" +
+				"SELECT jsonb_agg(value)::text FROM jsonb_array_elements_text(registered_challenges::jsonb) value " +
+				"WHERE value <> ?), '[]') WHERE user_id = ?", challengeName, userId);
+	}
+
 	public boolean existsById(String userId) {
 		if (userId == null) return false;
 		Integer count = jdbc.queryForObject(

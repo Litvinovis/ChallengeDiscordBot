@@ -137,6 +137,11 @@ public class ChallengeService implements IChallengeService {
 			return challenge;
 		}
 
+		challengeRepository.lockById(challenge.getId());
+		if (challengeRepository.isInactive(challenge.getId())) {
+			throw new IllegalStateException("Испытание уже остановлено, прогресс не внесён");
+		}
+
 		// Ошибки БД намеренно не перехватываются: @Transactional откатит транзакцию
 		// целиком, иначе инкремент прогресса зафиксируется без пересчёта итога.
 		participantService.registerForChallenge(userId, username != null ? username : userId, challenge.getName());
@@ -179,6 +184,8 @@ public class ChallengeService implements IChallengeService {
 	@Override
 	public Challenge subtractProgress(Challenge challenge, String userId, String username, long amount) {
 		if (challenge == null || userId == null || amount <= 0) return challenge;
+
+		challengeRepository.lockById(challenge.getId());
 
 		// Ошибки БД не перехватываются — см. addProgress
 		long removed = progressRepository.subtractAmount(challenge.getId(), userId, amount);
@@ -304,6 +311,7 @@ public class ChallengeService implements IChallengeService {
 			if (legacy.isEmpty()) return false;
 			id = legacy.get().getId();
 		}
+		challengeRepository.lockById(id);
 		// Ошибки БД не перехватываются: @Transactional откатит удаление целиком,
 		// иначе испытание могло остаться без прогресса или прогресс без испытания
 		progressRepository.deleteByChallengeId(id);
@@ -348,74 +356,64 @@ public class ChallengeService implements IChallengeService {
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public Challenge setParticipantProgress(Challenge challenge, String userId, long progress) {
-		try {
-			if (challenge == null || userId == null || userId.isBlank() || progress < 0) return challenge;
-			progressRepository.upsert(challenge.getId(), userId, progress);
-			challengeRepository.addParticipant(challenge.getId(), userId);
-			challengeRepository.refreshCurrentValue(challenge.getId());
-			challenge.addParticipant(userId);
-			// Синхронизируем в-памяти для текущей сессии
-			challenge.getParticipantProgress().put(userId, progress);
-			var allProgress = loadProgress(challenge);
-			challenge.setCurrentValue(allProgress.values().stream().mapToLong(Long::longValue).sum());
-			return challenge;
-		} catch (Exception e) {
-			logger.error("Ошибка при установке прогресса: userId={}, challenge={}", userId,
-							challenge != null ? challenge.getName() : "null", e);
-			return challenge;
-		}
+		if (challenge == null || userId == null || userId.isBlank() || progress < 0) return challenge;
+		challengeRepository.lockById(challenge.getId());
+		progressRepository.upsert(challenge.getId(), userId, progress);
+		challengeRepository.addParticipant(challenge.getId(), userId);
+		challengeRepository.refreshCurrentValue(challenge.getId());
+		challenge.addParticipant(userId);
+		// Синхронизируем в-памяти для текущей сессии
+		challenge.getParticipantProgress().put(userId, progress);
+		var allProgress = loadProgress(challenge);
+		challenge.setCurrentValue(allProgress.values().stream().mapToLong(Long::longValue).sum());
+		return challenge;
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public Challenge removeParticipant(Challenge challenge, String userId) {
-		try {
-			if (challenge == null || userId == null || userId.isBlank()) return challenge;
-			progressRepository.delete(challenge.getId(), userId);
-			challengeRepository.removeParticipant(challenge.getId(), userId);
-			challengeRepository.refreshCurrentValue(challenge.getId());
-			challenge.removeParticipant(userId);
-			challenge.getParticipantProgress().remove(userId);
-			long totalProgress = loadProgress(challenge).values().stream().mapToLong(Long::longValue).sum();
-			challenge.setCurrentValue(totalProgress);
-			return challenge;
-		} catch (Exception e) {
-			logger.error("Ошибка при удалении участника: userId={}, challenge={}", userId,
-							challenge != null ? challenge.getName() : "null", e);
-			return challenge;
-		}
+		if (challenge == null || userId == null || userId.isBlank()) return challenge;
+		challengeRepository.lockById(challenge.getId());
+		progressRepository.delete(challenge.getId(), userId);
+		challengeRepository.removeParticipant(challenge.getId(), userId);
+		participantService.removeChallengeRegistration(userId, challenge.getName());
+		challengeRepository.refreshCurrentValue(challenge.getId());
+		if (challengeRepository.stopIfEmpty(challenge.getId())) challenge.setActive(false);
+		challenge.removeParticipant(userId);
+		challenge.getParticipantProgress().remove(userId);
+		long totalProgress = loadProgress(challenge).values().stream().mapToLong(Long::longValue).sum();
+		challenge.setCurrentValue(totalProgress);
+		return challenge;
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public Challenge addParticipantWithUsername(Challenge challenge, String userId, String username) {
-		try {
-			if (challenge == null || userId == null || userId.isBlank()) return challenge;
-			participantService.registerForChallenge(userId,
-							username != null ? username : userId, challenge.getName());
-			challengeRepository.addParticipant(challenge.getId(), userId);
-			challenge.addParticipant(userId);
-			if (!challenge.getParticipantProgress().containsKey(userId)) {
-				progressRepository.upsert(challenge.getId(), userId, 0L);
-				challenge.getParticipantProgress().put(userId, 0L);
-			}
-			return challenge;
-		} catch (Exception e) {
-			logger.error("Ошибка при добавлении участника: userId={}, challenge={}", userId,
-							challenge != null ? challenge.getName() : "null", e);
-			return challenge;
-		}
+		if (challenge == null || userId == null || userId.isBlank()) return challenge;
+		challengeRepository.lockById(challenge.getId());
+		participantService.registerForChallenge(userId,
+						username != null ? username : userId, challenge.getName());
+		challengeRepository.addParticipant(challenge.getId(), userId);
+		challenge.addParticipant(userId);
+		// Объект команды мог быть прочитан до параллельного исключения: источником истины остаётся БД.
+		progressRepository.ensureParticipant(challenge.getId(), userId);
+		challenge.getParticipantProgress().put(userId, loadProgress(challenge).getOrDefault(userId, 0L));
+		return challenge;
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
+	@Transactional
 	@Override
 	public Challenge addParticipant(Challenge challenge, String userId) {
 		return addParticipantWithUsername(challenge, userId, userId);

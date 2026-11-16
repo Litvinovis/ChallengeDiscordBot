@@ -189,6 +189,11 @@ public class ParticipantService implements IUserService {
 
 	// ---- Дополнительные методы управления участниками ----
 
+	/** Ошибка БД должна откатывать исключение вместе с удалением прогресса участия. */
+	public void removeChallengeRegistration(String userId, String challengeName) {
+		participantRepository.removeChallengeRegistration(userId, challengeName);
+	}
+
 	/**
 	 * Возвращает всех зарегистрированных участников системы.
 	 *

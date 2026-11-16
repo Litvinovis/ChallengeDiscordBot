@@ -6,6 +6,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,19 +23,32 @@ public class ChallengeProgressRepository {
 		this.jdbc = jdbc;
 	}
 
+	/** Повторная регистрация не обнуляет результат и не продлевает срок неактивности. */
+	public void ensureParticipant(String challengeId, String userId) {
+		jdbc.update("INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, 0) " +
+				"ON CONFLICT (challenge_id, user_id) DO NOTHING", challengeId, userId);
+	}
+
 	public void upsert(String challengeId, String userId, long progress) {
 		jdbc.update(
-						"INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, ?) " +
-										"ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = EXCLUDED.progress",
-						challengeId, userId, progress);
+						"INSERT INTO challenge_progress (challenge_id, user_id, progress, last_progress_at) VALUES (?, ?, ?, CASE WHEN ? > 0 THEN NOW() END) " +
+                        "ON CONFLICT (challenge_id, user_id) DO UPDATE SET " +
+                        "last_progress_at = CASE WHEN EXCLUDED.progress > challenge_progress.progress THEN NOW() ELSE challenge_progress.last_progress_at END, " +
+                        "first_inactivity_warning_at = CASE WHEN EXCLUDED.progress > challenge_progress.progress THEN NULL ELSE challenge_progress.first_inactivity_warning_at END, " +
+                        "second_inactivity_warning_at = CASE WHEN EXCLUDED.progress > challenge_progress.progress THEN NULL ELSE challenge_progress.second_inactivity_warning_at END, " +
+                        "progress = EXCLUDED.progress",
+						challengeId, userId, progress, progress);
 	}
 
 	/** Атомарно прибавляет amount к прогрессу участника (защита от гонок при одновременных командах). */
 	public void addAmount(String challengeId, String userId, long amount) {
 		jdbc.update(
-						"INSERT INTO challenge_progress (challenge_id, user_id, progress) VALUES (?, ?, ?) " +
-										"ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = challenge_progress.progress + EXCLUDED.progress",
-						challengeId, userId, amount);
+						"INSERT INTO challenge_progress (challenge_id, user_id, progress, last_progress_at) VALUES (?, ?, ?, CASE WHEN ? > 0 THEN NOW() END) " +
+                        "ON CONFLICT (challenge_id, user_id) DO UPDATE SET progress = challenge_progress.progress + EXCLUDED.progress, " +
+                        "last_progress_at = CASE WHEN EXCLUDED.progress > 0 THEN NOW() ELSE challenge_progress.last_progress_at END, " +
+                        "first_inactivity_warning_at = CASE WHEN EXCLUDED.progress > 0 THEN NULL ELSE challenge_progress.first_inactivity_warning_at END, " +
+                        "second_inactivity_warning_at = CASE WHEN EXCLUDED.progress > 0 THEN NULL ELSE challenge_progress.second_inactivity_warning_at END",
+						challengeId, userId, amount, amount);
 	}
 
 	/**
@@ -81,6 +96,26 @@ public class ChallengeProgressRepository {
 						userId);
 		return result;
 	}
+
+    public record InactivityState(String userId, Instant inactiveSince, Instant firstWarningAt, Instant secondWarningAt) {}
+
+    public List<InactivityState> findInactivityStates(String challengeId) {
+        return jdbc.query("SELECT user_id, COALESCE(last_progress_at, joined_at) AS inactive_since, " +
+                        "first_inactivity_warning_at, second_inactivity_warning_at FROM challenge_progress WHERE challenge_id = ? ORDER BY user_id",
+                (rs, row) -> new InactivityState(rs.getString("user_id"), rs.getTimestamp("inactive_since").toInstant(),
+                        instant(rs.getTimestamp("first_inactivity_warning_at")), instant(rs.getTimestamp("second_inactivity_warning_at"))), challengeId);
+    }
+
+    public void markInactivityWarning(String challengeId, String userId, boolean second, Instant sentAt) {
+        // Имя колонки выбирается только из двух констант, пользовательские данные идут параметрами.
+        String column = second ? "second_inactivity_warning_at" : "first_inactivity_warning_at";
+        jdbc.update("UPDATE challenge_progress SET " + column + " = ? WHERE challenge_id = ? AND user_id = ?",
+                Timestamp.from(sentAt), challengeId, userId);
+    }
+
+    private static Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
+    }
 
 	public void delete(String challengeId, String userId) {
 		jdbc.update("DELETE FROM challenge_progress WHERE challenge_id = ? AND user_id = ?", challengeId, userId);

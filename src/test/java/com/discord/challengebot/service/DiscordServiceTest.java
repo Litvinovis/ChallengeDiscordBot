@@ -123,6 +123,7 @@ class DiscordServiceTest {
 		Challenge challenge = new Challenge();
 		challenge.setId("c1");
 		challenge.setActive(true);
+		challenge.getParticipantProgress().put("user1", 1L);
 		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
 		when(progressHistoryRepository.hasProgressLastHours(List.of("c1"), 24)).thenReturn(false);
 
@@ -136,6 +137,7 @@ class DiscordServiceTest {
 		Challenge challenge = new Challenge();
 		challenge.setId("c1");
 		challenge.setActive(true);
+		challenge.getParticipantProgress().put("user1", 1L);
 		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
 		when(progressHistoryRepository.hasProgressLastHours(List.of("c1"), 24)).thenReturn(true);
 
