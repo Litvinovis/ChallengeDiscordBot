@@ -408,7 +408,8 @@ class ChallengeLifecyclePostgresTest {
     void progressCanCommitDuringDiscordDeliveryAndCancelsStaleWarning() throws Exception {
         enroll("a");
         Instant now = Instant.now();
-        lastProgress("a", now.minus(Duration.ofDays(14)));
+        // Здесь проверяем блокировки, а не границу 14 суток с округлением до микросекунд в PostgreSQL.
+        lastProgress("a", now.minus(Duration.ofDays(15)));
         var sending = new CountDownLatch(1);
         var finish = new CountDownLatch(1);
         when(discord.sendInactivityNotification(eq("123"), anyString())).thenAnswer(invocation -> {
