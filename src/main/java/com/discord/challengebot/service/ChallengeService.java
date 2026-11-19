@@ -85,10 +85,6 @@ public class ChallengeService implements IChallengeService {
 		return progressRepository.findByChallengeId(challenge.getId());
 	}
 
-	private List<String> loadParticipantIds(Challenge challenge) {
-		return new ArrayList<>(progressRepository.findByChallengeId(challenge.getId()).keySet());
-	}
-
     private void checkProgressPeriod(Challenge challenge) {
         if (challengeRepository.hasClosedProgressPeriod(challenge.getId(), challenge.getStartDate(),
                 LocalDateTime.now(TimeZones.MOSCOW))) {
@@ -270,12 +266,12 @@ public class ChallengeService implements IChallengeService {
 	public ChallengeStats getChallengeStats(Challenge challenge) {
 		try {
 			if (challenge == null) return null;
-			long remaining = challenge.getTargetValue() - challenge.getCurrentValue();
+			long remaining = Math.max(0, challenge.getTargetValue() - challenge.getCurrentValue());
 			double percentage = challenge.getTargetValue() > 0
 							? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
 			long daysRemaining = challenge.getEndDate() != null
 							? ChronoUnit.DAYS.between(LocalDate.now(TimeZones.MOSCOW), challenge.getEndDate().toLocalDate()) : 0;
-			int participantCount = Math.max(loadParticipantIds(challenge).size(), 1);
+			int participantCount = Math.max(challenge.getParticipantProgress().size(), 1);
 			double dailyTarget = daysRemaining > 0
 							? (double) remaining / participantCount / daysRemaining : 0;
 			return new ChallengeStats(challenge.getName(), challenge.getTargetValue(),
@@ -371,7 +367,11 @@ public class ChallengeService implements IChallengeService {
 		if (challenge == null || userId == null || userId.isBlank() || progress < 0) return challenge;
 		challengeRepository.lockById(challenge.getId());
 		checkProgressPeriod(challenge);
+		long previous = progressRepository.getAmount(challenge.getId(), userId);
 		progressRepository.upsert(challenge.getId(), userId, progress);
+		if (previous != progress) {
+			progressHistoryRepository.recordAdjustment(challenge.getId(), userId, progress - previous);
+		}
 		challengeRepository.addParticipant(challenge.getId(), userId);
 		challengeRepository.refreshCurrentValue(challenge.getId());
 		challenge.addParticipant(userId);
@@ -451,10 +451,12 @@ public class ChallengeService implements IChallengeService {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void completeChallenge(Challenge challenge) {
-		if (challenge == null) return;
+	public boolean completeChallenge(Challenge challenge) {
+		if (challenge == null || !challengeRepository.markCompleted(challenge.getId(), LocalDateTime.now(TimeZones.MOSCOW))) {
+			return false;
+		}
 		challenge.setActive(false);
-		challengeRepository.updateActive(challenge.getId(), false);
 		logger.info("Испытание '{}' завершено", challenge.getName());
+		return true;
 	}
 }

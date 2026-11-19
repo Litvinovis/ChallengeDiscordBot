@@ -1,6 +1,7 @@
 package com.discord.challengebot.command;
 
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.util.ChallengeDeadline;
 import com.discord.challengebot.service.IChallengeService;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -61,7 +62,7 @@ public class ListChallengesCommand extends BaseCommand {
 				message.append("  Цель: ").append(challenge.getTargetValue()).append(" ").append(challenge.getUnit()).append("\n");
 				message.append("  Участников: ").append(challenge.getParticipants().size()).append("\n");
 				message.append("  Окончание: ")
-								.append(challenge.getEndDate() != null ? challenge.getEndDate().toLocalDate().toString() : "—")
+								.append(ChallengeDeadline.format(challenge.getEndDate()))
 								.append("\n\n");
 			}
 			reply(event, message.toString());

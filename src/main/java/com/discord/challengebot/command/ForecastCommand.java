@@ -1,6 +1,7 @@
 package com.discord.challengebot.command;
 
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.service.IChallengeService;
 import com.discord.challengebot.service.IStatisticsService;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -69,13 +70,15 @@ public class ForecastCommand extends BaseCommand {
 				return;
 			}
 
-			long userProgress = challenge.getParticipantProgress().getOrDefault(authorId, 0L);
+			boolean group = challenge.getType() == ChallengeType.GROUP;
+			long current = group ? challenge.getCurrentValue() : challenge.getParticipantProgress().getOrDefault(authorId, 0L);
 			long targetValue = challenge.getTargetValue();
 
-			if (userProgress >= targetValue) {
+			if (current >= targetValue) {
 				channel.sendMessage(String.format(
-								"✅ Ты уже выполнил цель по испытанию \"%s\"! (%d/%d)",
-								challenge.getName(), userProgress, targetValue
+								group ? "✅ Команда уже выполнила цель по испытанию \"%s\"! (%d/%d)"
+									: "✅ Ты уже выполнил цель по испытанию \"%s\"! (%d/%d)",
+								challenge.getName(), current, targetValue
 				)).queue();
 				return;
 			}
@@ -91,13 +94,13 @@ public class ForecastCommand extends BaseCommand {
 				return;
 			}
 
-			long remaining = targetValue - userProgress;
+			long remaining = targetValue - current;
 			channel.sendMessage(String.format(
 							"📅 **Прогноз по испытанию \"%s\":**\n" +
 											"Выполнено: %d / %d\n" +
 											"Осталось: %d\n" +
-											"При текущем темпе ты закончишь цель к **%s**",
-							challenge.getName(), userProgress, targetValue, remaining, forecast
+											"При текущем темпе %s выполнит цель к **%s**",
+							challenge.getName(), current, targetValue, remaining, group ? "команда" : "участник", forecast
 			)).queue();
 
 		} catch (Exception e) {

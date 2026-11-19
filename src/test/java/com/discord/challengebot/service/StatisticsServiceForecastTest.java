@@ -131,6 +131,18 @@ class StatisticsServiceForecastTest {
 		assertTrue(result.isAfter(LocalDate.now(TimeZones.MOSCOW)));
 	}
 
+	@Test
+	void groupForecastUsesTeamRemainingAndTeamPace() {
+		Challenge challenge = buildChallenge(1000, 600);
+		challenge.setType(ChallengeType.GROUP);
+		challenge.getParticipantProgress().put("user1", 300L);
+		when(progressHistoryRepository.getUserTotalsInRange(eq(challenge.getId()), any(), any()))
+				.thenReturn(Map.of("user1", 70L, "user2", 70L));
+
+		assertEquals(LocalDate.now(TimeZones.MOSCOW).plusDays(20),
+				statisticsService.forecastCompletionDate(challenge, "user1"));
+	}
+
 	// ---- Вспомогательные методы ----
 
 	private Challenge buildChallenge(long target, long current) {
@@ -139,7 +151,7 @@ class StatisticsServiceForecastTest {
 		challenge.setName("Test Challenge");
 		challenge.setTargetValue(target);
 		challenge.setCurrentValue(current);
-		challenge.setType(ChallengeType.GROUP);
+		challenge.setType(ChallengeType.INDIVIDUAL);
 		challenge.setStartDate(LocalDateTime.now().minusDays(10));
 		challenge.setEndDate(LocalDateTime.now().plusDays(60));
 		challenge.setActive(true);

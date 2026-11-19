@@ -171,9 +171,10 @@ public interface IChallengeService {
 	List<Map.Entry<String, Long>> getTopParticipants(Challenge challenge, int limit);
 
 	/**
-	 * Завершает испытание, устанавливая его статус в неактивный.
+	 * Завершает активное испытание без срока, если оно достигло цели.
 	 *
 	 * @param challenge испытание
+	 * @return удалось отметить завершение
 	 */
-	void completeChallenge(Challenge challenge);
+	boolean completeChallenge(Challenge challenge);
 }

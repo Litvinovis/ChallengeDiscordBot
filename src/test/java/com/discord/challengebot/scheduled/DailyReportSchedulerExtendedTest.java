@@ -1,7 +1,9 @@
 package com.discord.challengebot.scheduled;
 
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.repository.ChallengeRepository;
 import com.discord.challengebot.service.ChallengeService;
+import com.discord.challengebot.service.ChallengeRenewalService;
 import com.discord.challengebot.service.DiscordService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,12 @@ class DailyReportSchedulerExtendedTest {
 	@Mock
 	private ChallengeService challengeService;
 
+	@Mock
+	private ChallengeRepository challengeRepository;
+
+	@Mock
+	private ChallengeRenewalService renewalService;
+
 	@InjectMocks
 	private DailyReportScheduler dailyReportScheduler;
 
@@ -36,86 +44,25 @@ class DailyReportSchedulerExtendedTest {
 		MockitoAnnotations.openMocks(this);
 	}
 
-	// ---- cleanupOldData ----
-
 	@Test
-	void cleanupOldData_deletesInactiveChallengesOlderThan30Days() {
-		Challenge old = new Challenge();
-		old.setName("OldChallenge");
-		old.setActive(false);
-		old.setEndDate(LocalDateTime.now().minusDays(31));
-
-		when(challengeService.getAllChallenges()).thenReturn(List.of(old));
-		when(challengeService.deleteChallenge("OldChallenge")).thenReturn(true);
+	void cleanupArchivesOnlyConfirmedCompletions() {
+		when(challengeRepository.findCompletedBefore(any())).thenReturn(List.of("old"));
 
 		dailyReportScheduler.cleanupOldData();
 
-		verify(challengeService).deleteChallenge("OldChallenge");
+		verify(renewalService).archiveCompleted(eq("old"), any());
+		verifyNoInteractions(challengeService);
 	}
 
 	@Test
-	void cleanupOldData_doesNotDeleteActiveChallenges() {
-		Challenge active = new Challenge();
-		active.setName("ActiveChallenge");
-		active.setActive(true);
-		active.setEndDate(LocalDateTime.now().minusDays(31));
-
-		when(challengeService.getAllChallenges()).thenReturn(List.of(active));
+	void cleanupContinuesWhenOneArchiveFails() {
+		when(challengeRepository.findCompletedBefore(any())).thenReturn(List.of("failed", "other"));
+		when(renewalService.archiveCompleted(eq("failed"), any())).thenThrow(new IllegalStateException("archive"));
 
 		dailyReportScheduler.cleanupOldData();
 
-		verify(challengeService, never()).deleteChallenge(anyString());
-	}
-
-	@Test
-	void cleanupOldData_doesNotDeleteRecentInactiveChallenges() {
-		Challenge recent = new Challenge();
-		recent.setName("RecentCompleted");
-		recent.setActive(false);
-		recent.setEndDate(LocalDateTime.now().minusDays(5)); // within 30 days
-
-		when(challengeService.getAllChallenges()).thenReturn(List.of(recent));
-
-		dailyReportScheduler.cleanupOldData();
-
-		verify(challengeService, never()).deleteChallenge(anyString());
-	}
-
-	@Test
-	void cleanupOldData_emptyList_doesNothing() {
-		when(challengeService.getAllChallenges()).thenReturn(Collections.emptyList());
-
-		dailyReportScheduler.cleanupOldData();
-
-		verify(challengeService, never()).deleteChallenge(anyString());
-	}
-
-	@Test
-	void cleanupOldData_mixedChallenges_deletesOnlyEligible() {
-		Challenge oldCompleted = new Challenge();
-		oldCompleted.setName("OldDone");
-		oldCompleted.setActive(false);
-		oldCompleted.setEndDate(LocalDateTime.now().minusDays(40));
-
-		Challenge recentCompleted = new Challenge();
-		recentCompleted.setName("RecentDone");
-		recentCompleted.setActive(false);
-		recentCompleted.setEndDate(LocalDateTime.now().minusDays(10));
-
-		Challenge stillActive = new Challenge();
-		stillActive.setName("Active");
-		stillActive.setActive(true);
-		stillActive.setEndDate(LocalDateTime.now().plusDays(10));
-
-		when(challengeService.getAllChallenges())
-						.thenReturn(Arrays.asList(oldCompleted, recentCompleted, stillActive));
-		when(challengeService.deleteChallenge("OldDone")).thenReturn(true);
-
-		dailyReportScheduler.cleanupOldData();
-
-		verify(challengeService, times(1)).deleteChallenge("OldDone");
-		verify(challengeService, never()).deleteChallenge("RecentDone");
-		verify(challengeService, never()).deleteChallenge("Active");
+		verify(renewalService).archiveCompleted(eq("other"), any());
+		verifyNoInteractions(challengeService);
 	}
 
 	// ---- checkChallengeCompletions — multiple challenges ----
@@ -134,7 +81,8 @@ class DailyReportSchedulerExtendedTest {
 		c2.setCurrentValue(100L);
 		c2.setActive(true);
 
-		when(challengeService.getAllChallenges()).thenReturn(Arrays.asList(c1, c2));
+		when(challengeRepository.findDue(any())).thenReturn(Arrays.asList(c1, c2));
+		when(challengeService.completeChallenge(any())).thenReturn(true);
 
 		dailyReportScheduler.checkChallengeCompletions();
 
@@ -144,27 +92,10 @@ class DailyReportSchedulerExtendedTest {
 		verify(discordService).sendChallengeCompletionNotification(c2);
 	}
 
-	@Test
-	void checkChallengeCompletions_inactiveChallenge_isSkipped() {
-		Challenge inactive = new Challenge();
-		inactive.setName("InactiveChallenge");
-		inactive.setTargetValue(100L);
-		inactive.setCurrentValue(100L);
-		inactive.setActive(false); // already inactive
-		inactive.setEndDate(LocalDateTime.now().plusDays(1));
-
-		when(challengeService.getAllChallenges()).thenReturn(List.of(inactive));
-
-		dailyReportScheduler.checkChallengeCompletions();
-
-		verify(challengeService, never()).completeChallenge(any());
-		verify(discordService, never()).sendChallengeCompletionNotification(any());
-		verify(discordService, never()).sendChallengeFailureNotification(any());
-	}
 
 	@Test
 	void checkChallengeCompletions_emptyList_doesNothing() {
-		when(challengeService.getAllChallenges()).thenReturn(Collections.emptyList());
+		when(challengeRepository.findDue(any())).thenReturn(Collections.emptyList());
 
 		dailyReportScheduler.checkChallengeCompletions();
 
@@ -181,7 +112,8 @@ class DailyReportSchedulerExtendedTest {
 		overachieved.setCurrentValue(150L); // exceeded target
 		overachieved.setActive(true);
 
-		when(challengeService.getAllChallenges()).thenReturn(List.of(overachieved));
+		when(challengeRepository.findDue(any())).thenReturn(List.of(overachieved));
+		when(challengeService.completeChallenge(any())).thenReturn(true);
 
 		dailyReportScheduler.checkChallengeCompletions();
 

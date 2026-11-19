@@ -4,6 +4,7 @@ import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.repository.ChallengeArchiveRepository;
 import com.discord.challengebot.repository.ChallengeProgressRepository;
 import com.discord.challengebot.repository.ChallengeRepository;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import com.discord.challengebot.util.TimeZones;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +23,14 @@ public class ChallengeRenewalService {
     private final ChallengeRepository challenges;
     private final ChallengeProgressRepository progress;
     private final ChallengeArchiveRepository archive;
+    private final ProgressHistoryRepository history;
 
     public ChallengeRenewalService(ChallengeRepository challenges, ChallengeProgressRepository progress,
-                                   ChallengeArchiveRepository archive) {
+                                   ChallengeArchiveRepository archive, ProgressHistoryRepository history) {
         this.challenges = challenges;
         this.progress = progress;
         this.archive = archive;
+        this.history = history;
     }
 
     public record Renewal(Challenge previous, long nextTarget, LocalDateTime nextDeadline, boolean goalReached) {}
@@ -58,6 +61,21 @@ public class ChallengeRenewalService {
         progress.resetForRenewal(id, now.atZone(TimeZones.MOSCOW).toInstant());
         challenges.startNextCycle(id, nextTarget, now, nextDeadline);
         return Optional.of(new Renewal(previous, nextTarget, nextDeadline, reached));
+    }
+
+    @Transactional
+    public boolean archiveCompleted(String id, LocalDateTime cutoff) {
+        challenges.lockById(id);
+        var completed = challenges.findCompletedAt(id).orElse(null);
+        if (completed == null || completed.isAfter(cutoff)) return false;
+        Challenge challenge = challenges.findById(id).orElseThrow();
+        if (challenge.getEndDate() == null) challenge.setEndDate(completed);
+        String archiveId = UUID.randomUUID().toString();
+        archive.archive(challenge, archiveId);
+        history.moveToArchive(id, archiveId);
+        progress.deleteByChallengeId(id);
+        challenges.deleteById(id);
+        return true;
     }
 
     static long roundTarget(long target, boolean reached) {

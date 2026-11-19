@@ -4,6 +4,7 @@ import com.discord.challengebot.service.DiscordService;
 import com.discord.challengebot.service.ChallengeRenewalService;
 import com.discord.challengebot.service.ChallengeService;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.repository.ChallengeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -26,6 +27,9 @@ class DailyReportSchedulerTest {
 
 	@Mock
 	private ChallengeRenewalService renewalService;
+
+	@Mock
+	private ChallengeRepository challengeRepository;
 
 	@InjectMocks
 	private DailyReportScheduler dailyReportScheduler;
@@ -54,7 +58,7 @@ class DailyReportSchedulerTest {
 		challenge.setActive(true);
 		challenge.setEndDate(LocalDateTime.now().plusDays(1)); // Еще не просрочено
 
-		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
+		when(challengeRepository.findDue(any())).thenReturn(List.of(challenge));
 
 		// When
 		dailyReportScheduler.checkChallengeCompletions();
@@ -73,7 +77,7 @@ class DailyReportSchedulerTest {
 		challenge.setEndDate(LocalDateTime.of(2000, 7, 1, 12, 0));
 		var renewal = new ChallengeRenewalService.Renewal(challenge, 700,
 				LocalDateTime.of(2040, 7, 1, 12, 0), false);
-		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
+		when(challengeRepository.findDue(any())).thenReturn(List.of(challenge));
 		when(renewalService.renewIfDue(eq("test"), any())).thenReturn(Optional.of(renewal));
 
 		dailyReportScheduler.checkChallengeCompletions();
@@ -92,7 +96,7 @@ class DailyReportSchedulerTest {
 		challenge.setActive(true);
 		challenge.setEndDate(LocalDateTime.now().plusDays(1)); // Не просрочено
 
-		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
+		when(challengeRepository.findDue(any())).thenReturn(List.of(challenge));
 
 		// When
 		dailyReportScheduler.checkChallengeCompletions();

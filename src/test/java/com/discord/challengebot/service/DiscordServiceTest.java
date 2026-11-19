@@ -154,4 +154,31 @@ class DiscordServiceTest {
 
 		verify(progressHistoryRepository, never()).hasProgressLastHours(any(), anyInt());
 	}
+
+    @Test
+    void periodReportUsesWorkoutsWithinRangeAndSeparatesCurrentCycle() {
+        var report = spy(discordService);
+        var challenge = new Challenge();
+        challenge.setId("pushups");
+        challenge.setName("Отжимания");
+        challenge.setUnit("раз");
+        challenge.setTargetValue(1000);
+        challenge.setCurrentValue(600);
+        challenge.getParticipantProgress().put("123", 600L);
+        var from = java.time.LocalDate.of(2030, 1, 1);
+        var to = from.plusMonths(1);
+        when(discordConfig.getReportChannel()).thenReturn("announcements");
+        when(challengeService.getActiveChallenges()).thenReturn(java.util.List.of(challenge));
+        when(progressHistoryRepository.getWorkoutTotalsInRange(from.atStartOfDay(), to.atStartOfDay()))
+                .thenReturn(java.util.Map.of("pushups", java.util.Map.of("123", 42L)));
+        when(statisticsService.formatLeaderboardForDiscord(eq(challenge), anyList())).thenReturn("Лидеры");
+        doNothing().when(report).sendMessageToChannel(anyString(), anyString());
+
+        report.sendPeriodReport("Итоги месяца", from, to);
+
+        verify(report).sendMessageToChannel(eq("announcements"), contains("01.01.2030–31.01.2030"));
+        verify(report).sendMessageToChannel(eq("announcements"), contains("за период: **42**"));
+        verify(report).sendMessageToChannel(eq("announcements"), contains("Текущий цикл: **600 / 1000**"));
+        verify(challengeService, never()).getTopParticipants(any(), anyInt());
+    }
 }

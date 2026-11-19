@@ -107,6 +107,31 @@ public class ChallengeRepository {
 						this::mapRow);
 	}
 
+    public List<Challenge> findDue(LocalDateTime now) {
+        return jdbc.query("""
+                SELECT id, name, target_value, current_value, chal_type, start_date, end_date,
+                       active, description, unit, participants FROM challenges
+                WHERE active AND (end_date <= ? OR (end_date IS NULL AND current_value >= target_value))
+                ORDER BY id
+                """, this::mapRow, now);
+    }
+
+    public List<String> findCompletedBefore(LocalDateTime cutoff) {
+        return jdbc.queryForList("SELECT id FROM challenges WHERE NOT active AND completed_at <= ?", String.class, cutoff);
+    }
+
+    public Optional<LocalDateTime> findCompletedAt(String id) {
+        return jdbc.query("SELECT completed_at FROM challenges WHERE id = ? AND NOT active AND completed_at IS NOT NULL",
+                (rs, row) -> rs.getObject(1, LocalDateTime.class), id).stream().findFirst();
+    }
+
+    public boolean markCompleted(String id, LocalDateTime now) {
+        return jdbc.update("""
+                UPDATE challenges SET active = false, completed_at = ?
+                WHERE id = ? AND active AND end_date IS NULL AND current_value >= target_value
+                """, now, id) == 1;
+    }
+
 	/**
 	 * Пересчитывает current_value испытания из challenge_progress одним запросом.
 	 * Точечный UPDATE вместо перезаписи всей строки не даёт параллельным командам
@@ -156,7 +181,7 @@ public class ChallengeRepository {
 	/** Обновляет только флаг активности испытания. */
 	public void updateActive(String id, boolean active) {
 		if (id == null) return;
-		jdbc.update("UPDATE challenges SET active = ? WHERE id = ?", active, id);
+		jdbc.update("UPDATE challenges SET active = ?, completed_at = NULL WHERE id = ?", active, id);
 	}
 
 	public void deleteById(String id) {

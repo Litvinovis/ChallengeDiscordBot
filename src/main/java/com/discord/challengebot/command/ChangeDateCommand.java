@@ -1,6 +1,7 @@
 package com.discord.challengebot.command;
 
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.util.ChallengeDeadline;
 import com.discord.challengebot.service.IChallengeService;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -10,9 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.core.annotation.Order;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 /**
@@ -61,15 +60,10 @@ public class ChangeDateCommand extends BaseCommand {
 			String challengeName = args[1];
 			LocalDateTime newEndDate;
 			try {
-				newEndDate = LocalDate.parse(args[2], DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+				newEndDate = ChallengeDeadline.parseLastDay(args[2]);
 			} catch (DateTimeParseException e) {
-				try {
-					// LocalDateTime.parse с шаблоном без времени всегда падал — ISO-даты не принимались
-					newEndDate = LocalDate.parse(args[2], DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
-				} catch (DateTimeParseException e2) {
-					channel.sendMessage("Дата должна быть в формате dd.MM.yyyy или yyyy-MM-dd (например: 31.12.2025).").queue();
-					return;
-				}
+				channel.sendMessage("Дата должна быть в формате dd.MM.yyyy или yyyy-MM-dd.").queue();
+				return;
 			}
 			Challenge challenge = challengeService.getChallenge(challengeName);
 			if (challenge == null) {
@@ -78,7 +72,7 @@ public class ChangeDateCommand extends BaseCommand {
 			}
 			Challenge updated = challengeService.updateChallengeEndDate(challenge, newEndDate);
 			if (updated != null) {
-				channel.sendMessage("Дата окончания испытания \"" + challengeName + "\" изменена на " + args[2] + ".").queue();
+				channel.sendMessage("Дата окончания испытания \"" + challengeName + "\" изменена на " + ChallengeDeadline.format(newEndDate) + ".").queue();
 			} else {
 				channel.sendMessage("Ошибка при изменении даты окончания испытания \"" + challengeName + "\".").queue();
 			}

@@ -1,11 +1,7 @@
 package com.discord.challengebot.command;
 
-import com.discord.challengebot.model.Challenge;
-import com.discord.challengebot.repository.ChallengeProgressRepository;
-import com.discord.challengebot.service.IChallengeService;
+import com.discord.challengebot.service.ChallengeBackupService;
 import com.discord.challengebot.service.IUserService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.utils.FileUpload;
 import org.slf4j.Logger;
@@ -14,12 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import com.discord.challengebot.util.TimeZones;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Команда {@code +бэкап} — экспорт всех испытаний и прогресса в JSON-файл (только для администраторов).
@@ -30,17 +21,9 @@ public class BackupCommand extends BaseCommand {
     private static final Logger logger = LoggerFactory.getLogger(BackupCommand.class);
 
     @Autowired
-    private IChallengeService challengeService;
-    @Autowired
-    private ChallengeProgressRepository progressRepository;
+    private ChallengeBackupService backupService;
     @Autowired
     private IUserService userService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .enable(SerializationFeature.INDENT_OUTPUT)
-            // ISO-строки дат — именно их разбирает ImportCommand через LocalDateTime.parse
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .findAndRegisterModules();
 
     @Override
     public boolean canHandle(String cmd) {
@@ -54,19 +37,10 @@ public class BackupCommand extends BaseCommand {
                 replyError(event, "Недостаточно прав для выполнения команды");
                 return;
             }
-            List<Challenge> challenges = challengeService.getAllChallenges();
-            Map<String, Map<String, Long>> progress = new HashMap<>();
-            for (Challenge c : challenges) {
-                progress.put(c.getId(), progressRepository.findByChallengeId(c.getId()));
-            }
-            Map<String, Object> backup = new LinkedHashMap<>();
-            backup.put("exportedAt", LocalDateTime.now(TimeZones.MOSCOW).toString());
-            backup.put("challenges", challenges);
-            backup.put("progress", progress);
-            byte[] jsonBytes = objectMapper.writeValueAsBytes(backup);
+            byte[] jsonBytes = backupService.exportSnapshot().getBytes(StandardCharsets.UTF_8);
             event.getChannel().asTextChannel()
                     .sendFiles(FileUpload.fromData(jsonBytes, "backup.json"))
-                    .setContent("💾 Бэкап данных создан (" + challenges.size() + " испытаний)")
+                    .setContent("💾 Полный бэкап данных создан.")
                     .queue();
         } catch (Exception e) {
             logger.error("Ошибка обработки команды +бэкап", e);

@@ -1,9 +1,6 @@
 package com.discord.challengebot.command;
 
-import com.discord.challengebot.model.Challenge;
-import com.discord.challengebot.model.ChallengeType;
-import com.discord.challengebot.repository.ChallengeProgressRepository;
-import com.discord.challengebot.service.IChallengeService;
+import com.discord.challengebot.service.ChallengeBackupService;
 import com.discord.challengebot.service.IUserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,9 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -38,9 +32,7 @@ import static org.mockito.Mockito.*;
 class BackupCommandTest {
 
 	@Mock
-	private IChallengeService challengeService;
-	@Mock
-	private ChallengeProgressRepository progressRepository;
+	private ChallengeBackupService backupService;
 	@Mock
 	private IUserService userService;
 
@@ -67,12 +59,10 @@ class BackupCommandTest {
 	}
 
 	@Test
-	void backup_serializesDates_asIsoStringsReadableByImport() throws Exception {
-		LocalDateTime end = LocalDateTime.of(2026, 12, 31, 0, 0);
-		Challenge challenge = new Challenge("отжимания", "Отжимания", 10000, ChallengeType.GROUP,
-						LocalDateTime.of(2026, 1, 1, 10, 30), end, "desc", "раз");
-		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
-		when(progressRepository.findByChallengeId("отжимания")).thenReturn(Map.of("u1", 42L));
+	void backupAttachesCompleteSnapshot() throws Exception {
+		when(backupService.exportSnapshot()).thenReturn("""
+				{"version":2,"progress_history":[{"amount":42}],"challenge_archive":[]}
+				""");
 
 		command.execute(event, new String[]{"бэкап"}, "admin", "Admin");
 
@@ -80,10 +70,7 @@ class BackupCommandTest {
 		ArgumentCaptor<FileUpload> upload = ArgumentCaptor.forClass(FileUpload.class);
 		verify(textChannel).sendFiles(upload.capture());
 		JsonNode root = new ObjectMapper().readTree(upload.getValue().getData().readAllBytes());
-
-		JsonNode saved = root.path("challenges").get(0);
-		// ImportCommand читает дату через LocalDateTime.parse
-		assertEquals(end, LocalDateTime.parse(saved.path("endDate").asText()));
-		assertEquals(42L, root.path("progress").path("отжимания").path("u1").asLong());
+		assertEquals(2, root.path("version").asInt());
+		assertEquals(42, root.path("progress_history").get(0).path("amount").asInt());
 	}
 }
