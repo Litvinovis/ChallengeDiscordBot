@@ -1,11 +1,10 @@
 package com.discord.challengebot.command;
 
-import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.service.IChallengeService;
-import com.discord.challengebot.service.IStatisticsService;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import com.discord.challengebot.service.IVisualizationService;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import com.discord.challengebot.util.TimeZones;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.utils.FileUpload;
 import org.slf4j.Logger;
@@ -14,21 +13,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Map;
 
 /**
- * Команда {@code +график [название испытания]} — генерирует и отправляет PNG-график прогресса.
- * Использование: {@code +график <название>}.
+ * Команда {@code +график <название испытания>} — личный календарь активности.
  */
 @Component
 @Order(2)
 public class ProgressChartCommand extends BaseCommand {
+	private static final int CALENDAR_DAYS = 365;
 	private static final Logger logger = LoggerFactory.getLogger(ProgressChartCommand.class);
 
 	@Autowired
 	private IChallengeService challengeService;
 	@Autowired
-	private IStatisticsService statisticsService;
+	private ProgressHistoryRepository progressHistoryRepository;
 	@Autowired
 	private IVisualizationService visualizationService;
 
@@ -46,7 +47,7 @@ public class ProgressChartCommand extends BaseCommand {
 
 	/**
 	 * {@inheritDoc}
-	 * Ищет испытание по названию, генерирует PNG-график прогресса и отправляет в канал.
+	 * Отправляет календарь прогресса автора команды по выбранному испытанию.
 	 *
 	 * @param event    событие получения сообщения Discord
 	 * @param args     args[0] — "график", args[1..] — название испытания
@@ -55,7 +56,6 @@ public class ProgressChartCommand extends BaseCommand {
 	 */
 	@Override
 	public void execute(MessageReceivedEvent event, String[] args, String authorId, String username) {
-		TextChannel channel = event.getChannel().asTextChannel();
 		try {
 			if (args.length < 2) {
 				replyError(event, "Укажите название испытания. Пример: `+график Отжимания`");
@@ -69,20 +69,18 @@ public class ProgressChartCommand extends BaseCommand {
 				return;
 			}
 
-			ChallengeStats stats = statisticsService.calculateStats(challenge);
-			if (stats == null) {
-				replyError(event, "Не удалось получить статистику для испытания \"" + challengeName + "\".");
-				return;
-			}
-
-			byte[] imageBytes = visualizationService.generateProgressChart(stats).get();
+			LocalDate today = LocalDate.now(TimeZones.MOSCOW);
+			LocalDate start = today.minusDays(CALENDAR_DAYS - 1);
+			Map<LocalDate, Long> dailyTotals = progressHistoryRepository.getDailyTotals(
+					challenge.getId(), authorId, CALENDAR_DAYS);
+			byte[] imageBytes = visualizationService.generateActivityCalendar(start, today, dailyTotals).get();
 			if (imageBytes == null || imageBytes.length == 0) {
 				replyError(event, "Не удалось сгенерировать график для испытания \"" + challengeName + "\".");
 				return;
 			}
 
-			channel.sendFiles(FileUpload.fromData(imageBytes, "progress.png"))
-					.setContent("📊 График прогресса: **" + challengeName + "**")
+			event.getChannel().sendFiles(FileUpload.fromData(imageBytes, "activity-calendar.png"))
+					.setContent("📅 Личный календарь активности · **" + challengeName + "**")
 					.queue();
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
