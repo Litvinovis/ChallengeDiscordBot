@@ -2,6 +2,7 @@ package com.discord.challengebot.scheduled;
 
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.repository.ChallengeArchiveRepository;
+import com.discord.challengebot.service.ChallengeRenewalService;
 import com.discord.challengebot.service.ChallengeService;
 import com.discord.challengebot.service.DiscordService;
 import org.slf4j.Logger;
@@ -32,6 +33,9 @@ public class DailyReportScheduler {
 	@Autowired
 	private ChallengeArchiveRepository challengeArchiveRepository;
 
+	@Autowired
+	private ChallengeRenewalService challengeRenewalService;
+
 	/**
 	 * Отправка ежедневных отчетов о прогрессе в 7:00 утра
 	 */
@@ -46,64 +50,25 @@ public class DailyReportScheduler {
 		}
 	}
 
-	/**
-	 * Проверка завершения испытаний каждый час
-	 */
-	@Scheduled(cron = "0 0 * * * ?", zone = "Europe/Moscow") // Каждый час
+	/** Проверка сроков испытаний по московскому времени. */
+	@Scheduled(cron = "0 * * * * *", zone = "Europe/Moscow")
 	public void checkChallengeCompletions() {
-		logger.info("Проверка завершения испытаний");
-
-		try {
-			// Получаем все активные испытания
-			List<Challenge> challenges = challengeService.getAllChallenges();
-			LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
-
-			logger.debug("Получено {} активных испытаний для проверки завершения", challenges.size());
-
-			int completedChallenges = 0;
-			for (Challenge challenge : challenges) {
-				// Проверяем, активно ли испытание и достигнута ли цель
-				if (challenge.isActive() && isChallengeCompleted(challenge)) {
-					logger.info("Испытание '{}' завершено по достижению цели", challenge.getName());
-					// Испытание завершено успешно по достижению цели
+		LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
+		for (Challenge challenge : challengeService.getAllChallenges()) {
+			if (!challenge.isActive()) continue;
+			try {
+				if (challenge.getEndDate() != null) {
+					if (!challenge.getEndDate().isAfter(now)) {
+						challengeRenewalService.renewIfDue(challenge.getId(), now)
+								.ifPresent(discordService::sendChallengeRenewalNotification);
+					}
+				} else if (challenge.getCurrentValue() >= challenge.getTargetValue()) {
 					challengeService.completeChallenge(challenge);
 					discordService.sendChallengeCompletionNotification(challenge);
-					completedChallenges++;
-				} else if (challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(now)) {
-					logger.info("Испытание '{}' завершено по истечению срока", challenge.getName());
-					// Испытание завершено по истечению срока без достижения цели
-					challengeService.completeChallenge(challenge);
-					discordService.sendChallengeFailureNotification(challenge);
-					completedChallenges++;
 				}
+			} catch (Exception e) {
+				logger.error("Ошибка при завершении испытания '{}'", challenge.getName(), e);
 			}
-
-			logger.info("Проверка завершения испытаний завершена. Завершено {} испытаний", completedChallenges);
-		} catch (Exception e) {
-			logger.error("Ошибка при проверке завершения испытаний", e);
-		}
-	}
-
-	/**
-	 * Проверяет, достигнуто ли целевое значение испытания.
-	 *
-	 * @param challenge испытание для проверки
-	 * @return {@code true}, если текущее значение >= целевого
-	 */
-	private boolean isChallengeCompleted(Challenge challenge) {
-		try {
-			logger.debug("Проверка завершения испытания по цели: {} (текущее значение: {}, целевое значение: {})",
-							challenge.getName(), challenge.getCurrentValue(), challenge.getTargetValue());
-
-			// Испытание считается завершенным, если текущее значение больше или равно целевому
-			boolean isCompleted = challenge.getCurrentValue() >= challenge.getTargetValue();
-
-			logger.debug("Статус завершения по цели для испытания '{}': {}", challenge.getName(), isCompleted);
-			return isCompleted;
-		} catch (Exception e) {
-			logger.error("Ошибка при проверке завершения испытания по цели: {}",
-							challenge != null ? challenge.getName() : "null", e);
-			return false;
 		}
 	}
 

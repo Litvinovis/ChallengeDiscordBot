@@ -127,14 +127,12 @@ class DailyReportSchedulerExtendedTest {
 		c1.setTargetValue(100L);
 		c1.setCurrentValue(100L);
 		c1.setActive(true);
-		c1.setEndDate(LocalDateTime.now().plusDays(1));
 
 		Challenge c2 = new Challenge();
 		c2.setName("C2");
 		c2.setTargetValue(100L);
 		c2.setCurrentValue(100L);
 		c2.setActive(true);
-		c2.setEndDate(LocalDateTime.now().plusDays(1));
 
 		when(challengeService.getAllChallenges()).thenReturn(Arrays.asList(c1, c2));
 
@@ -182,7 +180,6 @@ class DailyReportSchedulerExtendedTest {
 		overachieved.setTargetValue(100L);
 		overachieved.setCurrentValue(150L); // exceeded target
 		overachieved.setActive(true);
-		overachieved.setEndDate(LocalDateTime.now().plusDays(5));
 
 		when(challengeService.getAllChallenges()).thenReturn(List.of(overachieved));
 

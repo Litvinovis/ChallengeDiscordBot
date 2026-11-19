@@ -15,11 +15,15 @@ public class ChallengeArchiveRepository {
 
     public void archive(Challenge challenge) {
         if (challenge == null) return;
+        archive(challenge, challenge.getId());
+    }
+
+    public void archive(Challenge challenge, String archiveId) {
         jdbc.update(
                 "INSERT INTO challenge_archive (id, name, target_value, current_value, chal_type, " +
                 "start_date, end_date, description, unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                 "ON CONFLICT (id) DO NOTHING",
-                challenge.getId(),
+                archiveId,
                 challenge.getName(),
                 challenge.getTargetValue(),
                 challenge.getCurrentValue(),

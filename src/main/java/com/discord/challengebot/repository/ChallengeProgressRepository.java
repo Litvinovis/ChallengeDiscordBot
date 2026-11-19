@@ -121,6 +121,15 @@ public class ChallengeProgressRepository {
 		jdbc.update("DELETE FROM challenge_progress WHERE challenge_id = ? AND user_id = ?", challengeId, userId);
 	}
 
+    public void resetForRenewal(String challengeId, Instant start) {
+        jdbc.update("""
+                UPDATE challenge_progress
+                SET progress = 0, joined_at = ?, last_progress_at = NULL,
+                    first_inactivity_warning_at = NULL, second_inactivity_warning_at = NULL
+                WHERE challenge_id = ?
+                """, Timestamp.from(start), challengeId);
+    }
+
 	public void deleteByChallengeId(String challengeId) {
 		jdbc.update("DELETE FROM challenge_progress WHERE challenge_id = ?", challengeId);
 	}
