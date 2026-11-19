@@ -29,10 +29,23 @@ jobs:
           echo "/usr/lib/jvm/java-25-openjdk-amd64/bin" >> $GITHUB_PATH
 
       - name: Build & Test
-        run: mvn package -B
+        run: mvn clean package -B
 
-      - name: PostgreSQL integration tests
+      - name: PostgreSQL integration and Discord E2E tests
         run: bash scripts/test-postgres.sh
+
+      - name: Check combined test coverage
+        run: mvn -B jacoco:check
+
+      - name: Upload coverage and test reports
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: challenge-test-reports
+          path: |
+            target/site/jacoco/
+            target/surefire-reports/TEST-*.xml
 
       - name: Deploy (only on push/dispatch to main)
         if: github.event_name != 'pull_request'
