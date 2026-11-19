@@ -485,6 +485,16 @@ public class DiscordService implements IDiscordService {
 		}
 	}
 
+	public void sendChallengeRenewalNotification(ChallengeRenewalService.Renewal renewal) {
+		Challenge previous = renewal.previous();
+		String result = renewal.goalReached() ? "цель выполнена" : "цель не выполнена";
+		String deadline = renewal.nextDeadline().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+		sendMessageToChannel(discordConfig.getReportChannel(),
+				"**Испытание «%s» продлено!**\nВ прошлом цикле %s: %d из %d.\nНовая цель — **%d** до **%s МСК**."
+						.formatted(previous.getName(), result, previous.getCurrentValue(), previous.getTargetValue(),
+								renewal.nextTarget(), deadline));
+	}
+
 	/**
 	 * {@inheritDoc}
 	 */

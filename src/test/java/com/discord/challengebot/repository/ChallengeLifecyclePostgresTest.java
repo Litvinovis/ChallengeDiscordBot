@@ -30,7 +30,7 @@ import static org.mockito.Mockito.*;
 
 /** Реальный PostgreSQL запускается scripts/test-postgres.sh, прод-конфигурация не используется. */
 @EnabledIfEnvironmentVariable(named = "CHALLENGE_TEST_DB_URL", matches = ".+")
-class ChallengeInactivityPostgresTest {
+class ChallengeLifecyclePostgresTest {
     private PGSimpleDataSource ds;
     private JdbcTemplate jdbc;
     private String schema;
@@ -41,6 +41,7 @@ class ChallengeInactivityPostgresTest {
     private ChallengeService service;
     private DiscordService discord;
     private ChallengeInactivityService inactivity;
+    private ChallengeRenewalService renewal;
 
     @BeforeEach
     void setup() {
@@ -62,6 +63,7 @@ class ChallengeInactivityPostgresTest {
         discord = mock(DiscordService.class);
         when(discord.sendInactivityNotification(anyString(), anyString())).thenReturn(true);
         inactivity = transactional(new ChallengeInactivityService(challenges, progress, service, discord));
+        renewal = transactional(new ChallengeRenewalService(challenges, progress, new ChallengeArchiveRepository(jdbc)));
     }
 
     private void migrate() {
@@ -239,6 +241,60 @@ class ChallengeInactivityPostgresTest {
         assertEquals(0L, progress.findByChallengeId("a").get("123"));
         assertNull(progress.findInactivityStates("a").getFirst().firstWarningAt());
         assertTrue(participants.findById("123").orElseThrow().getRegisteredChallenges().contains("a"));
+    }
+
+    @Test
+    void renewsExactlyAtDeadlineAndOnlyOnceWithConcurrentChecks() throws Exception {
+        enroll("a");
+        LocalDateTime end = LocalDateTime.of(2030, 6, 20, 12, 0);
+        jdbc.update("UPDATE challenges SET start_date = ?, end_date = ?, target_value = 1000 WHERE id = 'a'",
+                end.minusDays(14), end);
+        Challenge previous = service.getChallenge("a");
+        service.addProgress(previous, "123", "Участник", 1100);
+        progress.markInactivityWarning("a", "123", false, Instant.now());
+        assertTrue(renewal.renewIfDue("a", end.minusNanos(1)).isEmpty());
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> renewal.renewIfDue("a", end));
+            var second = executor.submit(() -> renewal.renewIfDue("a", end));
+            assertNotEquals(first.get(10, TimeUnit.SECONDS).isPresent(), second.get(10, TimeUnit.SECONDS).isPresent());
+        }
+        assertTrue(renewal.renewIfDue("a", end.plusMinutes(1)).isEmpty());
+        var next = service.getChallenge("a");
+        assertEquals(1300, next.getTargetValue());
+        assertEquals(0, next.getCurrentValue());
+        assertEquals(end, next.getStartDate());
+        assertEquals(end.plusDays(14), next.getEndDate());
+        assertEquals(java.util.Map.of("123", 0L), next.getParticipantProgress());
+        assertTrue(participants.findById("123").orElseThrow().getRegisteredChallenges().contains("a"));
+        assertNull(progress.findInactivityStates("a").getFirst().firstWarningAt());
+        assertEquals(1100L, jdbc.queryForObject("SELECT current_value FROM challenge_archive", Long.class));
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM progress_history WHERE challenge_id = 'a'", Integer.class));
+        assertThrows(IllegalStateException.class, () -> service.addProgress(previous, "123", "Участник", 1));
+    }
+
+    @Test
+    void legacyDeadlineWithoutStartUsesOneYearAndLowersTarget() {
+        enroll("a");
+        var now = LocalDateTime.of(2030, 6, 20, 12, 0);
+        jdbc.update("UPDATE challenges SET start_date = NULL, end_date = ?, target_value = 1000 WHERE id = 'a'",
+                now.minusDays(2));
+        var result = renewal.renewIfDue("a", now).orElseThrow();
+        assertFalse(result.goalReached());
+        assertEquals(700, result.nextTarget());
+        assertEquals(now.plusDays(365), result.nextDeadline());
+    }
+
+    @Test
+    void skipsStoppedChallengeAndDoesNotRestartAnEmptyOne() {
+        Challenge stopped = enroll("stopped");
+        service.updateChallengeStatus(stopped, false);
+        LocalDateTime now = LocalDateTime.of(2030, 6, 20, 12, 0);
+        service.createChallenge("empty", 100, now.minusDays(1), ChallengeType.GROUP, "", "раз");
+        assertTrue(renewal.renewIfDue("stopped", now).isEmpty());
+        assertTrue(renewal.renewIfDue("empty", now).isEmpty());
+        assertFalse(challenges.findById("empty").orElseThrow().isActive());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM challenge_archive", Integer.class));
     }
 
     private static Challenge staleChallenge(String id) {

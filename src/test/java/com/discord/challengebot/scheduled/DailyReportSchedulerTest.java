@@ -1,6 +1,7 @@
 package com.discord.challengebot.scheduled;
 
 import com.discord.challengebot.service.DiscordService;
+import com.discord.challengebot.service.ChallengeRenewalService;
 import com.discord.challengebot.service.ChallengeService;
 import com.discord.challengebot.model.Challenge;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +12,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.Mockito.*;
 
@@ -21,6 +23,9 @@ class DailyReportSchedulerTest {
 
 	@Mock
 	private ChallengeService challengeService;
+
+	@Mock
+	private ChallengeRenewalService renewalService;
 
 	@InjectMocks
 	private DailyReportScheduler dailyReportScheduler;
@@ -40,7 +45,7 @@ class DailyReportSchedulerTest {
 	}
 
 	@Test
-	void testCheckChallengeCompletions_GoalReached() {
+	void testCheckChallengeCompletions_GoalReachedBeforeDeadlineWaits() {
 		// Given
 		Challenge challenge = new Challenge();
 		challenge.setName("Тестовое испытание");
@@ -55,30 +60,26 @@ class DailyReportSchedulerTest {
 		dailyReportScheduler.checkChallengeCompletions();
 
 		// Then
-		verify(challengeService, times(1)).completeChallenge(challenge);
-		verify(discordService, times(1)).sendChallengeCompletionNotification(challenge);
+		verify(challengeService, never()).completeChallenge(any());
+		verifyNoInteractions(renewalService, discordService);
 		verify(discordService, never()).sendChallengeFailureNotification(any());
 	}
 
 	@Test
-	void testCheckChallengeCompletions_DeadlineReachedWithoutGoal() {
-		// Given
+	void testCheckChallengeCompletions_DeadlineTriggersRenewal() {
 		Challenge challenge = new Challenge();
-		challenge.setName("Тестовое испытание");
-		challenge.setTargetValue(100);
-		challenge.setCurrentValue(50); // Цель не достигнута
+		challenge.setId("test");
 		challenge.setActive(true);
-		challenge.setEndDate(LocalDateTime.now().minusDays(1)); // Просрочено
-
+		challenge.setEndDate(LocalDateTime.of(2000, 7, 1, 12, 0));
+		var renewal = new ChallengeRenewalService.Renewal(challenge, 700,
+				LocalDateTime.of(2040, 7, 1, 12, 0), false);
 		when(challengeService.getAllChallenges()).thenReturn(List.of(challenge));
+		when(renewalService.renewIfDue(eq("test"), any())).thenReturn(Optional.of(renewal));
 
-		// When
 		dailyReportScheduler.checkChallengeCompletions();
 
-		// Then
-		verify(challengeService, times(1)).completeChallenge(challenge);
-		verify(discordService, times(1)).sendChallengeFailureNotification(challenge);
-		verify(discordService, never()).sendChallengeCompletionNotification(any());
+		verify(discordService).sendChallengeRenewalNotification(renewal);
+		verify(challengeService, never()).completeChallenge(any());
 	}
 
 	@Test

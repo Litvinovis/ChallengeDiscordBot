@@ -72,6 +72,22 @@ public class ChallengeRepository {
 				"AND NOT EXISTS (SELECT 1 FROM challenge_progress WHERE challenge_id = ?)", id, id) > 0;
 	}
 
+    public boolean hasClosedProgressPeriod(String id, LocalDateTime expectedStart, LocalDateTime now) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM challenges WHERE id = ? AND active
+                    AND (end_date <= ? OR start_date IS DISTINCT FROM ?::timestamp)
+                )
+                """, Boolean.class, id, now, expectedStart));
+    }
+
+    public void startNextCycle(String id, long target, LocalDateTime start, LocalDateTime end) {
+        jdbc.update("""
+                UPDATE challenges SET target_value = ?, current_value = 0, start_date = ?, end_date = ?
+                WHERE id = ?
+                """, target, start, end, id);
+    }
+
 	public boolean isInactive(String id) {
 		var states = jdbc.query("SELECT active FROM challenges WHERE id = ?", (rs, row) -> rs.getBoolean(1), id);
 		return states.isEmpty() || !states.getFirst();

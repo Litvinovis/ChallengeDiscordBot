@@ -18,6 +18,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 /**
  * Тесты для функции прогнозирования в StatisticsService.
@@ -102,6 +106,18 @@ class StatisticsServiceForecastTest {
 		LocalDate result = statisticsService.forecastCompletionDate(challenge, "user1");
 		// Ни истории, ни накопленного прогресса — прогноз невозможен
 		assertNull(result);
+	}
+
+	@Test
+	void forecastIgnoresProgressFromPreviousCycle() {
+		Challenge challenge = buildChallenge(1000, 0);
+		var start = LocalDateTime.now(TimeZones.MOSCOW).minusHours(1);
+		challenge.setStartDate(start);
+		when(progressHistoryRepository.getUserTotalsInRange(eq(challenge.getId()), eq(start), any()))
+				.thenReturn(Map.of());
+
+		assertNull(statisticsService.forecastCompletionDate(challenge, "user1"));
+		verify(progressHistoryRepository, never()).getDailyTotals(anyString(), anyString(), anyInt());
 	}
 
 	@Test

@@ -208,17 +208,25 @@ public class StatisticsService implements IStatisticsService {
 			if (challenge == null || userId == null) return null;
 			long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
 			long remaining = challenge.getTargetValue() - userProgress;
-			LocalDate today = LocalDate.now(TimeZones.MOSCOW);
+			LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
+			LocalDate today = now.toLocalDate();
 			if (remaining <= 0) return today;
 
-			// Средний дневной темп за последние 7 дней из истории прогресса (переживает рестарты)
 			double avgPerDay = 0;
 			if (progressHistoryRepository != null) {
-				Map<LocalDate, Long> daily = progressHistoryRepository.getDailyTotals(
-						challenge.getId(), userId, 7);
-				long weekTotal = daily.values().stream().mapToLong(Long::longValue).sum();
+				LocalDateTime start = challenge.getStartDate();
+				long weekTotal;
+				if (start != null && start.isAfter(now.minusDays(7))) {
+					// История сохраняется между циклами, прогноз берёт только результат нового.
+					weekTotal = progressHistoryRepository.getUserTotalsInRange(challenge.getId(), start, now)
+							.getOrDefault(userId, 0L);
+				} else {
+					weekTotal = progressHistoryRepository.getDailyTotals(challenge.getId(), userId, 7)
+							.values().stream().mapToLong(Long::longValue).sum();
+				}
 				avgPerDay = weekTotal / 7.0;
 			}
+
 			if (avgPerDay <= 0) {
 				// Fallback: общий средний темп с начала испытания
 				LocalDate start = challenge.getStartDate() != null

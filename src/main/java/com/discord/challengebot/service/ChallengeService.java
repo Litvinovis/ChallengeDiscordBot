@@ -89,6 +89,13 @@ public class ChallengeService implements IChallengeService {
 		return new ArrayList<>(progressRepository.findByChallengeId(challenge.getId()).keySet());
 	}
 
+    private void checkProgressPeriod(Challenge challenge) {
+        if (challengeRepository.hasClosedProgressPeriod(challenge.getId(), challenge.getStartDate(),
+                LocalDateTime.now(TimeZones.MOSCOW))) {
+            throw new IllegalStateException("Цикл испытания завершён, повторите команду после продления");
+        }
+    }
+
 	// ---- IChallengeService implementation ----
 
 	/**
@@ -141,6 +148,7 @@ public class ChallengeService implements IChallengeService {
 		if (challengeRepository.isInactive(challenge.getId())) {
 			throw new IllegalStateException("Испытание уже остановлено, прогресс не внесён");
 		}
+		checkProgressPeriod(challenge);
 
 		// Ошибки БД намеренно не перехватываются: @Transactional откатит транзакцию
 		// целиком, иначе инкремент прогресса зафиксируется без пересчёта итога.
@@ -186,6 +194,7 @@ public class ChallengeService implements IChallengeService {
 		if (challenge == null || userId == null || amount <= 0) return challenge;
 
 		challengeRepository.lockById(challenge.getId());
+		checkProgressPeriod(challenge);
 
 		// Ошибки БД не перехватываются — см. addProgress
 		long removed = progressRepository.subtractAmount(challenge.getId(), userId, amount);
@@ -361,6 +370,7 @@ public class ChallengeService implements IChallengeService {
 	public Challenge setParticipantProgress(Challenge challenge, String userId, long progress) {
 		if (challenge == null || userId == null || userId.isBlank() || progress < 0) return challenge;
 		challengeRepository.lockById(challenge.getId());
+		checkProgressPeriod(challenge);
 		progressRepository.upsert(challenge.getId(), userId, progress);
 		challengeRepository.addParticipant(challenge.getId(), userId);
 		challengeRepository.refreshCurrentValue(challenge.getId());
