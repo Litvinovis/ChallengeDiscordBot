@@ -19,6 +19,7 @@ PY
 )
 "$pg_bin/initdb" -D "$pg_tmp/data" --auth=trust --username=inactivity_test --no-locale --encoding=UTF8 > "$pg_tmp/init.log"
 "$pg_bin/pg_ctl" -D "$pg_tmp/data" -l "$pg_tmp/server.log" -o "-h 127.0.0.1 -p $pg_port -k $pg_tmp -F" -w start
-CHALLENGE_TEST_DB_URL="jdbc:postgresql://127.0.0.1:$pg_port/postgres" \
+"$pg_bin/createdb" -h "$pg_tmp" -p "$pg_port" -U inactivity_test challenge_test
+CHALLENGE_TEST_DB_URL="jdbc:postgresql://127.0.0.1:$pg_port/challenge_test" \
 CHALLENGE_TEST_DB_USER=inactivity_test \
-    mvn -q -B -f "$repo_dir/pom.xml" -Dtest=ChallengeLifecyclePostgresTest test
+    mvn -q -B -f "$repo_dir/pom.xml" -Dtest=ChallengeLifecyclePostgresTest,BotDiscordE2eTest test jacoco:report
