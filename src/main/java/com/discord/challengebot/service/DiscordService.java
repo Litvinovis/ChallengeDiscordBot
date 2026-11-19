@@ -7,6 +7,7 @@ import com.discord.challengebot.event.AchievementUnlockedEvent;
 import com.discord.challengebot.event.ChallengeHalfwayEvent;
 import com.discord.challengebot.event.StreakMilestoneEvent;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.util.ChallengeDeadline;
 import com.discord.challengebot.repository.ProgressHistoryRepository;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -24,11 +25,14 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import com.discord.challengebot.util.TimeZones;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -381,7 +385,7 @@ public class DiscordService implements IDiscordService {
 			for (var challenge : challenges) {
 				ChallengeStats stats = challengeService.getChallengeStats(challenge);
 				if (stats == null) continue;
-				var top3 = challengeService.getTopParticipants(challenge, 3);
+				var top3 = topThree(challenge.getParticipantProgress());
 				String message = statisticsService.formatDailyReportForDiscord(challenge, stats, top3);
 				if (!message.isBlank()) {
 					sendMessageToChannel(discordConfig.getReportChannel(), message);
@@ -392,75 +396,45 @@ public class DiscordService implements IDiscordService {
 		}
 	}
 
-	/**
-	 * Формирует и отправляет еженедельный отчёт о прогрессе всех активных испытаний.
-	 */
+	/** Итоги предыдущей календарной недели по Москве. */
 	public void sendWeeklyReport() {
-		try {
-			List<Challenge> challenges = challengeService.getActiveChallenges().stream()
-                    .filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
-			if (challenges.isEmpty()) return;
-			for (Challenge challenge : challenges) {
-				try {
-					ChallengeStats stats = statisticsService.calculateStats(challenge);
-					if (stats == null) continue;
-					String report = formatWeeklyReport(challenge, stats);
-					sendMessageToChannel(discordConfig.getReportChannel(), report);
-				} catch (Exception e) {
-					logger.error("Ошибка при отправке недельного отчёта для испытания {}", challenge.getName(), e);
-				}
-			}
-		} catch (Exception e) {
-			logger.error("Ошибка при отправке недельных отчётов", e);
-		}
+		var end = LocalDate.now(TimeZones.MOSCOW).with(DayOfWeek.MONDAY);
+		sendPeriodReport("Итоги недели", end.minusWeeks(1), end);
 	}
 
-	/**
-	 * Формирует и отправляет ежемесячный отчёт о прогрессе всех активных испытаний.
-	 */
+	/** Итоги предыдущего календарного месяца по Москве. */
 	public void sendMonthlyReport() {
-		try {
-			List<Challenge> challenges = challengeService.getActiveChallenges().stream()
-                    .filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
-			String month = LocalDateTime.now(TimeZones.MOSCOW)
-					.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru")));
-			sendMessageToChannel(discordConfig.getReportChannel(),
-					"**📅 Месячный итог — " + month + "**");
-			if (challenges.isEmpty()) {
-				sendMessageToChannel(discordConfig.getReportChannel(), "Активных испытаний нет.");
-				return;
+		var end = LocalDate.now(TimeZones.MOSCOW).withDayOfMonth(1);
+		var start = end.minusMonths(1);
+		String month = start.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru")));
+		sendPeriodReport("Итоги месяца — " + month, start, end);
+	}
+
+	void sendPeriodReport(String title, LocalDate from, LocalDate to) {
+		List<Challenge> active = challengeService.getActiveChallenges().stream()
+				.filter(ch -> !ch.getParticipantProgress().isEmpty()).toList();
+		if (active.isEmpty()) return;
+		var totals = progressHistoryRepository.getWorkoutTotalsInRange(from.atStartOfDay(), to.atStartOfDay());
+		var format = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+		sendMessageToChannel(discordConfig.getReportChannel(), "**📅 %s · %s–%s МСК**"
+				.formatted(title, from.format(format), to.minusDays(1).format(format)));
+		for (Challenge challenge : active) {
+			var members = totals.getOrDefault(challenge.getId(), Map.of());
+			long periodTotal = members.values().stream().mapToLong(Long::longValue).sum();
+			var leaders = topThree(members).stream().filter(entry -> entry.getValue() > 0).toList();
+			String message = "**%s** · за период: **%d** %s\nТекущий цикл: **%d / %d**"
+					.formatted(challenge.getName(), periodTotal, challenge.getUnit(), challenge.getCurrentValue(), challenge.getTargetValue());
+			if (!leaders.isEmpty()) {
+				message += "\n" + statisticsService.formatLeaderboardForDiscord(challenge, leaders);
 			}
-			for (Challenge challenge : challenges) {
-				try {
-					ChallengeStats stats = statisticsService.calculateStats(challenge);
-					if (stats == null) continue;
-					var top3 = challengeService.getTopParticipants(challenge, 3);
-					String report = statisticsService.formatDailyReportForDiscord(challenge, stats, top3);
-					if (!report.isBlank()) {
-						sendMessageToChannel(discordConfig.getReportChannel(), report);
-					}
-				} catch (Exception e) {
-					logger.error("Ошибка при отправке месячного отчёта для испытания {}", challenge.getName(), e);
-				}
-			}
-		} catch (Exception e) {
-			logger.error("Ошибка при отправке ежемесячных отчётов", e);
+			sendMessageToChannel(discordConfig.getReportChannel(), message);
 		}
 	}
 
-	private String formatWeeklyReport(Challenge challenge, ChallengeStats stats) {
-		StringBuilder sb = new StringBuilder();
-		sb.append("📅 **Итоги недели — ").append(challenge.getName()).append("**\n");
-		double pct = stats.percentage();
-		sb.append(String.format("📊 Прогресс: **%d / %d** (%.1f%%)\n",
-			challenge.getCurrentValue(), challenge.getTargetValue(), pct));
-		if (challenge.getEndDate() != null) {
-			long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(
-				java.time.LocalDateTime.now(TimeZones.MOSCOW), challenge.getEndDate());
-			sb.append("⏳ До конца: **").append(Math.max(0, daysLeft)).append(" дн.**\n");
-		}
-		sb.append("💪 Продолжайте в том же духе!");
-		return sb.toString();
+	private static List<Map.Entry<String, Long>> topThree(Map<String, Long> progress) {
+		return progress.entrySet().stream()
+				.sorted(Map.Entry.<String, Long>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
+				.limit(3).toList();
 	}
 
 	/**
@@ -488,9 +462,9 @@ public class DiscordService implements IDiscordService {
 	public void sendChallengeRenewalNotification(ChallengeRenewalService.Renewal renewal) {
 		Challenge previous = renewal.previous();
 		String result = renewal.goalReached() ? "цель выполнена" : "цель не выполнена";
-		String deadline = renewal.nextDeadline().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+		String deadline = ChallengeDeadline.format(renewal.nextDeadline());
 		sendMessageToChannel(discordConfig.getReportChannel(),
-				"**Испытание «%s» продлено!**\nВ прошлом цикле %s: %d из %d.\nНовая цель — **%d** до **%s МСК**."
+				"**Испытание «%s» продлено!**\nВ прошлом цикле %s: %d из %d.\nНовая цель — **%d** до **%s**."
 						.formatted(previous.getName(), result, previous.getCurrentValue(), previous.getTargetValue(),
 								renewal.nextTarget(), deadline));
 	}

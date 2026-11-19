@@ -2,6 +2,7 @@ package com.discord.challengebot.service;
 
 import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.util.ChallengeDeadline;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.model.Participant;
 import com.discord.challengebot.repository.ProgressHistoryRepository;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -49,7 +51,7 @@ public class StatisticsService implements IStatisticsService {
 	public ChallengeStats calculateStats(Challenge challenge) {
 		if (challenge == null) return null;
 		try {
-			long remaining = challenge.getTargetValue() - challenge.getCurrentValue();
+			long remaining = Math.max(0, challenge.getTargetValue() - challenge.getCurrentValue());
 			double percentage = challenge.getTargetValue() > 0
 					? (double) challenge.getCurrentValue() / challenge.getTargetValue() * 100 : 0;
 			LocalDate today = LocalDate.now(TimeZones.MOSCOW);
@@ -157,8 +159,7 @@ public class StatisticsService implements IStatisticsService {
 			int filled = pct * 15 / 100;
 			String bar = "█".repeat(filled) + "░".repeat(15 - filled);
 
-			String endDate = challenge.getEndDate() != null
-					? challenge.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "—";
+			String endDate = ChallengeDeadline.format(challenge.getEndDate());
 
 			StringBuilder sb = new StringBuilder();
 			sb.append("──────────────────────────────\n");
@@ -206,8 +207,9 @@ public class StatisticsService implements IStatisticsService {
 	public LocalDate forecastCompletionDate(Challenge challenge, String userId) {
 		try {
 			if (challenge == null || userId == null) return null;
-			long userProgress = challenge.getParticipantProgress().getOrDefault(userId, 0L);
-			long remaining = challenge.getTargetValue() - userProgress;
+			boolean group = challenge.getType() == ChallengeType.GROUP;
+			long current = group ? challenge.getCurrentValue() : challenge.getParticipantProgress().getOrDefault(userId, 0L);
+			long remaining = challenge.getTargetValue() - current;
 			LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
 			LocalDate today = now.toLocalDate();
 			if (remaining <= 0) return today;
@@ -215,16 +217,21 @@ public class StatisticsService implements IStatisticsService {
 			double avgPerDay = 0;
 			if (progressHistoryRepository != null) {
 				LocalDateTime start = challenge.getStartDate();
-				long weekTotal;
-				if (start != null && start.isAfter(now.minusDays(7))) {
-					// История сохраняется между циклами, прогноз берёт только результат нового.
-					weekTotal = progressHistoryRepository.getUserTotalsInRange(challenge.getId(), start, now)
-							.getOrDefault(userId, 0L);
+				LocalDateTime from = now.minusDays(7);
+				boolean shortCycle = start != null && start.isAfter(from);
+				if (shortCycle) from = start;
+				long total;
+				if (group || shortCycle) {
+					// Тренировки предыдущего цикла не влияют на прогноз нового.
+					var totals = progressHistoryRepository.getUserTotalsInRange(challenge.getId(), from, now);
+					total = group ? totals.values().stream().mapToLong(Long::longValue).sum()
+							: totals.getOrDefault(userId, 0L);
 				} else {
-					weekTotal = progressHistoryRepository.getDailyTotals(challenge.getId(), userId, 7)
+					total = progressHistoryRepository.getDailyTotals(challenge.getId(), userId, 7)
 							.values().stream().mapToLong(Long::longValue).sum();
 				}
-				avgPerDay = weekTotal / 7.0;
+				double days = Math.max(1, Duration.between(from, now).toSeconds() / (double) Duration.ofDays(1).toSeconds());
+				avgPerDay = total / days;
 			}
 
 			if (avgPerDay <= 0) {
@@ -233,7 +240,7 @@ public class StatisticsService implements IStatisticsService {
 						? challenge.getStartDate().toLocalDate() : today;
 				long daysSinceStart = ChronoUnit.DAYS.between(start, today);
 				if (daysSinceStart <= 0) return null;
-				avgPerDay = (double) userProgress / daysSinceStart;
+				avgPerDay = (double) current / daysSinceStart;
 			}
 			if (avgPerDay <= 0) return null;
 			long daysNeeded = (long) Math.ceil((double) remaining / avgPerDay);

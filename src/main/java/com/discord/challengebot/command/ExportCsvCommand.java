@@ -54,9 +54,10 @@ public class ExportCsvCommand extends BaseCommand {
                 return;
             }
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            StringBuilder csv = new StringBuilder("Дата,Количество\n");
+            StringBuilder csv = new StringBuilder("Дата,Количество,Тип\n");
             records.forEach(r -> csv.append(r.recordedAt().format(fmt))
-                    .append(",").append(r.amount()).append("\n"));
+                    .append(",").append(r.amount()).append(",")
+                    .append(r.kind() == ProgressRecord.Kind.ADJUSTMENT ? "Корректировка" : "Тренировка").append("\n"));
             byte[] csvBytes = csv.toString().getBytes(StandardCharsets.UTF_8);
             String filename = challenge.getId() + "_export.csv";
             event.getChannel().asTextChannel()

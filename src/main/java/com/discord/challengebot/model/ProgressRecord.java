@@ -10,5 +10,8 @@ public record ProgressRecord(
         String userId,
         String username,
         long amount,
-        LocalDateTime recordedAt
-) {}
+        LocalDateTime recordedAt,
+        Kind kind
+) {
+    public enum Kind { WORKOUT, ADJUSTMENT }
+}

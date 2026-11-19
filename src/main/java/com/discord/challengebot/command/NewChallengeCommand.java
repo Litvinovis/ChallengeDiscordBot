@@ -1,6 +1,7 @@
 package com.discord.challengebot.command;
 
 import com.discord.challengebot.model.Challenge;
+import com.discord.challengebot.util.ChallengeDeadline;
 import com.discord.challengebot.model.ChallengeType;
 import com.discord.challengebot.service.IChallengeService;
 import com.discord.challengebot.util.TimeZones;
@@ -12,9 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.core.annotation.Order;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 /**
@@ -84,16 +83,10 @@ public class NewChallengeCommand extends BaseCommand {
 
 			if (args.length > 3) {
 				try {
-					endDate = LocalDate.parse(args[3], DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+					endDate = ChallengeDeadline.parseLastDay(args[3]);
 				} catch (DateTimeParseException e) {
-					try {
-						endDate = LocalDate.parse(args[3], DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
-					} catch (DateTimeParseException e2) {
-						// Раньше молча подставлялся год от сегодня — админ узнавал об этом только из отчётов
-						channel.sendMessage("Неверный формат даты \"" + args[3]
-										+ "\". Используйте dd.MM.yyyy или yyyy-MM-dd.").queue();
-						return;
-					}
+					channel.sendMessage("Неверная дата. Используйте dd.MM.yyyy или yyyy-MM-dd.").queue();
+					return;
 				}
 			}
 
@@ -110,7 +103,7 @@ public class NewChallengeCommand extends BaseCommand {
 
 			Challenge challenge = challengeService.createChallenge(name, target, endDate, type, description, unit);
 			if (challenge != null) {
-				channel.sendMessage("Испытание \"" + name + "\" успешно создано!").queue();
+				channel.sendMessage("Испытание \"" + name + "\" успешно создано. Срок — " + ChallengeDeadline.format(endDate) + ".").queue();
 			} else {
 				channel.sendMessage("Ошибка при создании испытания \"" + name + "\".").queue();
 			}

@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS progress_history (
 CREATE INDEX IF NOT EXISTS idx_progress_history_challenge_user ON progress_history(challenge_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_progress_history_recorded_at ON progress_history(recorded_at);
 
+ALTER TABLE progress_history ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'WORKOUT';
+
 -- Состояние участия хранится отдельно для каждого испытания. Обновляем старые строки
 -- только один раз: повторный запуск схемы не должен переносить старую историю на повторное вступление.
 ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP WITH TIME ZONE;
@@ -50,7 +52,7 @@ ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS first_inactivity_warning
 ALTER TABLE challenge_progress ADD COLUMN IF NOT EXISTS second_inactivity_warning_at TIMESTAMP WITH TIME ZONE;
 UPDATE challenge_progress cp SET joined_at = NOW(), last_progress_at = (
     SELECT MAX(recorded_at) FROM progress_history ph
-    WHERE ph.challenge_id = cp.challenge_id AND ph.user_id = cp.user_id AND ph.amount > 0
+    WHERE ph.challenge_id = cp.challenge_id AND ph.user_id = cp.user_id AND ph.amount > 0 AND ph.kind = 'WORKOUT'
 ) WHERE cp.joined_at IS NULL;
 ALTER TABLE challenge_progress ALTER COLUMN joined_at SET DEFAULT NOW();
 ALTER TABLE challenge_progress ALTER COLUMN joined_at SET NOT NULL;
@@ -80,3 +82,14 @@ ALTER TABLE challenge_archive ALTER COLUMN start_date        TYPE TIMESTAMP USIN
 ALTER TABLE challenge_archive ALTER COLUMN end_date          TYPE TIMESTAMP USING end_date::timestamp;
 ALTER TABLE challenge_participants ALTER COLUMN join_date          TYPE TIMESTAMP USING join_date::timestamp;
 ALTER TABLE challenge_participants ALTER COLUMN last_activity_date TYPE DATE      USING last_activity_date::date;
+
+-- completed_at отмечает фактическое завершение. Старые неактивные записи могут быть паузами.
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS challenge_schema_updates (name TEXT PRIMARY KEY);
+WITH migration AS (
+    INSERT INTO challenge_schema_updates (name) VALUES ('inclusive_deadlines')
+    ON CONFLICT DO NOTHING RETURNING name
+)
+UPDATE challenges SET end_date = end_date + INTERVAL '1 day'
+WHERE end_date::time = TIME '00:00' AND EXISTS (SELECT 1 FROM migration);

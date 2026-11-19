@@ -306,12 +306,14 @@ class ChallengeServiceExtendedTest {
 	void completeChallenge_setsInactive() {
 		Challenge challenge = new Challenge();
 		challenge.setName("Pushups");
+		challenge.setId("pushups");
 		challenge.setActive(true);
+		when(challengeRepository.markCompleted(eq("pushups"), any())).thenReturn(true);
 
-		challengeService.completeChallenge(challenge);
+		assertTrue(challengeService.completeChallenge(challenge));
 
 		assertFalse(challenge.isActive());
-		verify(challengeRepository).updateActive(challenge.getId(), false);
+		verify(challengeRepository).markCompleted(eq(challenge.getId()), any());
 	}
 
 	@Test
@@ -437,6 +439,6 @@ class ChallengeServiceExtendedTest {
 
 		assertNotNull(stats);
 		assertTrue(stats.percentage() > 100.0);
-		assertTrue(stats.remaining() < 0);
+		assertEquals(0, stats.remaining());
 	}
 }

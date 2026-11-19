@@ -66,7 +66,7 @@ class ForecastCommandTest {
 		challenge.setName("Отжимания");
 		challenge.setTargetValue(1000);
 		challenge.setCurrentValue(300);
-		challenge.setType(ChallengeType.GROUP);
+		challenge.setType(ChallengeType.INDIVIDUAL);
 		challenge.setStartDate(LocalDateTime.now().minusDays(30));
 		challenge.setEndDate(LocalDateTime.now().plusDays(60));
 		challenge.setActive(true);

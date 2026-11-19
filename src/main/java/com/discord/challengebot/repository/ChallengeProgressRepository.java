@@ -29,6 +29,12 @@ public class ChallengeProgressRepository {
 				"ON CONFLICT (challenge_id, user_id) DO NOTHING", challengeId, userId);
 	}
 
+    public long getAmount(String challengeId, String userId) {
+        return jdbc.queryForObject("""
+                SELECT COALESCE((SELECT progress FROM challenge_progress WHERE challenge_id = ? AND user_id = ?), 0)
+                """, Long.class, challengeId, userId);
+    }
+
 	public void upsert(String challengeId, String userId, long progress) {
 		jdbc.update(
 						"INSERT INTO challenge_progress (challenge_id, user_id, progress, last_progress_at) VALUES (?, ?, ?, CASE WHEN ? > 0 THEN NOW() END) " +
@@ -99,11 +105,23 @@ public class ChallengeProgressRepository {
 
     public record InactivityState(String userId, Instant inactiveSince, Instant firstWarningAt, Instant secondWarningAt) {}
 
+    private static final String INACTIVITY_QUERY = """
+            SELECT user_id, COALESCE(last_progress_at, joined_at) AS inactive_since,
+                   first_inactivity_warning_at, second_inactivity_warning_at
+            FROM challenge_progress WHERE challenge_id = ?
+            """;
+
     public List<InactivityState> findInactivityStates(String challengeId) {
-        return jdbc.query("SELECT user_id, COALESCE(last_progress_at, joined_at) AS inactive_since, " +
-                        "first_inactivity_warning_at, second_inactivity_warning_at FROM challenge_progress WHERE challenge_id = ? ORDER BY user_id",
-                (rs, row) -> new InactivityState(rs.getString("user_id"), rs.getTimestamp("inactive_since").toInstant(),
-                        instant(rs.getTimestamp("first_inactivity_warning_at")), instant(rs.getTimestamp("second_inactivity_warning_at"))), challengeId);
+        return jdbc.query(INACTIVITY_QUERY + " ORDER BY user_id", this::mapInactivity, challengeId);
+    }
+
+    public List<InactivityState> findInactivityState(String challengeId, String userId) {
+        return jdbc.query(INACTIVITY_QUERY + " AND user_id = ?", this::mapInactivity, challengeId, userId);
+    }
+
+    private InactivityState mapInactivity(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+        return new InactivityState(rs.getString("user_id"), rs.getTimestamp("inactive_since").toInstant(),
+                instant(rs.getTimestamp("first_inactivity_warning_at")), instant(rs.getTimestamp("second_inactivity_warning_at")));
     }
 
     public void markInactivityWarning(String challengeId, String userId, boolean second, Instant sentAt) {

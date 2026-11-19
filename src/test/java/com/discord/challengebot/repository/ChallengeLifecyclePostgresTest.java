@@ -62,8 +62,8 @@ class ChallengeLifecyclePostgresTest {
                 new ProgressHistoryRepository(jdbc), mock(ApplicationEventPublisher.class)));
         discord = mock(DiscordService.class);
         when(discord.sendInactivityNotification(anyString(), anyString())).thenReturn(true);
-        inactivity = transactional(new ChallengeInactivityService(challenges, progress, service, discord));
-        renewal = transactional(new ChallengeRenewalService(challenges, progress, new ChallengeArchiveRepository(jdbc)));
+        inactivity = new ChallengeInactivityService(challenges, progress, service, discord, tx);
+        renewal = transactional(new ChallengeRenewalService(challenges, progress, new ChallengeArchiveRepository(jdbc), new ProgressHistoryRepository(jdbc)));
     }
 
     private void migrate() {
@@ -101,7 +101,7 @@ class ChallengeLifecyclePostgresTest {
         lastProgress("pushups", start);
         inactivity.checkChallenge("pushups", start.plus(Duration.ofDays(14)));
         // Новый сервис моделирует перезапуск: никаких счётчиков в памяти нет.
-        inactivity = transactional(new ChallengeInactivityService(challenges, progress, service, discord));
+        inactivity = new ChallengeInactivityService(challenges, progress, service, discord, tx);
         inactivity.checkChallenge("pushups", start.plus(Duration.ofDays(15)));
         verify(discord, times(1)).sendInactivityNotification(eq("123"), anyString());
         inactivity.checkChallenge("pushups", start.plus(Duration.ofDays(21)));
@@ -295,6 +295,139 @@ class ChallengeLifecyclePostgresTest {
         assertTrue(renewal.renewIfDue("empty", now).isEmpty());
         assertFalse(challenges.findById("empty").orElseThrow().isActive());
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM challenge_archive", Integer.class));
+    }
+
+    @Test
+    void existingDateOnlyDeadlinesShiftOnceAndEndAfterLastDay() {
+        enroll("a");
+        var old = LocalDateTime.of(2030, 12, 31, 0, 0);
+        jdbc.update("UPDATE challenges SET end_date=? WHERE id='a'", old);
+        jdbc.update("DELETE FROM challenge_schema_updates WHERE name='inclusive_deadlines'");
+        migrate();
+        migrate();
+        assertEquals(old.plusDays(1), challenges.findById("a").orElseThrow().getEndDate());
+        assertTrue(challenges.findDue(old.plusHours(23)).isEmpty());
+        assertEquals("a", challenges.findDue(old.plusDays(1)).getFirst().getId());
+    }
+
+    @Test
+    void archivedCompletionPreservesHistoryAndFailureRollsBackBeforeDeletion() {
+        var done = enroll("done");
+        var paused = enroll("paused");
+        service.addProgress(done, "123", "Участник", 10);
+        service.updateChallengeStatus(paused, false);
+        jdbc.update("UPDATE challenges SET end_date=NULL, target_value=10 WHERE id='done'");
+        assertTrue(service.completeChallenge(done));
+        var cutoff = LocalDateTime.now(com.discord.challengebot.util.TimeZones.MOSCOW).plusDays(1);
+        assertEquals(java.util.List.of("done"), challenges.findCompletedBefore(cutoff));
+        assertFalse(renewal.archiveCompleted("paused", cutoff));
+        jdbc.execute("ALTER TABLE progress_history ADD CONSTRAINT keep_original_id CHECK (challenge_id = 'done')");
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> renewal.archiveCompleted("done", cutoff));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM challenge_archive", Integer.class));
+        assertTrue(challenges.findById("done").isPresent());
+        assertEquals(10L, progress.getAmount("done", "123"));
+
+        jdbc.execute("ALTER TABLE progress_history DROP CONSTRAINT keep_original_id");
+        assertTrue(renewal.archiveCompleted("done", cutoff));
+        assertTrue(challenges.findById("done").isEmpty());
+        assertEquals(10L, jdbc.queryForObject("""
+                SELECT h.amount FROM progress_history h JOIN challenge_archive a ON a.id = h.challenge_id
+                """, Long.class));
+        assertTrue(challenges.findById("paused").isPresent());
+    }
+
+    @Test
+    void fullBackupRestoresSnapshotAndSequenceAndRejectsNonemptyDestination() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var backup = transactional(new ChallengeBackupService(jdbc, challenges, progress, participants));
+        var challenge = enroll("a");
+        service.addProgress(challenge, "123", "Участник", 10);
+        service.setParticipantProgress(challenge, "123", 37);
+        service.updateChallengeStatus(challenge, false);
+        new ChallengeArchiveRepository(jdbc).archive(challenge, "previous-cycle");
+        var snapshot = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(backup.exportSnapshot());
+
+        assertThrows(IllegalArgumentException.class, () -> backup.restore(snapshot));
+        assertEquals(37L, progress.getAmount("a", "123"));
+        jdbc.execute("TRUNCATE challenges, challenge_progress, challenge_participants, progress_history, challenge_archive RESTART IDENTITY");
+        var damaged = snapshot.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) damaged.path("challenge_progress").get(0)).putNull("progress");
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> backup.restore(damaged));
+        assertTrue(challenges.findAll().isEmpty());
+        assertEquals(1, backup.restore(snapshot));
+        var restored = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(backup.exportSnapshot());
+        snapshot.remove("exportedAt");
+        restored.remove("exportedAt");
+        assertEquals(snapshot, restored);
+        assertFalse(challenges.findById("a").orElseThrow().isActive());
+        new ProgressHistoryRepository(jdbc).insert("a", "123", "Участник", 4);
+        assertEquals(3, jdbc.queryForObject("SELECT max(id) FROM progress_history", Long.class));
+    }
+
+    @Test
+    void legacyBackupKeepsExistingProgressAndRestoresOriginalDatesAndPause() throws Exception {
+        var backup = transactional(new ChallengeBackupService(jdbc, challenges, progress, participants));
+        var existing = enroll("existing");
+        service.addProgress(existing, "123", "Участник", 17);
+        var snapshot = new com.fasterxml.jackson.databind.ObjectMapper().readTree("""
+                {"challenges":[
+                  {"id":"existing","name":"existing","targetValue":1000,"endDate":"2030-12-31T00:00:00"},
+                  {"id":"old","name":"old","targetValue":1000,"startDate":"2026-01-23T16:00:00",
+                   "endDate":"2030-12-31T00:00:00","active":false}
+                ],"progress":{"existing":{"123":999},"old":{"123":42}}}
+                """);
+        assertEquals(1, backup.restore(snapshot));
+        assertEquals(17L, progress.getAmount("existing", "123"));
+        var old = service.getChallenge("old");
+        assertFalse(old.isActive());
+        assertEquals(LocalDateTime.of(2026, 1, 23, 16, 0), old.getStartDate());
+        assertEquals(LocalDateTime.of(2031, 1, 1, 0, 0), old.getEndDate());
+        assertEquals(42, old.getCurrentValue());
+    }
+
+    @Test
+    void adjustmentUpdatesResultButDoesNotCountAsWorkoutInPeriod() {
+        enroll("a");
+        var challenge = service.getChallenge("a");
+        service.addProgress(challenge, "123", "Участник", 10);
+        service.setParticipantProgress(challenge, "123", 58);
+        service.setParticipantProgress(challenge, "123", 58);
+        service.setParticipantProgress(challenge, "123", 50);
+        var history = new ProgressHistoryRepository(jdbc);
+        var now = LocalDateTime.now(com.discord.challengebot.util.TimeZones.MOSCOW);
+        assertEquals(java.util.Map.of("a", java.util.Map.of("123", 10L)),
+                history.getWorkoutTotalsInRange(now.minusDays(1), now.plusDays(1)));
+        assertEquals(java.util.List.of(10L, 48L, -8L), history.getAllRecords("a", "123").stream()
+                .map(com.discord.challengebot.model.ProgressRecord::amount).toList());
+        assertEquals(50L, progress.getAmount("a", "123"));
+    }
+
+    @Test
+    void progressCanCommitDuringDiscordDeliveryAndCancelsStaleWarning() throws Exception {
+        enroll("a");
+        Instant now = Instant.now();
+        lastProgress("a", now.minus(Duration.ofDays(14)));
+        var sending = new CountDownLatch(1);
+        var finish = new CountDownLatch(1);
+        when(discord.sendInactivityNotification(eq("123"), anyString())).thenAnswer(invocation -> {
+            sending.countDown();
+            return finish.await(8, TimeUnit.SECONDS);
+        });
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var check = executor.submit(() -> inactivity.checkChallenge("a", now));
+            try {
+                assertTrue(sending.await(5, TimeUnit.SECONDS));
+                var write = executor.submit(() -> service.addProgress(service.getChallenge("a"), "123", "Участник", 1));
+                assertEquals(1, write.get(3, TimeUnit.SECONDS).getCurrentValue());
+            } finally {
+                finish.countDown();
+            }
+            check.get(5, TimeUnit.SECONDS);
+        }
+        assertNull(progress.findInactivityStates("a").getFirst().firstWarningAt());
     }
 
     private static Challenge staleChallenge(String id) {

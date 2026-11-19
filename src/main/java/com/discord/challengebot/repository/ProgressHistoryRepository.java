@@ -29,6 +29,17 @@ public class ProgressHistoryRepository {
                 challengeId, userId, username, amount);
     }
 
+    public void recordAdjustment(String challengeId, String userId, long delta) {
+        jdbc.update("""
+                INSERT INTO progress_history (challenge_id, user_id, amount, kind)
+                VALUES (?, ?, ?, 'ADJUSTMENT')
+                """, challengeId, userId, delta);
+    }
+
+    public void moveToArchive(String challengeId, String archiveId) {
+        jdbc.update("UPDATE progress_history SET challenge_id = ? WHERE challenge_id = ?", archiveId, challengeId);
+    }
+
     /** Удаляет всю историю испытания — иначе новое испытание с тем же id унаследует чужие записи. */
     public void deleteByChallengeId(String challengeId) {
         jdbc.update("DELETE FROM progress_history WHERE challenge_id = ?", challengeId);
@@ -37,7 +48,7 @@ public class ProgressHistoryRepository {
     /** Daily totals for a specific user in a challenge over last N days. */
     public Map<LocalDate, Long> getDailyTotals(String challengeId, String userId, int days) {
         String sql = "SELECT DATE(recorded_at AT TIME ZONE 'Europe/Moscow') AS day, SUM(amount) AS total " +
-                "FROM progress_history WHERE challenge_id = ? AND user_id = ? " +
+                "FROM progress_history WHERE kind = 'WORKOUT' AND challenge_id = ? AND user_id = ? " +
                 "AND recorded_at >= NOW() - INTERVAL '" + days + " days' " +
                 "GROUP BY day ORDER BY day";
         Map<LocalDate, Long> result = new HashMap<>();
@@ -50,7 +61,7 @@ public class ProgressHistoryRepository {
     /** Daily totals for all users in a challenge combined over last N days. */
     public Map<LocalDate, Long> getDailyTotalsAll(String challengeId, int days) {
         String sql = "SELECT DATE(recorded_at AT TIME ZONE 'Europe/Moscow') AS day, SUM(amount) AS total " +
-                "FROM progress_history WHERE challenge_id = ? " +
+                "FROM progress_history WHERE kind = 'WORKOUT' AND challenge_id = ? " +
                 "AND recorded_at >= NOW() - INTERVAL '" + days + " days' " +
                 "GROUP BY day ORDER BY day";
         Map<LocalDate, Long> result = new HashMap<>();
@@ -63,7 +74,7 @@ public class ProgressHistoryRepository {
     /** Total amount for a specific user in a challenge over last N hours. */
     public long getTotalLastHours(String challengeId, String userId, int hours) {
         String sql = "SELECT COALESCE(SUM(amount), 0) FROM progress_history " +
-                "WHERE challenge_id = ? AND user_id = ? " +
+                "WHERE kind = 'WORKOUT' AND challenge_id = ? AND user_id = ? " +
                 "AND recorded_at >= NOW() - INTERVAL '" + hours + " hours'";
         Long result = jdbc.queryForObject(sql, Long.class, challengeId, userId);
         return result != null ? result : 0L;
@@ -72,7 +83,7 @@ public class ProgressHistoryRepository {
     /** Total per user for a challenge in a date range. Returns Map<userId, total>. */
     public Map<String, Long> getUserTotalsInRange(String challengeId, LocalDateTime from, LocalDateTime to) {
         String sql = "SELECT user_id, SUM(amount) AS total FROM progress_history " +
-                "WHERE challenge_id = ? AND recorded_at >= ? AND recorded_at < ? " +
+                "WHERE kind = 'WORKOUT' AND challenge_id = ? AND recorded_at >= ? AND recorded_at < ? " +
                 "GROUP BY user_id";
         Map<String, Long> result = new HashMap<>();
         jdbc.query(sql, rs -> {
@@ -83,10 +94,24 @@ public class ProgressHistoryRepository {
         return result;
     }
 
+    public Map<String, Map<String, Long>> getWorkoutTotalsInRange(LocalDateTime from, LocalDateTime to) {
+        var totals = new HashMap<String, Map<String, Long>>();
+        jdbc.query("""
+                SELECT challenge_id, user_id, SUM(amount) AS total FROM progress_history
+                WHERE kind = 'WORKOUT' AND recorded_at >= ? AND recorded_at < ?
+                GROUP BY challenge_id, user_id
+                """, rs -> {
+            totals.computeIfAbsent(rs.getString("challenge_id"), id -> new HashMap<>())
+                    .put(rs.getString("user_id"), rs.getLong("total"));
+        }, Timestamp.from(from.atZone(TimeZones.MOSCOW).toInstant()),
+                Timestamp.from(to.atZone(TimeZones.MOSCOW).toInstant()));
+        return totals;
+    }
+
     /** Best single day (date with highest total) for a specific user in a challenge. */
     public LocalDate getBestDay(String challengeId, String userId) {
         String sql = "SELECT DATE(recorded_at AT TIME ZONE 'Europe/Moscow') AS day, SUM(amount) AS total " +
-                "FROM progress_history WHERE challenge_id = ? AND user_id = ? " +
+                "FROM progress_history WHERE kind = 'WORKOUT' AND challenge_id = ? AND user_id = ? " +
                 "GROUP BY day ORDER BY total DESC LIMIT 1";
         List<LocalDate> result = new ArrayList<>();
         jdbc.query(sql, rs -> {
@@ -98,7 +123,7 @@ public class ProgressHistoryRepository {
     /** Best single day across all users for a challenge (date + total). */
     public Map.Entry<LocalDate, Long> getBestDayAll(String challengeId) {
         String sql = "SELECT DATE(recorded_at AT TIME ZONE 'Europe/Moscow') AS day, SUM(amount) AS total " +
-                "FROM progress_history WHERE challenge_id = ? " +
+                "FROM progress_history WHERE kind = 'WORKOUT' AND challenge_id = ? " +
                 "GROUP BY day ORDER BY total DESC LIMIT 1";
         List<Map.Entry<LocalDate, Long>> result = new ArrayList<>();
         jdbc.query(sql, rs -> {
@@ -110,8 +135,8 @@ public class ProgressHistoryRepository {
     /** All records for a specific user in a challenge, ordered by recorded_at. */
     public List<ProgressRecord> getAllRecords(String challengeId, String userId) {
         String sql = "SELECT challenge_id, user_id, username, amount, " +
-                "recorded_at AT TIME ZONE 'Europe/Moscow' AS recorded_at_local " +
-                "FROM progress_history WHERE challenge_id = ? AND user_id = ? ORDER BY recorded_at";
+                "kind, recorded_at AT TIME ZONE 'Europe/Moscow' AS recorded_at_local " +
+                "FROM progress_history WHERE challenge_id = ? AND user_id = ? ORDER BY recorded_at, id";
         List<ProgressRecord> result = new ArrayList<>();
         jdbc.query(sql, rs -> {
             Timestamp ts = rs.getTimestamp("recorded_at_local");
@@ -121,7 +146,7 @@ public class ProgressHistoryRepository {
                     rs.getString("user_id"),
                     rs.getString("username"),
                     rs.getLong("amount"),
-                    ldt));
+                    ldt, ProgressRecord.Kind.valueOf(rs.getString("kind"))));
         }, challengeId, userId);
         return result;
     }
@@ -131,7 +156,7 @@ public class ProgressHistoryRepository {
         if (challengeIds.isEmpty()) return false;
         String placeholders = String.join(",", Collections.nCopies(challengeIds.size(), "?"));
         String sql = "SELECT EXISTS(SELECT 1 FROM progress_history " +
-                "WHERE challenge_id IN (" + placeholders + ") AND amount > 0 " +
+                "WHERE kind = 'WORKOUT' AND challenge_id IN (" + placeholders + ") AND amount > 0 " +
                 "AND recorded_at >= NOW() - INTERVAL '" + hours + " hours')";
         Boolean result = jdbc.queryForObject(sql, Boolean.class, challengeIds.toArray());
         return Boolean.TRUE.equals(result);
@@ -140,7 +165,7 @@ public class ProgressHistoryRepository {
     /** Sum per user in the last 24 hours for a challenge. Returns Map<userId, total>. */
     public Map<String, Long> getUserTotalsLast24Hours(String challengeId) {
         String sql = "SELECT user_id, SUM(amount) AS total FROM progress_history " +
-                "WHERE challenge_id = ? AND recorded_at >= NOW() - INTERVAL '24 hours' " +
+                "WHERE kind = 'WORKOUT' AND challenge_id = ? AND recorded_at >= NOW() - INTERVAL '24 hours' " +
                 "GROUP BY user_id HAVING SUM(amount) > 0 ORDER BY total DESC";
         Map<String, Long> result = new HashMap<>();
         jdbc.query(sql, rs -> {

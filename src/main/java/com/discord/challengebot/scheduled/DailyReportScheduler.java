@@ -1,7 +1,7 @@
 package com.discord.challengebot.scheduled;
 
 import com.discord.challengebot.model.Challenge;
-import com.discord.challengebot.repository.ChallengeArchiveRepository;
+import com.discord.challengebot.repository.ChallengeRepository;
 import com.discord.challengebot.service.ChallengeRenewalService;
 import com.discord.challengebot.service.ChallengeService;
 import com.discord.challengebot.service.DiscordService;
@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import com.discord.challengebot.util.TimeZones;
-import java.util.List;
 
 /**
  * Планировщик периодических задач бота.
@@ -31,7 +30,7 @@ public class DailyReportScheduler {
 	private ChallengeService challengeService;
 
 	@Autowired
-	private ChallengeArchiveRepository challengeArchiveRepository;
+	private ChallengeRepository challengeRepository;
 
 	@Autowired
 	private ChallengeRenewalService challengeRenewalService;
@@ -54,16 +53,14 @@ public class DailyReportScheduler {
 	@Scheduled(cron = "0 * * * * *", zone = "Europe/Moscow")
 	public void checkChallengeCompletions() {
 		LocalDateTime now = LocalDateTime.now(TimeZones.MOSCOW);
-		for (Challenge challenge : challengeService.getAllChallenges()) {
-			if (!challenge.isActive()) continue;
+		for (Challenge challenge : challengeRepository.findDue(now)) {
 			try {
 				if (challenge.getEndDate() != null) {
 					if (!challenge.getEndDate().isAfter(now)) {
 						challengeRenewalService.renewIfDue(challenge.getId(), now)
 								.ifPresent(discordService::sendChallengeRenewalNotification);
 					}
-				} else if (challenge.getCurrentValue() >= challenge.getTargetValue()) {
-					challengeService.completeChallenge(challenge);
+				} else if (challengeService.completeChallenge(challenge)) {
 					discordService.sendChallengeCompletionNotification(challenge);
 				}
 			} catch (Exception e) {
@@ -90,35 +87,15 @@ public class DailyReportScheduler {
 	 */
 	@Scheduled(cron = "0 0 2 * * ?", zone = "Europe/Moscow") // Каждый день в 2:00
 	public void cleanupOldData() {
-		logger.info("Очистка старых данных");
-		try {
-			// Получаем все испытания
-			List<Challenge> allChallenges = challengeService.getAllChallenges();
-			LocalDateTime thirtyDaysAgo = LocalDateTime.now(TimeZones.MOSCOW).minusDays(30);
-			int deletedCount = 0;
-
-			// Архивируем и удаляем завершенные испытания старше 30 дней
-			for (Challenge challenge : allChallenges) {
-				if (!challenge.isActive() && challenge.getEndDate() != null && challenge.getEndDate().isBefore(thirtyDaysAgo)) {
-					try {
-						challengeArchiveRepository.archive(challenge);
-					} catch (Exception e) {
-						logger.warn("Не удалось архивировать испытание {}: {}", challenge.getName(), e.getMessage());
-					}
-					try {
-						if (challengeService.deleteChallenge(challenge.getName())) {
-							deletedCount++;
-							logger.info("Архивировано и удалено старое завершенное испытание: {}", challenge.getName());
-						}
-					} catch (Exception e) {
-						logger.error("Не удалось удалить архивированное испытание {}", challenge.getName(), e);
-					}
+		LocalDateTime cutoff = LocalDateTime.now(TimeZones.MOSCOW).minusDays(30);
+		for (String id : challengeRepository.findCompletedBefore(cutoff)) {
+			try {
+				if (challengeRenewalService.archiveCompleted(id, cutoff)) {
+					logger.info("Испытание '{}' перенесено в архив", id);
 				}
+			} catch (Exception e) {
+				logger.error("Не удалось архивировать испытание '{}'", id, e);
 			}
-
-			logger.info("Очистка старых данных завершена. Удалено {} испытаний", deletedCount);
-		} catch (Exception e) {
-			logger.error("Ошибка при очистке старых данных", e);
 		}
 	}
 }

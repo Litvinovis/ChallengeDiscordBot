@@ -22,7 +22,8 @@ class ChallengeInactivityServiceTest {
     private final ChallengeProgressRepository progress = mock(ChallengeProgressRepository.class);
     private final ChallengeService challengeService = mock(ChallengeService.class);
     private final DiscordService discord = mock(DiscordService.class);
-    private final ChallengeInactivityService service = new ChallengeInactivityService(challenges, progress, challengeService, discord);
+    private final org.springframework.transaction.PlatformTransactionManager transactions = mock(org.springframework.transaction.PlatformTransactionManager.class);
+    private final ChallengeInactivityService service = new ChallengeInactivityService(challenges, progress, challengeService, discord, transactions);
     private Challenge challenge;
 
     @BeforeEach
@@ -37,7 +38,9 @@ class ChallengeInactivityServiceTest {
     }
 
     private void state(Instant last, Instant first, Instant second) {
-        when(progress.findInactivityStates("pushups")).thenReturn(List.of(new InactivityState("123", last, first, second)));
+        var states = List.of(new InactivityState("123", last, first, second));
+        when(progress.findInactivityStates("pushups")).thenReturn(states);
+        when(progress.findInactivityState("pushups", "123")).thenReturn(states);
     }
 
     @Test
