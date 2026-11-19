@@ -1,12 +1,9 @@
 package com.discord.challengebot.command;
 
-import com.discord.challengebot.dto.ChallengeStats;
 import com.discord.challengebot.model.Challenge;
 import com.discord.challengebot.service.IChallengeService;
-import com.discord.challengebot.service.IStatisticsService;
+import com.discord.challengebot.repository.ProgressHistoryRepository;
 import com.discord.challengebot.service.IVisualizationService;
-import net.dv8tion.jda.api.entities.channel.ChannelType;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.unions.MessageChannelUnion;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.requests.restaction.MessageCreateAction;
@@ -21,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -37,7 +36,7 @@ class ProgressChartCommandTest {
 	@Mock
 	private IChallengeService challengeService;
 	@Mock
-	private IStatisticsService statisticsService;
+	private ProgressHistoryRepository progressHistoryRepository;
 	@Mock
 	private IVisualizationService visualizationService;
 
@@ -49,8 +48,6 @@ class ProgressChartCommandTest {
 	@Mock
 	private MessageChannelUnion channelUnion;
 	@Mock
-	private TextChannel textChannel;
-	@Mock
 	private MessageCreateAction messageCreateAction;
 
 	private static final String AUTHOR_ID = "user-123";
@@ -59,12 +56,8 @@ class ProgressChartCommandTest {
 	@BeforeEach
 	void setUp() {
 		when(event.getChannel()).thenReturn(channelUnion);
-		when(channelUnion.getType()).thenReturn(ChannelType.TEXT);
-		when(channelUnion.asTextChannel()).thenReturn(textChannel);
 		// replyError() вызывает event.getChannel().sendMessage() — через channelUnion
 		when(channelUnion.sendMessage(anyString())).thenReturn(messageCreateAction);
-		// на случай если что-то идёт через textChannel напрямую
-		when(textChannel.sendMessage(anyString())).thenReturn(messageCreateAction);
 		doNothing().when(messageCreateAction).queue();
 	}
 
@@ -101,26 +94,13 @@ class ProgressChartCommandTest {
 	}
 
 	@Test
-	void execute_statsNull_sendsError() {
+	void execute_emptyImageBytes_sendsError() {
 		Challenge challenge = mock(Challenge.class);
-		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
-		when(statisticsService.calculateStats(challenge)).thenReturn(null);
-
-		command.execute(event, new String[]{"график", "Отжимания"}, AUTHOR_ID, USERNAME);
-
-		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-		verify(channelUnion).sendMessage(captor.capture());
-		assertTrue(captor.getValue().contains("Не удалось получить статистику"));
-	}
-
-	@Test
-	void execute_emptyImageBytes_sendsError() throws Exception {
-		Challenge challenge = mock(Challenge.class);
-		ChallengeStats stats = new ChallengeStats("Отжимания", 1000L, 500L, 500L, 50.0, 10.0, 50);
 
 		when(challengeService.getChallenge("Отжимания")).thenReturn(challenge);
-		when(statisticsService.calculateStats(challenge)).thenReturn(stats);
-		when(visualizationService.generateProgressChart(stats))
+		when(challenge.getId()).thenReturn("pushups");
+		when(progressHistoryRepository.getDailyTotals("pushups", AUTHOR_ID, 365)).thenReturn(Map.of());
+		when(visualizationService.generateActivityCalendar(any(), any(), eq(Map.of())))
 				.thenReturn(CompletableFuture.completedFuture(new byte[0]));
 
 		command.execute(event, new String[]{"график", "Отжимания"}, AUTHOR_ID, USERNAME);
@@ -131,24 +111,30 @@ class ProgressChartCommandTest {
 	}
 
 	@Test
-	void execute_multiWordChallengeName_joinsCorrectly() throws Exception {
+	void execute_sendsAuthorsCalendarForMultiWordChallengeName() {
 		Challenge challenge = mock(Challenge.class);
-		ChallengeStats stats = new ChallengeStats("Бег на 5 км", 100L, 80L, 20L, 80.0, 2.0, 10);
+		Map<LocalDate, Long> totals = Map.of(LocalDate.of(2026, 11, 17), 12L);
 		byte[] fakeImage = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x00};
 
 		when(challengeService.getChallenge("Бег на 5 км")).thenReturn(challenge);
-		when(statisticsService.calculateStats(challenge)).thenReturn(stats);
-		when(visualizationService.generateProgressChart(stats))
+		when(challenge.getId()).thenReturn("running");
+		when(progressHistoryRepository.getDailyTotals("running", AUTHOR_ID, 365)).thenReturn(totals);
+		when(visualizationService.generateActivityCalendar(any(), any(), eq(totals)))
 				.thenReturn(CompletableFuture.completedFuture(fakeImage));
 
 		MessageCreateAction sendFilesAction = mock(MessageCreateAction.class);
-		when(textChannel.sendFiles(any(FileUpload.class))).thenReturn(sendFilesAction);
+		when(channelUnion.sendFiles(any(FileUpload.class))).thenReturn(sendFilesAction);
 		when(sendFilesAction.setContent(anyString())).thenReturn(sendFilesAction);
 		doNothing().when(sendFilesAction).queue();
 
 		command.execute(event, new String[]{"график", "Бег", "на", "5", "км"}, AUTHOR_ID, USERNAME);
 
-		verify(challengeService).getChallenge("Бег на 5 км");
+		verify(progressHistoryRepository).getDailyTotals("running", AUTHOR_ID, 365);
+		ArgumentCaptor<LocalDate> start = ArgumentCaptor.forClass(LocalDate.class);
+		ArgumentCaptor<LocalDate> end = ArgumentCaptor.forClass(LocalDate.class);
+		verify(visualizationService).generateActivityCalendar(start.capture(), end.capture(), eq(totals));
+		assertEquals(end.getValue().minusDays(364), start.getValue());
+		verify(sendFilesAction).setContent("📅 Личный календарь активности · **Бег на 5 км**");
 		verify(sendFilesAction).queue();
 	}
 

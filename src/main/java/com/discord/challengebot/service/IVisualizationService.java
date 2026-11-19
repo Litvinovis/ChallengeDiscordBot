@@ -12,12 +12,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface IVisualizationService {
 	/**
-	 * Асинхронно генерирует столбчатый график прогресса испытания.
-	 *
-	 * @param stats статистика испытания
-	 * @return CompletableFuture с байтами PNG-изображения
+	 * Генерирует PNG-календарь личной активности за указанный период включительно.
 	 */
-	CompletableFuture<byte[]> generateProgressChart(ChallengeStats stats);
+	CompletableFuture<byte[]> generateActivityCalendar(LocalDate start, LocalDate end, Map<LocalDate, Long> dailyTotals);
 
 	/**
 	 * Асинхронно генерирует столбчатый график процента выполнения испытания.
